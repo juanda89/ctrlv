@@ -13,15 +13,10 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   release:
     runs-on: macos-14
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy-pages.outputs.page_url }}
 
     steps:
       - name: Checkout
@@ -131,15 +126,3 @@ jobs:
             dist/${{ env.VERSION }}/SHA256SUMS.txt
             dist/${{ env.VERSION }}/release-notes.md
             updates/stable/appcast.xml
-
-      - name: Setup Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: docs
-
-      - name: Deploy Pages
-        id: deploy-pages
-        uses: actions/deploy-pages@v4

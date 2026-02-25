@@ -18,6 +18,8 @@ ENTITLEMENTS="${RESOURCES_DIR}/InstantTranslator.entitlements"
 BIN_NAME="InstantTranslator"
 BUNDLE_NAME="ctrl+v.app"
 SPARKLE_SIGN_BIN="${PROJECT_DIR}/.build/artifacts/sparkle/Sparkle/bin/sign_update"
+ARM_BUILD_TRIPLE="${CTRLV_ARM_BUILD_TRIPLE:-arm64-apple-macosx14.0}"
+X86_BUILD_TRIPLE="${CTRLV_X86_BUILD_TRIPLE:-x86_64-apple-macosx14.0}"
 
 read_plist_value() {
     /usr/libexec/PlistBuddy -c "Print:${1}" "${INFO_PLIST}"
@@ -33,15 +35,38 @@ DMG_PATH="${DIST_DIR}/ctrlv-${VERSION}.dmg"
 CHECKSUMS_PATH="${DIST_DIR}/SHA256SUMS.txt"
 SPARKLE_SIG_PATH="${DIST_DIR}/sparkle-signature.txt"
 SPARKLE_FRAMEWORK_SOURCE="${PROJECT_DIR}/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+ARM_BINARY_PATH="${PROJECT_DIR}/.build/arm64-apple-macosx/release/${BIN_NAME}"
+X86_BINARY_PATH="${PROJECT_DIR}/.build/x86_64-apple-macosx/release/${BIN_NAME}"
+UNIVERSAL_BINARY_PATH="${DIST_DIR}/${BIN_NAME}-universal"
 
-echo "==> Building release binary (${VERSION}, build ${BUILD_NUMBER})"
+echo "==> Building release binaries (${VERSION}, build ${BUILD_NUMBER})"
 cd "${PROJECT_DIR}"
-swift build -c release
+swift build -c release --triple "${ARM_BUILD_TRIPLE}"
+swift build -c release --triple "${X86_BUILD_TRIPLE}"
 
 echo "==> Assembling app bundle"
 rm -rf "${DIST_DIR}"
 mkdir -p "${CONTENTS_DIR}/MacOS" "${CONTENTS_DIR}/Resources" "${CONTENTS_DIR}/Frameworks"
-cp ".build/release/${BIN_NAME}" "${CONTENTS_DIR}/MacOS/"
+
+if [[ ! -f "${ARM_BINARY_PATH}" || ! -f "${X86_BINARY_PATH}" ]]; then
+    echo "Missing architecture build outputs:"
+    echo "  arm64: ${ARM_BINARY_PATH}"
+    echo "  x86_64: ${X86_BINARY_PATH}"
+    exit 1
+fi
+
+echo "==> Creating universal binary (arm64 + x86_64)"
+lipo -create -output "${UNIVERSAL_BINARY_PATH}" "${ARM_BINARY_PATH}" "${X86_BINARY_PATH}"
+UNIVERSAL_ARCHS="$(lipo -archs "${UNIVERSAL_BINARY_PATH}")"
+echo "    Universal binary architectures: ${UNIVERSAL_ARCHS}"
+if [[ "${UNIVERSAL_ARCHS}" != *"arm64"* || "${UNIVERSAL_ARCHS}" != *"x86_64"* ]]; then
+    echo "Universal binary is missing required architectures"
+    exit 1
+fi
+
+cp "${UNIVERSAL_BINARY_PATH}" "${CONTENTS_DIR}/MacOS/${BIN_NAME}"
+rm -f "${UNIVERSAL_BINARY_PATH}"
+
 cp "${INFO_PLIST}" "${CONTENTS_DIR}/Info.plist"
 cp "${ENTITLEMENTS}" "${CONTENTS_DIR}/Resources/"
 
