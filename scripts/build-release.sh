@@ -120,6 +120,7 @@ DMG_STAGING="${DIST_DIR}/dmg-staging"
 rm -rf "${DMG_STAGING}"
 mkdir -p "${DMG_STAGING}"
 cp -R "${APP_BUNDLE}" "${DMG_STAGING}/"
+ln -s /Applications "${DMG_STAGING}/Applications"
 hdiutil create -volname "ctrl+v" -srcfolder "${DMG_STAGING}" -ov -format UDZO "${DMG_PATH}"
 rm -rf "${DMG_STAGING}"
 
