@@ -5,11 +5,11 @@ import SwiftUI
 @MainActor
 final class TranslationIslandOverlayController {
     private enum Metrics {
-        static let expandedSize = NSSize(width: 176, height: 38)
-        static let collapsedSize = NSSize(width: 132, height: 8)
-        static let topInset: CGFloat = 5
-        static let visibleDuration: TimeInterval = 0.56
-        static let hideDuration: TimeInterval = 0.44
+        static let expandedSize = NSSize(width: 224, height: 44)
+        static let collapsedSize = NSSize(width: 158, height: 10)
+        static let topInset: CGFloat = 3
+        static let visibleDuration: TimeInterval = 0.78
+        static let hideDuration: TimeInterval = 0.62
     }
 
     private var panel: NSPanel?
@@ -32,7 +32,7 @@ final class TranslationIslandOverlayController {
         let visibleFrame = frame(for: .visible)
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Metrics.visibleDuration
-            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.34, 1.56, 0.64, 1.0)
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
             panel.animator().setFrame(visibleFrame, display: true)
             panel.animator().alphaValue = 1
         }
@@ -49,7 +49,7 @@ final class TranslationIslandOverlayController {
         isVisible = false
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Metrics.hideDuration
-            context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            context.timingFunction = CAMediaTimingFunction(controlPoints: 0.40, 0.0, 0.20, 1.0)
             panel.animator().setFrame(hiddenFrame, display: true)
             panel.animator().alphaValue = 0
         } completionHandler: {
@@ -71,7 +71,7 @@ final class TranslationIslandOverlayController {
         panel.level = .statusBar
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = false
+        panel.hasShadow = true
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
@@ -109,7 +109,7 @@ final class TranslationIslandOverlayController {
             let y = bounds.maxY - size.height - Metrics.topInset
             return NSRect(x: x, y: y, width: size.width, height: size.height)
         case .hidden:
-            let y = bounds.maxY + 2
+            let y = bounds.maxY + 4
             return NSRect(x: x, y: y, width: size.width, height: size.height)
         }
     }
@@ -130,15 +130,24 @@ final class TranslationIslandOverlayController {
 private struct TranslationIslandOverlayView: View {
     private let aqua = Color(red: 0.00, green: 0.95, blue: 0.99)
     private let blue = Color(red: 0.24, green: 0.56, blue: 0.99)
+    private let islandWidth: CGFloat = 224
+    private let islandHeight: CGFloat = 44
+
+    private var islandShape: UnevenRoundedRectangle {
+        UnevenRoundedRectangle(
+            cornerRadii: .init(topLeading: 15, bottomLeading: 23, bottomTrailing: 23, topTrailing: 15),
+            style: .continuous
+        )
+    }
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 13) {
             ZStack {
-                RoundedRectangle(cornerRadius: 7, style: .continuous)
-                    .fill(aqua.opacity(0.14))
-                    .frame(width: 21, height: 21)
+                RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    .fill(aqua.opacity(0.16))
+                    .frame(width: 24, height: 24)
                 Text("V")
-                    .font(.system(size: 13, weight: .heavy, design: .rounded))
+                    .font(.system(size: 14, weight: .heavy, design: .rounded))
                     .foregroundStyle(
                         LinearGradient(
                             colors: [blue, aqua],
@@ -150,19 +159,34 @@ private struct TranslationIslandOverlayView: View {
 
             Spacer(minLength: 0)
 
-            TranslationWaveView(accent: aqua)
+            TranslationWaveView(accent: aqua.opacity(0.96))
         }
-        .padding(.horizontal, 13)
-        .frame(width: 176, height: 38)
-        .background(
-            Capsule(style: .continuous)
-                .fill(Color.black.opacity(0.94))
-        )
-        .overlay(
-            Capsule(style: .continuous)
-                .stroke(aqua.opacity(0.30), lineWidth: 0.9)
-        )
-        .shadow(color: aqua.opacity(0.24), radius: 9, x: 0, y: 4)
+        .padding(.horizontal, 15)
+        .frame(width: islandWidth, height: islandHeight)
+        .background {
+            islandShape
+                .fill(.ultraThinMaterial)
+                .overlay(islandShape.fill(Color.black.opacity(0.74)))
+        }
+        .overlay {
+            islandShape
+                .stroke(Color.white.opacity(0.11), lineWidth: 0.9)
+        }
+        .overlay(alignment: .top) {
+            islandShape
+                .inset(by: 0.6)
+                .stroke(aqua.opacity(0.22), lineWidth: 0.7)
+                .blur(radius: 0.25)
+                .mask(
+                    LinearGradient(
+                        colors: [.white, .white.opacity(0.2), .clear],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        }
+        .shadow(color: .black.opacity(0.42), radius: 18, x: 0, y: 9)
+        .shadow(color: aqua.opacity(0.14), radius: 7, x: 0, y: 3)
     }
 }
 
@@ -178,17 +202,17 @@ private struct TranslationWaveView: View {
                     let scale = waveScale(elapsed: elapsed, index: index)
                     Capsule(style: .continuous)
                         .fill(accent)
-                        .frame(width: 3, height: 14)
+                        .frame(width: 2.8, height: 15)
                         .scaleEffect(x: 1, y: scale, anchor: .center)
-                        .shadow(color: accent.opacity(0.65), radius: 3, x: 0, y: 0)
+                        .shadow(color: accent.opacity(0.58), radius: 2.5, x: 0, y: 0)
                 }
             }
         }
-        .frame(height: 16)
+        .frame(height: 17)
     }
 
     private func waveScale(elapsed: TimeInterval, index: Int) -> CGFloat {
-        let phase = elapsed * 7.4 + Double(index) * 0.75
-        return 0.34 + CGFloat(abs(sin(phase))) * 0.86
+        let phase = elapsed * 5.35 + Double(index) * 0.68
+        return 0.30 + CGFloat(abs(sin(phase))) * 0.92
     }
 }
