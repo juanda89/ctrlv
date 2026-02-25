@@ -1,5 +1,6 @@
 #!/bin/bash
 set -euo pipefail
+export COPYFILE_DISABLE=1
 
 # ctrl+v release builder
 # Produces signed .app, Sparkle .zip, .dmg and checksums in dist/<version>/
@@ -15,6 +16,7 @@ PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 RESOURCES_DIR="${PROJECT_DIR}/Resources"
 INFO_PLIST="${RESOURCES_DIR}/Info.plist"
 ENTITLEMENTS="${RESOURCES_DIR}/InstantTranslator.entitlements"
+ASSET_CATALOG="${RESOURCES_DIR}/Assets.xcassets"
 BIN_NAME="InstantTranslator"
 BUNDLE_NAME="ctrl+v.app"
 SPARKLE_SIGN_BIN="${PROJECT_DIR}/.build/artifacts/sparkle/Sparkle/bin/sign_update"
@@ -25,9 +27,16 @@ read_plist_value() {
     /usr/libexec/PlistBuddy -c "Print:${1}" "${INFO_PLIST}"
 }
 
+clean_xattrs() {
+    local target="$1"
+    xattr -cr "${target}" 2>/dev/null || true
+    find -L "${target}" -exec xattr -c {} + 2>/dev/null || true
+}
+
 VERSION="${1:-$(read_plist_value CFBundleShortVersionString)}"
 BUILD_NUMBER="${2:-$(read_plist_value CFBundleVersion)}"
-DIST_DIR="${PROJECT_DIR}/dist/${VERSION}"
+DIST_BASE_DIR="${CTRLV_DIST_DIR_BASE:-${PROJECT_DIR}/dist}"
+DIST_DIR="${DIST_BASE_DIR}/${VERSION}"
 APP_BUNDLE="${DIST_DIR}/${BUNDLE_NAME}"
 CONTENTS_DIR="${APP_BUNDLE}/Contents"
 ZIP_PATH="${DIST_DIR}/ctrlv-${VERSION}.zip"
@@ -67,33 +76,52 @@ fi
 cp "${UNIVERSAL_BINARY_PATH}" "${CONTENTS_DIR}/MacOS/${BIN_NAME}"
 rm -f "${UNIVERSAL_BINARY_PATH}"
 
+# Ensure bundled frameworks resolve correctly at runtime.
+if ! otool -l "${CONTENTS_DIR}/MacOS/${BIN_NAME}" | grep -q "@executable_path/../Frameworks"; then
+    install_name_tool -add_rpath "@executable_path/../Frameworks" "${CONTENTS_DIR}/MacOS/${BIN_NAME}"
+fi
+
 cp "${INFO_PLIST}" "${CONTENTS_DIR}/Info.plist"
 cp "${ENTITLEMENTS}" "${CONTENTS_DIR}/Resources/"
+
+if [[ -d "${ASSET_CATALOG}" ]]; then
+    echo "==> Compiling asset catalog"
+    xcrun actool "${ASSET_CATALOG}" \
+        --compile "${CONTENTS_DIR}/Resources" \
+        --platform macosx \
+        --minimum-deployment-target 14.0 \
+        --app-icon AppIcon \
+        --output-partial-info-plist "${DIST_DIR}/assetcatalog-info.plist" >/dev/null
+fi
 
 echo "==> Setting bundle version metadata"
 /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${VERSION}" "${CONTENTS_DIR}/Info.plist"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "${CONTENTS_DIR}/Info.plist"
 
 if [[ -d "${SPARKLE_FRAMEWORK_SOURCE}" ]]; then
-    cp -R "${SPARKLE_FRAMEWORK_SOURCE}" "${CONTENTS_DIR}/Frameworks/"
+    ditto --norsrc "${SPARKLE_FRAMEWORK_SOURCE}" "${CONTENTS_DIR}/Frameworks/Sparkle.framework"
 fi
 
 echo "==> Clearing extended attributes"
-xattr -cr "${APP_BUNDLE}"
+clean_xattrs "${APP_BUNDLE}"
 
 echo "==> Signing app bundle"
 SIGN_IDENTITY="${APPLE_DEVELOPER_ID_APPLICATION:--}"
 if [[ "${SIGN_IDENTITY}" == "-" ]]; then
     echo "    Using ad-hoc signing"
     if [[ -d "${CONTENTS_DIR}/Frameworks/Sparkle.framework" ]]; then
+        clean_xattrs "${CONTENTS_DIR}/Frameworks/Sparkle.framework"
         codesign --force --deep --sign - "${CONTENTS_DIR}/Frameworks/Sparkle.framework"
     fi
+    clean_xattrs "${APP_BUNDLE}"
     codesign --force --deep --sign - --entitlements "${ENTITLEMENTS}" "${APP_BUNDLE}"
 else
     echo "    Using Developer ID signing: ${SIGN_IDENTITY}"
     if [[ -d "${CONTENTS_DIR}/Frameworks/Sparkle.framework" ]]; then
+        clean_xattrs "${CONTENTS_DIR}/Frameworks/Sparkle.framework"
         codesign --force --deep --timestamp --options runtime --sign "${SIGN_IDENTITY}" "${CONTENTS_DIR}/Frameworks/Sparkle.framework"
     fi
+    clean_xattrs "${APP_BUNDLE}"
     codesign --force --deep --timestamp --options runtime --sign "${SIGN_IDENTITY}" --entitlements "${ENTITLEMENTS}" "${APP_BUNDLE}"
 fi
 
@@ -119,7 +147,7 @@ echo "==> Packaging DMG"
 DMG_STAGING="${DIST_DIR}/dmg-staging"
 rm -rf "${DMG_STAGING}"
 mkdir -p "${DMG_STAGING}"
-cp -R "${APP_BUNDLE}" "${DMG_STAGING}/"
+ditto --norsrc "${APP_BUNDLE}" "${DMG_STAGING}/ctrl+v.app"
 ln -s /Applications "${DMG_STAGING}/Applications"
 hdiutil create -volname "ctrl+v" -srcfolder "${DMG_STAGING}" -ov -format UDZO "${DMG_PATH}"
 rm -rf "${DMG_STAGING}"

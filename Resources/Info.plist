@@ -6,6 +6,8 @@
 	<string>ctrl+v</string>
 	<key>CFBundleExecutable</key>
 	<string>InstantTranslator</string>
+	<key>CFBundleIconName</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>com.instanttranslator.app</string>
 	<key>CFBundleName</key>

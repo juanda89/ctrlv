@@ -1,25 +1,36 @@
 import AppKit
+import ServiceManagement
 import SwiftUI
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
+    private var installerWindow: NSWindow?
     private let updateService = UpdateService()
     private let userDefaults = UserDefaults.standard
     private let onboardingShownKey = "didShowInitialOnboarding"
+    private let clickDebounceInterval: TimeInterval = 0.3
+    private var lastClickDate = Date.distantPast
+    private let installerState = InstallerWindowState()
 
     let licenseService = LicenseService()
     lazy var translatorViewModel = TranslatorViewModel(licenseService: licenseService)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if needsInstallation() {
+            presentInstallerWindow()
+            return
+        }
+
         setupMenuBar()
 
         // Hide dock icon — menu bar only
         NSApp.setActivationPolicy(.accessory)
+        registerLaunchAtLogin()
 
         Task { @MainActor in
-            await runInitialUserExperience()
+            await runPostInstallUserExperience()
         }
     }
 
@@ -50,12 +61,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    private func runInitialUserExperience() async {
-        if needsMoveToApplications(),
-           promptMoveToApplicationsIfNeeded() {
-            return
-        }
-
+    private func runPostInstallUserExperience() async {
         if !userDefaults.bool(forKey: onboardingShownKey) {
             showPopoverIfPossible()
             userDefaults.set(true, forKey: onboardingShownKey)
@@ -64,55 +70,100 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         await requestAccessibilityIfNeeded()
     }
 
-    private func needsMoveToApplications() -> Bool {
+    private func needsInstallation() -> Bool {
         let bundlePath = Bundle.main.bundleURL.path
-        return !bundlePath.hasPrefix("/Applications/")
+        let userApplicationsPrefix = "\(NSHomeDirectory())/Applications/"
+        return !(bundlePath.hasPrefix("/Applications/") || bundlePath.hasPrefix(userApplicationsPrefix))
     }
 
-    @discardableResult
-    private func promptMoveToApplicationsIfNeeded() -> Bool {
-        let alert = NSAlert()
-        alert.alertStyle = .informational
-        alert.messageText = "Install ctrl+v in Applications"
-        alert.informativeText = "To keep permissions stable and avoid launch issues, move ctrl+v to /Applications before using it."
-        alert.addButton(withTitle: "Move & Relaunch")
-        alert.addButton(withTitle: "Continue Here")
+    private func preferredInstallDestinationURL() -> URL {
+        let appName = Bundle.main.bundleURL.lastPathComponent
+        return URL(fileURLWithPath: "/Applications", isDirectory: true).appendingPathComponent(appName)
+    }
 
+    private func fallbackInstallDestinationURL() -> URL {
+        let appName = Bundle.main.bundleURL.lastPathComponent
+        return URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
+            .appendingPathComponent("Applications", isDirectory: true)
+            .appendingPathComponent(appName)
+    }
+
+    private func presentInstallerWindow() {
+        NSApp.setActivationPolicy(.regular)
+
+        let destinationHint = preferredInstallDestinationURL().path
+        let rootView = InstallerWindowView(
+            state: installerState,
+            destinationHint: destinationHint,
+            onInstall: { [weak self] in
+                Task { @MainActor in
+                    await self?.installAndRelaunch()
+                }
+            },
+            onQuit: {
+                NSApp.terminate(nil)
+            }
+        )
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 460, height: 260),
+            styleMask: [.titled],
+            backing: .buffered,
+            defer: false
+        )
+        window.title = "Install ctrl+v"
+        window.center()
+        window.isReleasedWhenClosed = false
+        window.contentViewController = NSHostingController(rootView: rootView)
+        window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
-        let response = alert.runModal()
-        if response == .alertFirstButtonReturn {
-            moveToApplicationsAndRelaunch()
-            return true
-        }
-
-        return false
+        installerWindow = window
     }
 
-    private func moveToApplicationsAndRelaunch() {
+    private func installAndRelaunch() async {
+        guard !installerState.isInstalling else { return }
+
+        installerState.isInstalling = true
+        installerState.errorMessage = nil
+
         let fileManager = FileManager.default
         let sourceURL = Bundle.main.bundleURL
-        let destinationURL = URL(fileURLWithPath: "/Applications", isDirectory: true)
-            .appendingPathComponent(sourceURL.lastPathComponent)
+        let destinations = [preferredInstallDestinationURL(), fallbackInstallDestinationURL()]
+        var errors: [String] = []
 
-        do {
-            if sourceURL.path != destinationURL.path {
-                if fileManager.fileExists(atPath: destinationURL.path) {
-                    _ = try? fileManager.trashItem(at: destinationURL, resultingItemURL: nil)
+        for destinationURL in destinations {
+            do {
+                try fileManager.createDirectory(
+                    at: destinationURL.deletingLastPathComponent(),
+                    withIntermediateDirectories: true,
+                    attributes: nil
+                )
+
+                if sourceURL.path != destinationURL.path {
+                    if fileManager.fileExists(atPath: destinationURL.path) {
+                        _ = try? fileManager.trashItem(at: destinationURL, resultingItemURL: nil)
+                        if fileManager.fileExists(atPath: destinationURL.path) {
+                            try fileManager.removeItem(at: destinationURL)
+                        }
+                    }
+                    try fileManager.copyItem(at: sourceURL, to: destinationURL)
                 }
-                try fileManager.copyItem(at: sourceURL, to: destinationURL)
-            }
 
-            NSWorkspace.shared.open(destinationURL)
-            NSApp.terminate(nil)
-        } catch {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = "Could not move ctrl+v automatically"
-            alert.informativeText = "Move the app to /Applications manually, then open it again."
-            alert.addButton(withTitle: "OK")
-            NSApp.activate(ignoringOtherApps: true)
-            alert.runModal()
+                installerState.isInstalling = false
+                NSWorkspace.shared.open(destinationURL)
+                NSApp.terminate(nil)
+                return
+            } catch {
+                errors.append("\(destinationURL.path): \(error.localizedDescription)")
+            }
         }
+
+        installerState.isInstalling = false
+        installerState.errorMessage = """
+        Could not install automatically.
+        Try drag-and-drop to /Applications and open again.
+        \(errors.joined(separator: "\n"))
+        """
     }
 
     private func showPopoverIfPossible() {
@@ -127,7 +178,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         AccessibilityService.requestPermission()
     }
 
+    private func registerLaunchAtLogin() {
+        let service = SMAppService.mainApp
+        do {
+            switch service.status {
+            case .enabled:
+                return
+            case .notRegistered, .requiresApproval, .notFound:
+                try service.register()
+            @unknown default:
+                try service.register()
+            }
+        } catch {
+            // Non-fatal: app remains usable even if login-item registration fails.
+            print("Launch-at-login registration failed: \(error.localizedDescription)")
+        }
+    }
+
     @objc private func togglePopover() {
+        let now = Date()
+        guard now.timeIntervalSince(lastClickDate) > clickDebounceInterval else { return }
+        lastClickDate = now
+
         guard let button = statusItem.button else { return }
 
         if popover.isShown {
