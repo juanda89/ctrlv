@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct StatusSection: View {
     @Bindable var licenseService: LicenseService
 
@@ -69,7 +70,7 @@ struct StatusSection: View {
                 Spacer()
 
                 Button("Deactivate") {
-                    Task {
+                    Task { @MainActor in
                         localMessage = nil
                         _ = await licenseService.deactivateCurrentLicense()
                     }
@@ -223,7 +224,7 @@ struct StatusSection: View {
             }
 
             Button {
-                Task {
+                Task { @MainActor in
                     localMessage = nil
                     let ok = await licenseService.submitLicenseKey(licenseKeyInput)
                     if ok {

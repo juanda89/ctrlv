@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct BehaviorSection: View {
     @Bindable var settingsVM: SettingsViewModel
     @Bindable var translatorVM: TranslatorViewModel

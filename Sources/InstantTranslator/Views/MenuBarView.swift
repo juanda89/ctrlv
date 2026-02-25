@@ -1,5 +1,6 @@
 import SwiftUI
 
+@MainActor
 struct MenuBarView: View {
     @Bindable var viewModel: TranslatorViewModel
     @Bindable var licenseService: LicenseService
