@@ -13,6 +13,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let clickDebounceInterval: TimeInterval = 0.3
     private var lastClickDate = Date.distantPast
     private let installerState = InstallerWindowState()
+    private let translationIslandOverlay = TranslationIslandOverlayController()
 
     let licenseService = LicenseService()
     lazy var translatorViewModel = TranslatorViewModel(licenseService: licenseService)
@@ -223,12 +224,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func showTranslatingIcon() {
         guard let button = statusItem.button else { return }
         button.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "Translating")
+        translationIslandOverlay.show()
     }
 
     /// Restore the default menu bar icon.
     func restoreDefaultIcon() {
         guard let button = statusItem.button else { return }
         button.image = defaultMenuBarIcon()
+        translationIslandOverlay.hide()
     }
 
     private func defaultMenuBarIcon() -> NSImage? {
