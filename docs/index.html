@@ -1,0 +1,1029 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Control-V - Translate Anywhere on Mac</title>
+    <meta
+      name="description"
+      content="Modern SaaS landing page for Control-V. Translate selected text in any macOS app instantly with one shortcut."
+    />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:ital,wght@1,400&display=swap"
+      rel="stylesheet"
+    />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    <link rel="icon" type="image/svg+xml" href="assets/control-v-logo.svg" />
+
+    <script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+    <script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#3B82F6",
+              "primary-hover": "#2563EB",
+              "background-light": "#F8FAFC",
+              "background-dark": "#0A0A1A",
+              "surface-light": "#FFFFFF",
+              "surface-dark": "#16162C",
+              "surface-dark-lighter": "#1E1E38",
+              "text-light": "#1E293B",
+              "text-dark": "#F1F5F9",
+              "muted-light": "#64748B",
+              "muted-dark": "#94A3B8"
+            },
+            fontFamily: {
+              display: ["Inter", "sans-serif"],
+              serif: ["Playfair Display", "serif"]
+            },
+            borderRadius: {
+              DEFAULT: "0.5rem",
+              xl: "1rem",
+              "2xl": "1.5rem"
+            }
+          }
+        }
+      };
+    </script>
+
+    <style>
+      body {
+        font-family: "Inter", sans-serif;
+      }
+
+      .glow-effect {
+        box-shadow: 0 8px 40px rgba(0, 0, 0, 0.08);
+      }
+
+      .dark .glow-effect {
+        box-shadow: 0 10px 44px rgba(2, 6, 23, 0.42);
+      }
+
+      .grid-bg {
+        background-image: linear-gradient(to right, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+          linear-gradient(to bottom, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+        background-size: 42px 42px;
+      }
+
+      .hide-scrollbar {
+        scrollbar-width: none;
+      }
+
+      .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+      }
+
+      .app-tab.active {
+        background: linear-gradient(160deg, rgba(59, 130, 246, 0.12), rgba(59, 130, 246, 0.05));
+        color: #2563eb;
+        border-color: rgba(59, 130, 246, 0.22);
+        box-shadow: 0 6px 16px rgba(37, 99, 235, 0.1);
+      }
+
+      .app-tab.active .tab-title {
+        color: #2563eb;
+      }
+
+      .app-tab.active .tab-subtitle {
+        color: #4f83f1;
+      }
+
+      .mock-scene {
+        display: none;
+      }
+
+      .mock-scene.active {
+        display: flex;
+      }
+
+      .demo-shell {
+        border-radius: 0.8rem;
+        border: 1px solid rgba(148, 163, 184, 0.26);
+        background: rgba(255, 255, 255, 0.92);
+        backdrop-filter: blur(10px);
+      }
+
+      .dark .demo-shell {
+        border-color: rgba(148, 163, 184, 0.24);
+        background: rgba(15, 23, 42, 0.74);
+      }
+
+      .demo-window-bar {
+        background: linear-gradient(180deg, rgba(248, 250, 252, 0.95), rgba(241, 245, 249, 0.9));
+      }
+
+      .dark .demo-window-bar {
+        background: linear-gradient(180deg, rgba(30, 41, 59, 0.84), rgba(15, 23, 42, 0.82));
+      }
+
+      .wa-wallpaper {
+        background-color: #ece9e2;
+        background-image: radial-gradient(rgba(15, 23, 42, 0.045) 0.65px, transparent 0.65px);
+        background-size: 19px 19px;
+      }
+
+      .dark .wa-wallpaper {
+        background-color: #0f172a;
+        background-image: radial-gradient(rgba(148, 163, 184, 0.12) 0.65px, transparent 0.65px);
+      }
+
+      .tab-logo {
+        border-radius: 0.8rem;
+        border: 1px solid rgba(148, 163, 184, 0.26);
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8), 0 3px 10px rgba(15, 23, 42, 0.07);
+      }
+
+      .dark .tab-logo {
+        border-color: rgba(148, 163, 184, 0.28);
+        background: rgba(15, 23, 42, 0.82);
+      }
+
+      .tab-logo-svg {
+        height: 2rem;
+        width: 2rem;
+        opacity: 0.4;
+        color: #aeb8c7;
+        transition: color 160ms ease, opacity 160ms ease;
+      }
+
+      .app-tab.active .tab-logo-svg {
+        opacity: 1;
+        color: #2563eb;
+      }
+
+      .slack-selected {
+        background-color: rgba(2, 132, 199, 0.2);
+        color: #0369a1;
+      }
+
+      .wa-selected {
+        background-color: rgba(0, 168, 132, 0.25);
+        color: #007a5f;
+      }
+
+      .gmail-selected {
+        background-color: rgba(11, 87, 208, 0.2);
+        color: #0b57d0;
+      }
+
+      .btn-click-effect {
+        transform: scale(0.96);
+        background-color: #0842a0;
+      }
+
+      .bento-marquee {
+        animation: marquee 24s linear infinite;
+      }
+
+      .logo-cell {
+        border-radius: 0.95rem;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        background: rgba(255, 255, 255, 0.9);
+        padding: 0.55rem;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+      }
+
+      .dark .logo-cell {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        background: rgba(22, 22, 44, 0.9);
+        box-shadow: 0 8px 18px rgba(2, 6, 23, 0.45);
+      }
+
+      .dark .logo-img {
+        filter: saturate(1.04) contrast(1.05);
+      }
+
+      @keyframes marquee {
+        0% {
+          transform: translateX(0);
+        }
+        100% {
+          transform: translateX(-50%);
+        }
+      }
+    </style>
+  </head>
+
+  <body class="bg-background-light text-text-light transition-colors duration-300 dark:bg-background-dark dark:text-text-dark">
+    <a href="#hero" class="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-3 focus:py-2 focus:text-white">Skip to content</a>
+
+    <header class="fixed top-0 z-50 w-full border-b border-gray-200/50 bg-background-light/80 backdrop-blur-md dark:border-white/10 dark:bg-background-dark/80">
+      <div class="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+        <a href="#hero" class="flex items-center space-x-3">
+          <div class="overflow-hidden rounded-lg border border-blue-100 bg-white p-1 dark:border-white/10 dark:bg-surface-dark">
+            <img src="assets/control-v-logo.svg" alt="Control-V logo" class="h-6 w-6 rounded object-cover" />
+          </div>
+          <span class="text-lg font-bold tracking-tight">Control-V</span>
+        </a>
+
+        <nav class="hidden items-center gap-7 text-sm font-medium md:flex">
+          <a href="#features" class="text-muted-light hover:text-primary dark:text-muted-dark">Features</a>
+          <a href="#workflow" class="text-muted-light hover:text-primary dark:text-muted-dark">How it works</a>
+          <a href="#pricing" class="text-muted-light hover:text-primary dark:text-muted-dark">Pricing</a>
+          <a href="#faq" class="text-muted-light hover:text-primary dark:text-muted-dark">FAQ</a>
+        </nav>
+
+        <div class="flex items-center space-x-3">
+          <button
+            aria-label="Toggle dark mode"
+            class="rounded-full p-2 transition-colors hover:bg-gray-100 dark:hover:bg-white/10"
+            onclick="document.documentElement.classList.toggle('dark')"
+          >
+            <span class="material-icons block text-sm dark:hidden">dark_mode</span>
+            <span class="material-icons hidden text-sm dark:block">light_mode</span>
+          </button>
+          <a href="https://github.com/juanda89/ctrlv/releases/latest/download/ctrlv-latest.dmg" class="hidden rounded-md border border-transparent bg-primary px-4 py-2 text-sm font-medium text-white shadow-sm transition-all hover:scale-105 hover:bg-primary-hover sm:inline-flex">Get Control-V</a>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <section id="hero" class="relative overflow-hidden pb-20 pt-32 grid-bg">
+        <div class="pointer-events-none absolute left-1/2 top-0 -z-10 h-[500px] w-full max-w-3xl -translate-x-1/2 rounded-full bg-primary/20 blur-[120px] dark:bg-primary/10"></div>
+
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div class="text-center">
+            <div class="mb-6 inline-flex items-center rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-600 dark:border-blue-700/50 dark:bg-blue-900/30 dark:text-blue-300">
+              <span class="mr-2 h-2 w-2 animate-pulse rounded-full bg-primary"></span>
+              New: translation memory + custom tones
+            </div>
+            <h1 class="text-5xl font-bold tracking-tight md:text-7xl">
+              Translate anywhere
+              <br />
+              <span class="font-serif text-2xl md:text-3xl text-slate-500 dark:text-slate-400">with</span>
+              <span class="font-serif text-5xl md:text-7xl text-slate-600 dark:text-slate-300">Control-V</span>
+            </h1>
+            <p class="mx-auto mt-6 max-w-2xl text-lg text-muted-light dark:text-muted-dark">
+              Select text in Slack, Gmail, Notion, Docs, or any app. Press one shortcut and continue writing with zero context switching.
+            </p>
+
+            <div class="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
+              <a href="https://github.com/juanda89/ctrlv/releases/latest/download/ctrlv-latest.dmg" class="w-full rounded-lg bg-primary px-8 py-3.5 font-medium text-white shadow-lg shadow-blue-500/30 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-blue-500/50 sm:w-auto">Start 14-day free trial</a>
+              <a href="#workflow" class="w-full rounded-lg border border-gray-300 px-8 py-3.5 font-medium text-text-light transition-colors hover:bg-gray-100 dark:border-white/20 dark:text-text-dark dark:hover:bg-white/10 sm:w-auto">See product flow</a>
+            </div>
+            <p class="mt-3 text-sm text-muted-light dark:text-muted-dark">No card required</p>
+          </div>
+
+          <div class="group relative mx-auto mt-16 max-w-[840px] px-2 sm:px-4">
+            <div class="demo-shell glow-effect relative overflow-hidden shadow-2xl">
+              <div class="demo-window-bar flex h-8 items-center space-x-2 border-b border-gray-200/80 px-4 dark:border-white/10">
+                <div class="h-2.5 w-2.5 rounded-full bg-[#ff5f57]"></div>
+                <div class="h-2.5 w-2.5 rounded-full bg-[#febc2e]"></div>
+                <div class="h-2.5 w-2.5 rounded-full bg-[#28c840]"></div>
+                <div id="app-window-title" class="flex-1 text-center text-xs font-medium text-muted-light dark:text-muted-dark">WhatsApp - Team Chat</div>
+              </div>
+
+              <div class="relative h-[350px] sm:h-[390px]">
+                <div id="scene-slack" class="mock-scene h-full w-full flex-col bg-white dark:bg-[#0F0F1E]">
+                  <div class="flex h-full min-h-0">
+                    <div class="hidden w-[210px] shrink-0 bg-[#3F0E40] p-3 sm:block">
+                      <div class="mb-4 flex items-center gap-2">
+                        <div class="grid h-7 w-7 place-items-center rounded-md bg-white/20 text-xs font-bold text-white">A</div>
+                        <div class="text-xs text-white/80">Acme Corp</div>
+                      </div>
+                      <div class="mb-3 rounded-md bg-white/10 px-2 py-1.5 text-xs text-white/80"># general</div>
+                      <div class="space-y-2 opacity-70">
+                        <div class="h-3 rounded bg-white/10"></div>
+                        <div class="h-3 w-4/5 rounded bg-white/10"></div>
+                        <div class="h-3 w-3/5 rounded bg-white/10"></div>
+                      </div>
+                    </div>
+
+                    <div class="flex min-w-0 flex-1 flex-col">
+                      <div class="border-b border-gray-200 px-4 py-2 text-sm font-bold text-[#1e293b] dark:border-white/10 dark:text-white"># general</div>
+                      <div class="flex-1 space-y-4 overflow-hidden p-4">
+                        <div class="flex gap-2.5">
+                          <div class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-emerald-500 text-xs font-bold text-white">S</div>
+                          <div>
+                            <div class="flex items-baseline gap-2">
+                              <span class="text-[13px] font-bold text-[#1e293b] dark:text-white">Sarah Chen</span>
+                              <span class="text-[10px] text-[#64748b]">10:42 AM</span>
+                            </div>
+                            <p class="text-[13px] text-[#1e293b]/90 dark:text-gray-200">We just got a high-priority ticket from the US client.</p>
+                          </div>
+                        </div>
+                        <div class="flex gap-2.5">
+                          <div class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-orange-400 text-xs font-bold text-white">M</div>
+                          <div>
+                            <div class="flex items-baseline gap-2">
+                              <span class="text-[13px] font-bold text-[#1e293b] dark:text-white">Mike Johnson</span>
+                              <span class="text-[10px] text-[#64748b]">10:43 AM</span>
+                            </div>
+                            <p class="text-[13px] text-[#1e293b]/90 dark:text-gray-200">Looking into the server logs right now.</p>
+                          </div>
+                        </div>
+                        <div id="slack-you-msg" class="hidden gap-2.5 opacity-0 transition-opacity duration-300">
+                          <div class="grid h-8 w-8 shrink-0 place-items-center rounded-md bg-primary text-xs font-bold text-white">Y</div>
+                          <div>
+                            <div class="flex items-baseline gap-2">
+                              <span class="text-[13px] font-bold text-[#1e293b] dark:text-white">You</span>
+                              <span class="text-[10px] text-[#64748b]">10:44 AM</span>
+                            </div>
+                            <p id="slack-msg" class="text-[13px] text-[#1e293b]/90 dark:text-gray-200"></p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="border-t border-gray-200 px-4 py-3 dark:border-white/10">
+                        <div class="relative flex items-center rounded-lg border border-gray-300 bg-gray-50 px-3 py-2 dark:border-white/20 dark:bg-white/5">
+                          <div class="flex-1 text-[13px] text-[#1e293b] dark:text-gray-100">
+                            <span id="slack-input-text" class="rounded px-0.5"></span>
+                            <span id="slack-input-cursor" class="ml-px inline-block h-[14px] w-[1.5px] animate-pulse bg-[#1e293b]/60 dark:bg-gray-200"></span>
+                          </div>
+                          <div id="slack-shortcut-badge" class="flex scale-95 gap-0.5 opacity-0 transition-all duration-300">
+                            <span class="rounded border border-primary/20 bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">⌘</span>
+                            <span class="rounded border border-primary/20 bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">⇧</span>
+                            <span class="rounded border border-primary/20 bg-white px-1.5 py-0.5 text-[10px] font-bold text-primary">V</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="scene-whatsapp" class="mock-scene active h-full w-full flex-col wa-wallpaper">
+                  <div class="flex h-full min-h-0">
+                    <div class="hidden w-[188px] shrink-0 border-r border-gray-200/80 bg-white/96 backdrop-blur-sm sm:block">
+                      <div class="flex h-12 items-center justify-between border-b border-gray-200/70 bg-[#f7f8fa] px-3">
+                        <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Felix&backgroundColor=b6e3f4" alt="My profile" class="h-7 w-7 rounded-full border border-gray-200/80 object-cover shadow-sm" />
+                        <div class="text-xs text-[#54656f]">⋯</div>
+                      </div>
+                      <div class="space-y-1 p-2">
+                        <div class="flex items-center gap-2 rounded-lg border border-gray-200/60 bg-gray-50 p-1.5 text-[11px]">
+                          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Neha&backgroundColor=ffdfbf" alt="Neha" class="h-6 w-6 rounded-full border border-gray-200/80 object-cover shadow-sm" />
+                          <span>Neha</span>
+                        </div>
+                        <div class="flex items-center gap-2 rounded-lg p-1.5 text-[11px] text-gray-500">
+                          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Rahul&backgroundColor=c0aede" alt="Rahul" class="h-6 w-6 rounded-full border border-gray-200/80 object-cover shadow-sm" />
+                          <span>Rahul Engineering</span>
+                        </div>
+                        <div class="flex items-center gap-2 rounded-lg p-1.5 text-[11px] text-gray-500">
+                          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Alex&backgroundColor=d1d4f9" alt="Alex" class="h-6 w-6 rounded-full border border-gray-200/80 object-cover shadow-sm" />
+                          <span>Design Team</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex min-w-0 flex-1 flex-col">
+                      <div class="flex h-12 items-center justify-between border-b border-gray-200/80 bg-[#f7f8fa]/95 px-4 backdrop-blur-sm">
+                        <div class="flex items-center gap-3">
+                          <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=Neha&backgroundColor=ffdfbf" alt="Neha" class="h-7 w-7 rounded-full border border-gray-200/80 object-cover shadow-sm" />
+                          <div class="text-[13px] font-semibold text-[#111b21]">Neha</div>
+                        </div>
+                      </div>
+                      <div id="wa-chat-messages" class="flex-1 space-y-1.5 overflow-hidden p-2.5">
+                        <div class="flex justify-start">
+                          <div class="max-w-[75%] rounded-lg rounded-tl-sm border border-gray-200/80 bg-white/96 px-2.5 py-1.5 text-[12px] text-[#111b21] shadow-sm">Hey, what time are you reaching the office?</div>
+                        </div>
+                        <div class="flex justify-end">
+                          <div class="max-w-[75%] rounded-lg rounded-tr-sm border border-[#c7efc0] bg-[#daf5d2] px-2.5 py-1.5 text-[12px] text-[#111b21] shadow-sm">I just left the house.</div>
+                        </div>
+                        <div class="flex justify-start">
+                          <div class="max-w-[75%] rounded-lg rounded-tl-sm border border-gray-200/80 bg-white/96 px-2.5 py-1.5 text-[12px] text-[#111b21] shadow-sm">Okay, let me know if you need me for standup.</div>
+                        </div>
+                        <div id="wa-sent-msg" class="hidden justify-end opacity-0 transition-opacity duration-300">
+                          <div class="max-w-[75%] rounded-lg rounded-tr-sm border border-[#c7efc0] bg-[#daf5d2] px-2.5 py-1.5 text-[12px] text-[#111b21] shadow-sm">
+                            <p id="wa-msg-content"></p>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-2.5 border-t border-gray-200/70 bg-[#f7f8fa]/95 px-3 py-2 backdrop-blur-sm">
+                        <span class="material-icons text-base text-[#54656f]">sentiment_satisfied_alt</span>
+                        <div class="relative flex-1 rounded-lg border border-gray-200/80 bg-white px-2.5 py-1.5 shadow-sm">
+                          <span id="wa-input-text" class="text-[13px] text-[#111b21]"></span>
+                          <span id="wa-input-cursor" class="ml-px inline-block h-[14px] w-[1.5px] animate-pulse bg-[#667781]"></span>
+                          <div id="wa-shortcut-badge" class="absolute right-2.5 top-1.5 flex scale-95 gap-0.5 opacity-0 transition-all duration-300">
+                            <span class="rounded border border-[#00a884]/20 bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#00a884]">⌘</span>
+                            <span class="rounded border border-[#00a884]/20 bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#00a884]">⇧</span>
+                            <span class="rounded border border-[#00a884]/20 bg-white px-1.5 py-0.5 text-[10px] font-bold text-[#00a884]">V</span>
+                          </div>
+                        </div>
+                        <span id="wa-icon-send" class="material-icons text-lg text-[#54656f]">send</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="scene-email" class="mock-scene h-full w-full flex-col bg-[#f6f8fc]">
+                  <div class="flex h-full min-h-0">
+                    <div class="hidden w-[240px] shrink-0 bg-[#f6f8fc] p-3 sm:block">
+                      <button class="mb-4 flex w-full items-center gap-2 rounded-2xl bg-[#c2e7ff] px-4 py-3 text-sm">Redactar</button>
+                      <div class="space-y-1 text-sm">
+                        <div class="rounded-r-full bg-[#d3e3fd] px-4 py-2 font-bold">Recibidos</div>
+                        <div class="rounded-r-full px-4 py-2 text-[#444746]">Destacados</div>
+                        <div class="rounded-r-full px-4 py-2 text-[#444746]">Enviados</div>
+                      </div>
+                    </div>
+                    <div class="flex min-w-0 flex-1 flex-col rounded-t-2xl border border-gray-200 bg-white">
+                      <div class="h-12 border-b border-gray-100"></div>
+                      <div class="flex-1 space-y-1 overflow-hidden">
+                        <div class="flex items-center border-b border-gray-100 bg-white px-4 py-2 text-sm"><span class="w-40 font-bold">Equipo de Diseño</span><span class="truncate font-bold">Nuevos mockups listos</span></div>
+                        <div class="flex items-center border-b border-gray-100 bg-[#f2f6fc] px-4 py-2 text-sm"><span class="w-40">Sarah Chen</span><span class="truncate">Actualización del proyecto</span></div>
+                        <div class="flex items-center border-b border-gray-100 bg-[#f2f6fc] px-4 py-2 text-sm"><span class="w-40">Recursos Humanos</span><span class="truncate">Recordatorio anual</span></div>
+                      </div>
+                    </div>
+                  </div>
+                  <div id="gmail-compose-box" class="absolute bottom-0 right-[4%] z-10 w-[92%] rounded-t-xl border border-gray-200 bg-white shadow-xl sm:w-[460px]">
+                    <div class="rounded-t-xl bg-[#f2f6fc] px-4 py-2.5 text-sm text-[#444746]">Mensaje nuevo</div>
+                    <div class="border-b border-gray-100 px-4 py-2 text-sm">Para: sarah.chen@company.com</div>
+                    <div class="border-b border-gray-100 px-4 py-2 text-sm">Asunto: Actualización importante del proyecto</div>
+                    <div class="relative min-h-[160px] p-4 text-sm">
+                      <span id="gmail-input-text" class="whitespace-pre-wrap rounded"></span>
+                      <span id="gmail-input-cursor" class="ml-px hidden h-[16px] w-[1.5px] animate-pulse bg-black"></span>
+                      <div id="gmail-shortcut-badge" class="pointer-events-none absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-1.5 rounded-lg border border-gray-200 bg-white p-2 opacity-0 transition-opacity duration-300">
+                        <span class="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-bold text-[#0b57d0]">⌘</span>
+                        <span class="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-bold text-[#0b57d0]">⇧</span>
+                        <span class="rounded border border-gray-200 bg-gray-50 px-2 py-1 text-xs font-bold text-[#0b57d0]">V</span>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-3 border-t border-gray-50 px-4 py-3">
+                      <button id="gmail-send-btn" class="rounded-full bg-[#0b57d0] px-5 py-2 text-sm font-medium text-white">Enviar</button>
+                    </div>
+                  </div>
+                  <div id="gmail-toast" class="absolute bottom-6 left-6 z-20 translate-y-20 rounded bg-[#323232] px-6 py-3 text-sm text-white opacity-0 transition-all duration-300">Mensaje enviado.</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="mx-auto mt-5 flex w-full max-w-5xl items-center justify-between gap-3">
+              <div class="grid flex-1 grid-cols-1 gap-3 sm:grid-cols-3">
+                <button class="app-tab active rounded-2xl border border-gray-200/80 bg-white/90 px-5 py-3 text-left transition hover:border-primary/30 dark:border-white/10 dark:bg-surface-dark/90" type="button" data-scene="whatsapp" data-title="WhatsApp - Team Chat">
+                  <span class="flex items-center gap-3">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" class="tab-logo-svg whatsapp">
+                      <path d="M20.52 3.48A11.8 11.8 0 0 0 12.11 0C5.6 0 .29 5.3.29 11.82c0 2.09.54 4.13 1.57 5.93L0 24l6.43-1.83a11.8 11.8 0 0 0 5.68 1.45h.01c6.51 0 11.82-5.3 11.82-11.82 0-3.16-1.23-6.13-3.47-8.32zM12.12 21.62h-.01a9.8 9.8 0 0 1-5-1.37l-.36-.21-3.82 1.09 1.1-3.72-.23-.38a9.77 9.77 0 0 1-1.5-5.22c0-5.42 4.4-9.82 9.83-9.82 2.62 0 5.08 1.02 6.93 2.87a9.75 9.75 0 0 1 2.88 6.95c0 5.41-4.41 9.81-9.82 9.81zm5.38-7.36c-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.96-.95 1.15-.17.2-.35.22-.65.08-.3-.15-1.27-.47-2.42-1.5a9.05 9.05 0 0 1-1.68-2.09c-.18-.3-.02-.46.13-.6.13-.13.3-.35.45-.52.15-.17.2-.3.3-.5.1-.2.05-.37-.03-.52-.08-.15-.67-1.62-.92-2.22-.24-.58-.48-.5-.67-.5h-.57c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.49 0 1.47 1.07 2.89 1.22 3.1.15.2 2.1 3.2 5.09 4.49.71.31 1.27.5 1.7.64.72.23 1.37.2 1.89.12.58-.09 1.76-.72 2.01-1.42.25-.7.25-1.3.17-1.42-.07-.13-.27-.2-.57-.35z"></path>
+                    </svg>
+                    <span>
+                      <span class="tab-title block text-sm font-semibold leading-none text-text-light dark:text-text-dark sm:text-base">WhatsApp</span>
+                      <span class="tab-subtitle block pt-0.5 text-[11px] text-muted-light dark:text-muted-dark sm:text-xs">Translate before sending</span>
+                    </span>
+                  </span>
+                </button>
+                <button class="app-tab rounded-2xl border border-gray-200/80 bg-white/90 px-5 py-3 text-left transition hover:border-primary/30 dark:border-white/10 dark:bg-surface-dark/90" type="button" data-scene="slack" data-title="Slack - #general">
+                  <span class="flex items-center gap-3">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" class="tab-logo-svg slack">
+                      <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"></path>
+                    </svg>
+                    <span>
+                      <span class="tab-title block text-sm font-semibold leading-none text-text-light dark:text-text-dark sm:text-base">Slack</span>
+                      <span class="tab-subtitle block text-[11px] text-muted-light dark:text-muted-dark sm:text-xs">Reply in any language</span>
+                    </span>
+                  </span>
+                </button>
+                <button class="app-tab rounded-2xl border border-gray-200/80 bg-white/90 px-5 py-3 text-left transition hover:border-primary/30 dark:border-white/10 dark:bg-surface-dark/90" type="button" data-scene="email" data-title="Gmail - New Message">
+                  <span class="flex items-center gap-3">
+                    <svg aria-hidden="true" viewBox="0 0 24 24" fill="currentColor" class="tab-logo-svg gmail">
+                      <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"></path>
+                    </svg>
+                    <span>
+                      <span class="tab-title block text-sm font-semibold leading-none text-text-light dark:text-text-dark sm:text-base">Email</span>
+                      <span class="tab-subtitle block text-[11px] text-muted-light dark:text-muted-dark sm:text-xs">Write globally</span>
+                    </span>
+                  </span>
+                </button>
+              </div>
+              <div class="hidden items-center gap-2 sm:flex">
+                <button id="app-prev" aria-label="Previous app view" class="grid h-12 w-12 place-items-center rounded-full bg-blue-50 text-primary transition hover:bg-blue-100 dark:bg-white/10 dark:hover:bg-white/20">
+                  <span class="material-icons">chevron_left</span>
+                </button>
+                <button id="app-next" aria-label="Next app view" class="grid h-12 w-12 place-items-center rounded-full bg-blue-50 text-primary transition hover:bg-blue-100 dark:bg-white/10 dark:hover:bg-white/20">
+                  <span class="material-icons">chevron_right</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="features" class="border-y border-gray-100 bg-white/70 py-20 dark:border-white/5 dark:bg-black/20">
+        <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+          <div class="mb-14 text-center">
+            <h2 class="text-3xl font-medium tracking-tight text-text-light sm:text-4xl font-serif dark:text-text-dark">Everything you need</h2>
+            <p class="mt-3 text-base text-muted-light dark:text-muted-dark">A simple shortcut that does all the heavy lifting for you.</p>
+          </div>
+
+          <div class="grid gap-4 sm:grid-cols-2">
+            <article class="flex flex-col rounded-3xl border border-transparent bg-primary/5 p-6 dark:border-white/10 dark:bg-surface-dark/70">
+              <div class="mb-6 flex flex-1 items-center justify-center gap-5 px-2 py-6">
+                <div class="min-w-0 flex-1 rounded-lg border border-gray-200/60 bg-white/80 px-4 py-2.5 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/10">
+                  <div class="flex min-h-[1.25rem] items-center text-[14px] text-text-light dark:text-text-dark">
+                    <span id="bento-text" class="whitespace-nowrap rounded-[3px] px-0.5">Hola, como estas?</span>
+                    <span id="bento-cursor" class="ml-px inline-block h-[14px] w-[1.5px] animate-pulse bg-text-light/60 dark:bg-text-dark/60"></span>
+                  </div>
+                </div>
+                <div class="flex shrink-0 items-center gap-1.5">
+                  <span id="bento-key-cmd" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200/80 bg-gradient-to-b from-white to-gray-50 font-mono text-lg font-semibold text-gray-600 shadow-[0_3px_0_0_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.9)]">⌘</span>
+                  <span id="bento-key-shift" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200/80 bg-gradient-to-b from-white to-gray-50 font-mono text-2xl font-semibold text-gray-600 shadow-[0_3px_0_0_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.9)]">⇧</span>
+                  <span id="bento-key-v" class="inline-flex h-10 w-10 items-center justify-center rounded-lg border border-gray-200/80 bg-gradient-to-b from-white to-gray-50 font-mono text-lg font-semibold text-gray-600 shadow-[0_3px_0_0_rgba(0,0,0,0.08),0_2px_4px_rgba(0,0,0,0.05),inset_0_1px_0_rgba(255,255,255,0.9)]">V</span>
+                </div>
+              </div>
+              <h3 class="text-lg font-semibold text-text-light dark:text-text-dark">One shortcut</h3>
+              <p class="mt-1 text-sm text-muted-light dark:text-muted-dark">Press CMD+SHIFT+V and the translation auto-pastes where you are typing. No extra steps.</p>
+            </article>
+
+            <article class="relative flex h-[240px] flex-col overflow-hidden rounded-3xl border border-transparent bg-primary/5 dark:border-white/10 dark:bg-surface-dark/70">
+              <div class="p-6 pb-2">
+                <h3 class="text-lg font-semibold text-text-light dark:text-text-dark">Works everywhere</h3>
+                <p class="mt-1 text-sm text-muted-light dark:text-muted-dark">Slack, WhatsApp, browser, email, docs and social apps.</p>
+              </div>
+              <div class="relative flex flex-1 items-center overflow-hidden">
+                <div class="flex w-max gap-5" style="animation: marquee 30s linear infinite">
+                  <div class="flex gap-5">
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/slack.png" alt="Slack" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/notion.png" alt="Notion" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/gmail.png" alt="Gmail" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/figma.png" alt="Figma" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/whatsapp.png" alt="WhatsApp" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/discord.png" alt="Discord" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/chrome.png" alt="Chrome" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/safari.png" alt="Safari" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/linkedin.png" alt="LinkedIn" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/x.png" alt="X" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/teams.png" alt="Teams" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/cursor.png" alt="Cursor" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/lovable.png" alt="Lovable" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/obsidian.png" alt="Obsidian" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/claude.png" alt="Claude" class="logo-img h-full w-full object-contain" /></div>
+                  </div>
+                  <div class="flex gap-5">
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/slack.png" alt="Slack" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/notion.png" alt="Notion" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/gmail.png" alt="Gmail" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/figma.png" alt="Figma" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/whatsapp.png" alt="WhatsApp" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/discord.png" alt="Discord" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/chrome.png" alt="Chrome" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/safari.png" alt="Safari" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/linkedin.png" alt="LinkedIn" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/x.png" alt="X" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/teams.png" alt="Teams" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/cursor.png" alt="Cursor" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/lovable.png" alt="Lovable" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/obsidian.png" alt="Obsidian" class="logo-img h-full w-full object-contain" /></div>
+                    <div class="logo-cell flex h-14 w-14 shrink-0 items-center justify-center"><img src="/icons/claude.png" alt="Claude" class="logo-img h-full w-full object-contain" /></div>
+                  </div>
+                </div>
+                <div class="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-primary/5 to-transparent"></div>
+                <div class="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-primary/5 to-transparent"></div>
+              </div>
+            </article>
+          </div>
+
+          <div class="mt-4 grid gap-4 sm:grid-cols-3">
+            <article class="flex flex-col rounded-3xl border border-transparent bg-primary/5 p-6 dark:border-white/10 dark:bg-surface-dark/70">
+              <div class="mb-4 flex flex-1 items-center">
+                <div class="flex flex-wrap gap-1.5">
+                  <span class="inline-block rounded-full border border-gray-100/60 bg-white/80 px-2.5 py-1 text-xs font-medium text-text-light dark:border-white/10 dark:bg-white/10 dark:text-text-dark">Hello</span>
+                  <span class="inline-block rounded-full border border-gray-100/60 bg-white/80 px-2.5 py-1 text-xs font-medium text-text-light dark:border-white/10 dark:bg-white/10 dark:text-text-dark">Hola</span>
+                  <span class="inline-block rounded-full border border-gray-100/60 bg-white/80 px-2.5 py-1 text-xs font-medium text-text-light dark:border-white/10 dark:bg-white/10 dark:text-text-dark">Bonjour</span>
+                  <span class="inline-block rounded-full border border-gray-100/60 bg-white/80 px-2.5 py-1 text-xs font-medium text-text-light dark:border-white/10 dark:bg-white/10 dark:text-text-dark">Ciao</span>
+                  <span class="inline-block rounded-full border border-gray-100/60 bg-white/80 px-2.5 py-1 text-xs font-medium text-text-light dark:border-white/10 dark:bg-white/10 dark:text-text-dark">Hallo</span>
+                  <span class="inline-block rounded-full border border-gray-100/60 bg-white/80 px-2.5 py-1 text-xs font-medium text-text-light dark:border-white/10 dark:bg-white/10 dark:text-text-dark">Ola</span>
+                </div>
+              </div>
+              <h3 class="text-lg font-semibold text-text-light dark:text-text-dark">Any language</h3>
+              <p class="mt-1 text-sm text-muted-light dark:text-muted-dark">Auto-detects the source language. You choose where it goes.</p>
+            </article>
+
+            <article class="flex flex-col rounded-3xl border border-transparent bg-primary/5 p-6 dark:border-white/10 dark:bg-surface-dark/70">
+              <div class="mb-4 flex flex-1 items-center justify-center py-4">
+                <div class="w-full max-w-[240px] overflow-hidden rounded-xl border border-gray-200/60 bg-white/90 shadow-sm dark:border-white/10 dark:bg-white/10">
+                  <div class="flex items-center gap-2 border-b border-gray-100 px-3 py-2 dark:border-white/10">
+                    <span class="material-icons text-sm text-gray-400">tune</span>
+                    <span class="text-xs font-medium text-text-light dark:text-text-dark">Tone</span>
+                  </div>
+                  <div class="grid grid-cols-4 gap-1 p-1.5">
+                    <div class="flex flex-col items-center gap-1 rounded-lg px-1 py-2"><span class="material-icons text-base text-gray-500">auto_awesome</span><span class="text-[9px]">Orig</span></div>
+                    <div class="flex flex-col items-center gap-1 rounded-lg bg-primary/10 px-1 py-2"><span class="material-icons text-base text-primary">business_center</span><span class="text-[9px] text-primary">Formal</span></div>
+                    <div class="flex flex-col items-center gap-1 rounded-lg px-1 py-2"><span class="material-icons text-base text-gray-500">emoji_emotions</span><span class="text-[9px]">Casual</span></div>
+                    <div class="flex flex-col items-center gap-1 rounded-lg px-1 py-2"><span class="material-icons text-base text-gray-500">short_text</span><span class="text-[9px]">Brief</span></div>
+                  </div>
+                </div>
+              </div>
+              <h3 class="text-lg font-semibold text-text-light dark:text-text-dark">Custom tone</h3>
+              <p class="mt-1 text-sm text-muted-light dark:text-muted-dark">Set it to professional, casual, or write your own style.</p>
+            </article>
+
+            <article class="flex flex-col rounded-3xl border border-transparent bg-primary/5 p-6 dark:border-white/10 dark:bg-surface-dark/70">
+              <div class="mb-4 flex flex-1 flex-col items-center justify-center gap-6 py-6">
+                <div class="flex items-center justify-center gap-3">
+                  <div class="flex h-14 w-14 items-center justify-center rounded-xl border border-gray-200/70 bg-white shadow-lg dark:border-white/10 dark:bg-surface-dark-lighter">
+                    <img src="/icons/claude.png" alt="Claude" class="h-10 w-10 object-contain" />
+                  </div>
+                  <div class="flex h-14 w-14 items-center justify-center rounded-xl border border-gray-200/70 bg-white shadow-lg dark:border-white/10 dark:bg-surface-dark-lighter">
+                    <img src="/icons/ChatGPT_logo.svg" alt="ChatGPT" class="h-9 w-9 object-contain" />
+                  </div>
+                  <div class="flex h-14 w-14 items-center justify-center rounded-xl border border-gray-200/70 bg-white shadow-lg dark:border-white/10 dark:bg-surface-dark-lighter">
+                    <img src="/icons/gemini.svg" alt="Gemini" class="h-9 w-9 object-contain" />
+                  </div>
+                </div>
+                <div class="w-full rounded-lg border border-gray-200/60 bg-white/80 px-3 py-1 shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-white/10">
+                  <span class="font-mono text-[14px] tracking-tight text-muted-light/70 dark:text-muted-dark/70">sk-proj-4f8a...Tg3xW</span>
+                </div>
+              </div>
+              <h3 class="text-lg font-semibold text-text-light dark:text-text-dark">Your API key</h3>
+              <p class="mt-1 text-sm text-muted-light dark:text-muted-dark">Connect your own API key. Your texts never touch our servers.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="workflow" class="py-24">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div class="mb-16 text-center">
+            <h2 class="mb-4 text-3xl font-bold md:text-4xl">From 6 steps to 1 shortcut</h2>
+            <p class="text-muted-light dark:text-muted-dark">Positioning block to show contrast and accelerate conversion.</p>
+          </div>
+
+          <div class="grid gap-8 md:grid-cols-2">
+            <div class="relative overflow-hidden rounded-2xl border border-gray-200 bg-white p-8 dark:border-white/5 dark:bg-surface-dark">
+              <div class="absolute right-0 top-0 p-4 opacity-10"><span class="material-icons text-6xl text-red-500">timer_off</span></div>
+              <div class="mb-6 flex items-start justify-between">
+                <div>
+                  <h3 class="mb-1 text-lg font-bold">Without Control-V</h3>
+                  <p class="text-sm font-medium text-red-500">Manual process</p>
+                </div>
+                <span class="rounded-full border border-red-100 bg-red-50 px-3 py-1 text-xs font-bold text-red-600 dark:border-red-800/30 dark:bg-red-900/20 dark:text-red-300">~2 minutes</span>
+              </div>
+
+              <ul class="space-y-4 text-sm text-muted-light dark:text-muted-dark">
+                <li class="opacity-60">1. Copy selected text</li>
+                <li class="opacity-60">2. Open translation tool</li>
+                <li class="opacity-60">3. Paste and request translation</li>
+                <li class="opacity-60">4. Copy output</li>
+                <li class="opacity-60">5. Go back to original app</li>
+                <li class="opacity-60">6. Paste result</li>
+              </ul>
+            </div>
+
+            <div class="relative overflow-hidden rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-white p-8 shadow-lg shadow-blue-500/5 dark:border-blue-500/20 dark:from-[#1E1E38] dark:to-[#0F0F1E]">
+              <div class="absolute right-0 top-0 p-4 opacity-10"><span class="material-icons text-6xl text-primary">bolt</span></div>
+              <div class="mb-6 flex items-start justify-between">
+                <div>
+                  <h3 class="mb-1 text-lg font-bold">With Control-V</h3>
+                  <p class="text-sm font-medium text-primary">Native flow</p>
+                </div>
+                <span class="rounded-full border border-blue-200 bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700 dark:border-blue-700/50 dark:bg-blue-900/40 dark:text-blue-300">~2 seconds</span>
+              </div>
+
+              <div class="flex items-start gap-4">
+                <span class="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">1</span>
+                <div>
+                  <p class="mb-1 text-sm font-semibold">Select text and press <span class="mx-1 rounded border border-gray-200 bg-white px-1.5 font-mono dark:border-white/10 dark:bg-white/10">CMD+SHIFT+V</span></p>
+                  <p class="text-xs leading-relaxed text-muted-light dark:text-muted-dark">Translation appears in place. No tab switching, no copy loops.</p>
+                </div>
+              </div>
+
+              <div class="mt-8 rounded-xl border border-blue-100 bg-white p-4 backdrop-blur-sm dark:border-white/5 dark:bg-black/20">
+                <div class="mb-2 flex items-center gap-2">
+                  <div class="h-2 w-2 rounded-full bg-green-400"></div>
+                  <span class="text-xs font-mono text-muted-light dark:text-muted-dark">Success</span>
+                </div>
+                <div class="mb-1 h-2 w-3/4 rounded bg-gray-100 dark:bg-white/10"></div>
+                <div class="h-2 w-1/2 rounded bg-gray-100 dark:bg-white/10"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="pricing" class="py-24">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+          <div class="mb-12 text-center">
+            <h2 class="mb-3 text-3xl font-bold md:text-4xl">Simple monthly pricing</h2>
+            <p class="text-muted-light dark:text-muted-dark">Choose your monthly plan based on your LLM setup.</p>
+          </div>
+
+          <div class="mx-auto grid max-w-4xl gap-6 lg:grid-cols-2">
+            <article class="rounded-2xl border border-gray-200 bg-white p-7 dark:border-white/10 dark:bg-surface-dark">
+              <p class="text-sm font-medium text-muted-light dark:text-muted-dark">Connected LLM</p>
+              <p class="mt-3 text-4xl font-bold">$4.95</p>
+              <p class="mt-1 text-sm text-muted-light dark:text-muted-dark">USD / month</p>
+              <ul class="mt-5 space-y-2 text-sm">
+                <li>Use your own LLM/API key</li>
+                <li>All languages</li>
+                <li>Shortcut translation in any app</li>
+              </ul>
+              <a href="#" class="mt-7 inline-flex rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium hover:bg-gray-100 dark:border-white/20 dark:hover:bg-white/10">Choose $4.95/mo</a>
+            </article>
+
+            <article class="relative rounded-2xl border border-primary bg-white p-7 shadow-lg shadow-blue-500/20 dark:bg-surface-dark">
+              <span class="absolute -top-3 left-6 rounded-full bg-primary px-3 py-1 text-xs font-bold text-white">Most popular</span>
+              <p class="text-sm font-medium text-muted-light dark:text-muted-dark">No LLM Connected</p>
+              <p class="mt-3 text-4xl font-bold">$7.95</p>
+              <p class="mt-1 text-sm text-muted-light dark:text-muted-dark">USD / month</p>
+              <ul class="mt-5 space-y-2 text-sm">
+                <li>Managed LLM included</li>
+                <li>No API key required</li>
+                <li>Instant setup</li>
+              </ul>
+              <a href="#" class="mt-7 inline-flex rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white hover:bg-primary-hover">Choose $7.95/mo</a>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section id="faq" class="bg-gray-50 py-24 dark:bg-black/20">
+        <div class="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
+          <div class="mb-12 text-center">
+            <h2 class="mb-3 text-3xl font-bold md:text-4xl">FAQ</h2>
+            <p class="text-muted-light dark:text-muted-dark">Objections handled before checkout.</p>
+          </div>
+
+          <div class="space-y-4">
+            <details class="rounded-xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-surface-dark" open>
+              <summary class="cursor-pointer font-semibold">Does it work outside the browser?</summary>
+              <p class="mt-2 text-sm text-muted-light dark:text-muted-dark">Yes. It works across native macOS apps and browser-based tools.</p>
+            </details>
+            <details class="rounded-xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-surface-dark">
+              <summary class="cursor-pointer font-semibold">Do you store user text?</summary>
+              <p class="mt-2 text-sm text-muted-light dark:text-muted-dark">No. Translation requests go directly from your machine to your configured provider.</p>
+            </details>
+            <details class="rounded-xl border border-gray-200 bg-white p-5 dark:border-white/10 dark:bg-surface-dark">
+              <summary class="cursor-pointer font-semibold">Can I bring my own API key?</summary>
+              <p class="mt-2 text-sm text-muted-light dark:text-muted-dark">Yes. You can connect your own key and control usage directly from provider dashboard.</p>
+            </details>
+          </div>
+        </div>
+      </section>
+
+      <section class="relative overflow-hidden bg-primary py-24 text-white">
+        <div class="absolute inset-0 opacity-10">
+          <svg width="100%" height="100%" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+                <path d="M 40 0 L 0 0 0 40" fill="none" stroke="currentColor" stroke-width="1"></path>
+              </pattern>
+            </defs>
+            <rect width="100%" height="100%" fill="url(#grid)"></rect>
+          </svg>
+        </div>
+
+        <div class="relative z-10 mx-auto max-w-4xl px-4 text-center">
+          <h2 class="mb-6 text-4xl font-bold tracking-tight md:text-5xl">Ready to ship faster with Control-V?</h2>
+          <div class="mb-10 flex items-center justify-center gap-3 text-sm text-blue-100">
+            <span>14-day free trial</span>
+            <span class="h-1 w-1 rounded-full bg-blue-300"></span>
+            <span>macOS only</span>
+            <span class="h-1 w-1 rounded-full bg-blue-300"></span>
+            <span>Monthly plans</span>
+          </div>
+          <div class="flex flex-col items-center justify-center gap-4 sm:flex-row">
+            <a href="#pricing" class="w-full rounded-lg border border-blue-400/30 bg-blue-700/50 px-8 py-3.5 font-medium backdrop-blur-sm transition-colors hover:bg-blue-700 sm:w-auto">See plans</a>
+            <a href="https://github.com/juanda89/ctrlv/releases/latest/download/ctrlv-latest.dmg" class="w-full rounded-lg bg-white px-8 py-3.5 font-bold text-primary shadow-lg transition-colors hover:bg-blue-50 sm:w-auto">Download for Mac</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="border-t border-gray-200 bg-background-light py-12 dark:border-white/5 dark:bg-background-dark">
+      <div class="mx-auto max-w-7xl px-4 text-center">
+        <div class="mb-6 flex justify-center">
+          <div class="overflow-hidden rounded-xl border border-blue-100 bg-white p-2 dark:border-white/10 dark:bg-surface-dark">
+            <img src="assets/control-v-logo.svg" alt="Control-V logo" class="h-8 w-8 rounded object-cover" />
+          </div>
+        </div>
+        <p class="mb-2 text-sm text-muted-light dark:text-muted-dark">2026 Control-V. All rights reserved.</p>
+        <p class="text-xs opacity-70 text-muted-light dark:text-muted-dark">Built by Ctrl-V</p>
+      </div>
+    </footer>
+    <script>
+      const appTabs = Array.from(document.querySelectorAll(".app-tab"));
+      const scenes = {
+        slack: document.getElementById("scene-slack"),
+        whatsapp: document.getElementById("scene-whatsapp"),
+        email: document.getElementById("scene-email")
+      };
+      const appTitle = document.getElementById("app-window-title");
+      const appPrev = document.getElementById("app-prev");
+      const appNext = document.getElementById("app-next");
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+      function activateTab(tab) {
+        appTabs.forEach((item) => item.classList.remove("active"));
+        tab.classList.add("active");
+        Object.values(scenes).forEach((scene) => scene.classList.remove("active"));
+        const target = scenes[tab.dataset.scene];
+        if (target) target.classList.add("active");
+        appTitle.textContent = tab.dataset.title || "Control-V";
+      }
+
+      appTabs.forEach((tab) => {
+        tab.addEventListener("click", () => activateTab(tab));
+      });
+
+      function moveTab(direction) {
+        const currentIndex = appTabs.findIndex((tab) => tab.classList.contains("active"));
+        const nextIndex = (currentIndex + direction + appTabs.length) % appTabs.length;
+        activateTab(appTabs[nextIndex]);
+      }
+
+      if (appPrev) appPrev.addEventListener("click", () => moveTab(-1));
+      if (appNext) appNext.addEventListener("click", () => moveTab(1));
+
+      async function typeText(element, text, speed = 70) {
+        element.textContent = "";
+        for (let i = 0; i < text.length; i += 1) {
+          element.textContent += text.charAt(i);
+          await sleep(speed + Math.random() * 40);
+        }
+      }
+
+      async function runSlackAnimation() {
+        const inputText = document.getElementById("slack-input-text");
+        const shortcutBadge = document.getElementById("slack-shortcut-badge");
+        const cursor = document.getElementById("slack-input-cursor");
+        const youMsg = document.getElementById("slack-you-msg");
+        const sentMsgText = document.getElementById("slack-msg");
+        if (!inputText || !shortcutBadge || !cursor || !youMsg || !sentMsgText) return;
+
+        const textES = "He encontrado el error en la base de datos. Ya estoy subiendo el parche.";
+        const textEN = "I found the error in the database. I am uploading the patch now.";
+
+        while (true) {
+          inputText.textContent = "";
+          inputText.classList.remove("slack-selected");
+          shortcutBadge.style.opacity = "0";
+          shortcutBadge.style.transform = "scale(0.95)";
+          cursor.style.display = "inline-block";
+          youMsg.style.opacity = "0";
+          await sleep(350);
+          youMsg.classList.add("hidden");
+          await sleep(900);
+          await typeText(inputText, textES, 50);
+          await sleep(700);
+          inputText.classList.add("slack-selected");
+          cursor.style.display = "none";
+          await sleep(700);
+          shortcutBadge.style.opacity = "1";
+          shortcutBadge.style.transform = "scale(1)";
+          await sleep(1000);
+          inputText.classList.remove("slack-selected");
+          inputText.textContent = textEN;
+          shortcutBadge.style.opacity = "0";
+          shortcutBadge.style.transform = "scale(0.95)";
+          cursor.style.display = "inline-block";
+          await sleep(900);
+          inputText.textContent = "";
+          await sleep(300);
+          sentMsgText.textContent = textEN;
+          youMsg.classList.remove("hidden");
+          youMsg.classList.add("flex");
+          void youMsg.offsetWidth;
+          youMsg.style.opacity = "1";
+          await sleep(3800);
+        }
+      }
+
+      async function runWhatsAppAnimation() {
+        const inputText = document.getElementById("wa-input-text");
+        const shortcutBadge = document.getElementById("wa-shortcut-badge");
+        const cursor = document.getElementById("wa-input-cursor");
+        const sentMsgContainer = document.getElementById("wa-sent-msg");
+        const sentMsgText = document.getElementById("wa-msg-content");
+        const iconSend = document.getElementById("wa-icon-send");
+        const chatMessages = document.getElementById("wa-chat-messages");
+        if (!inputText || !shortcutBadge || !cursor || !sentMsgContainer || !sentMsgText || !iconSend || !chatMessages) return;
+
+        const textHindi = "हाँ, कृपया मेरी जगह ले लें। मुझे थोड़ी देर हो जाएगी।";
+        const textEnglish = "Yes, please cover for me. I'll be a little late.";
+
+        while (true) {
+          inputText.textContent = "";
+          inputText.classList.remove("wa-selected");
+          shortcutBadge.style.opacity = "0";
+          shortcutBadge.style.transform = "scale(0.95)";
+          cursor.style.display = "inline-block";
+          sentMsgContainer.style.opacity = "0";
+          iconSend.classList.remove("hidden");
+          await sleep(400);
+          sentMsgContainer.classList.add("hidden");
+          await sleep(1200);
+          await typeText(inputText, textHindi, 55);
+          await sleep(700);
+          inputText.classList.add("wa-selected");
+          cursor.style.display = "none";
+          await sleep(700);
+          shortcutBadge.style.opacity = "1";
+          shortcutBadge.style.transform = "scale(1)";
+          await sleep(1100);
+          inputText.classList.remove("wa-selected");
+          inputText.textContent = textEnglish;
+          shortcutBadge.style.opacity = "0";
+          shortcutBadge.style.transform = "scale(0.95)";
+          cursor.style.display = "inline-block";
+          await sleep(900);
+          inputText.textContent = "";
+          await sleep(350);
+          sentMsgText.textContent = textEnglish;
+          sentMsgContainer.classList.remove("hidden");
+          sentMsgContainer.classList.add("flex");
+          void sentMsgContainer.offsetWidth;
+          sentMsgContainer.style.opacity = "1";
+          chatMessages.scrollTop = chatMessages.scrollHeight;
+          await sleep(4600);
+        }
+      }
+
+      async function runEmailAnimation() {
+        const composeBox = document.getElementById("gmail-compose-box");
+        const inputText = document.getElementById("gmail-input-text");
+        const shortcutBadge = document.getElementById("gmail-shortcut-badge");
+        const cursor = document.getElementById("gmail-input-cursor");
+        const sendBtn = document.getElementById("gmail-send-btn");
+        const toast = document.getElementById("gmail-toast");
+        if (!composeBox || !inputText || !shortcutBadge || !cursor || !sendBtn || !toast) return;
+
+        const textES = "Hola Sarah,\n\nTe envio la propuesta comercial actualizada para Madrid.\n\nSaludos,\nDiego";
+        const textEN = "Hi Sarah,\n\nI'm sending the updated commercial proposal for Madrid.\n\nBest regards,\nDiego";
+
+        while (true) {
+          inputText.textContent = "";
+          inputText.classList.remove("gmail-selected");
+          shortcutBadge.style.opacity = "0";
+          sendBtn.classList.remove("btn-click-effect");
+          toast.style.opacity = "0";
+          toast.style.transform = "translateY(20px)";
+          composeBox.style.transform = "translateY(0)";
+          composeBox.style.opacity = "1";
+          cursor.classList.remove("hidden");
+          await sleep(1300);
+          await typeText(inputText, textES, 40);
+          await sleep(900);
+          inputText.classList.add("gmail-selected");
+          cursor.classList.add("hidden");
+          await sleep(700);
+          shortcutBadge.style.opacity = "1";
+          await sleep(1000);
+          inputText.classList.remove("gmail-selected");
+          inputText.textContent = textEN;
+          shortcutBadge.style.opacity = "0";
+          cursor.classList.remove("hidden");
+          await sleep(1100);
+          cursor.classList.add("hidden");
+          sendBtn.classList.add("btn-click-effect");
+          await sleep(160);
+          sendBtn.classList.remove("btn-click-effect");
+          await sleep(260);
+          composeBox.style.transform = "translateY(100%)";
+          composeBox.style.opacity = "0";
+          await sleep(400);
+          toast.style.opacity = "1";
+          toast.style.transform = "translateY(0)";
+          await sleep(4300);
+        }
+      }
+
+      async function runBentoShortcutAnimation() {
+        const bentoText = document.getElementById("bento-text");
+        const bentoCursor = document.getElementById("bento-cursor");
+        const keyCmd = document.getElementById("bento-key-cmd");
+        const keyShift = document.getElementById("bento-key-shift");
+        const keyV = document.getElementById("bento-key-v");
+        if (!bentoText || !bentoCursor || !keyCmd || !keyShift || !keyV) return;
+
+        while (true) {
+          bentoText.textContent = "Hola, como estas?";
+          bentoText.style.backgroundColor = "transparent";
+          bentoCursor.style.opacity = "1";
+          [keyCmd, keyShift, keyV].forEach((k) => {
+            k.style.transform = "translateY(0)";
+            k.style.boxShadow =
+              "0 3px 0 0 rgba(0,0,0,0.08),0 2px 4px rgba(0,0,0,0.05),inset 0 1px 0 rgba(255,255,255,0.9)";
+          });
+
+          await sleep(1200);
+
+          bentoText.style.backgroundColor = "rgba(59, 130, 246, 0.15)";
+          bentoCursor.style.opacity = "0";
+
+          [keyCmd, keyShift, keyV].forEach((k, i) => {
+            setTimeout(() => {
+              k.style.transform = "translateY(1px)";
+              k.style.boxShadow =
+                "0 1px 0 0 rgba(0,0,0,0.12),0 1px 2px rgba(0,0,0,0.06),inset 0 1px 0 rgba(255,255,255,0.9)";
+            }, i * 80);
+          });
+
+          await sleep(450);
+          bentoText.textContent = "Hi, how are you?";
+          bentoText.style.backgroundColor = "transparent";
+          [keyCmd, keyShift, keyV].forEach((k) => {
+            k.style.transform = "translateY(0)";
+          });
+
+          await sleep(2200);
+        }
+      }
+
+      runSlackAnimation();
+      runWhatsAppAnimation();
+      runEmailAnimation();
+      runBentoShortcutAnimation();
+    </script>
+  </body>
+</html>

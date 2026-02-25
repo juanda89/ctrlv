@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:translator}",
+            "name": "Debug InstantTranslator",
+            "target": "InstantTranslator",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug InstantTranslator"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:translator}",
+            "name": "Release InstantTranslator",
+            "target": "InstantTranslator",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release InstantTranslator"
+        }
+    ]
+}

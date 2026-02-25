@@ -1,0 +1,16 @@
+<?xml version="1.0" standalone="yes"?>
+<rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
+    <channel>
+        <title>ctrl+v</title>
+        <item>
+            <title>1.0.1</title>
+            <pubDate>Tue, 24 Feb 2026 18:17:22 -0500</pubDate>
+            <sparkle:version>101</sparkle:version>
+            <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+            <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
+            <sparkle:releaseNotesLink>https://control-v.info/release-notes/ctrlv-1.0.1.md</sparkle:releaseNotesLink>
+            <enclosure url="https://control-v.info/downloads/ctrlv-1.0.1.zip" length="1382717" type="application/octet-stream" sparkle:edSignature="hFDygHZad4uZVMpfBL3WhOliltV1kQFkD1dkduD3WffA7CUSYj2icQqpoeST1nXvoR3kYORMD3FZtfALI2K6BA=="/>
+        </item>
+    </channel>
+</rss>

@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+.swiftpm/
+*.xcodeproj/
+*.xcworkspace/
+DerivedData/
+.env
+build/
+dist/
+updates/stable/*
+!updates/stable/appcast.xml
+*.dmg

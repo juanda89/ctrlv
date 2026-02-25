@@ -1,0 +1,145 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Release version (e.g. 1.2.0). If empty, uses Info.plist."
+        required: false
+        type: string
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: macos-14
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy-pages.outputs.page_url }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release version
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION=$(/usr/libexec/PlistBuddy -c "Print:CFBundleShortVersionString" Resources/Info.plist)
+          fi
+          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
+
+      - name: Ensure scripts are executable
+        run: chmod +x scripts/*.sh
+
+      - name: Validate Sparkle signing secret
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: |
+          if [[ -z "${SPARKLE_EDDSA_PRIVATE_KEY}" ]]; then
+            echo "SPARKLE_EDDSA_PRIVATE_KEY is required to publish signed Sparkle updates."
+            exit 1
+          fi
+
+      - name: Build release artifacts
+        env:
+          APPLE_DEVELOPER_ID_APPLICATION: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+        run: ./scripts/build-release.sh "${VERSION}"
+
+      - name: Ensure release notes file
+        run: |
+          NOTES_FILE="dist/${VERSION}/release-notes.md"
+          if [[ ! -f "${NOTES_FILE}" ]]; then
+            cat > "${NOTES_FILE}" <<EOF
+          # ctrl+v ${VERSION}
+
+          - Improvements and fixes.
+          EOF
+          fi
+
+      - name: Prepare stable latest DMG alias
+        run: |
+          cp "dist/${VERSION}/ctrlv-${VERSION}.dmg" "dist/${VERSION}/ctrlv-latest.dmg"
+
+      - name: Validate latest DMG alias
+        run: |
+          LATEST_DMG="dist/${VERSION}/ctrlv-latest.dmg"
+          if [[ ! -s "${LATEST_DMG}" ]]; then
+            echo "Missing or empty ${LATEST_DMG}"
+            exit 1
+          fi
+
+      - name: Generate Sparkle appcast
+        env:
+          SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+          DOWNLOAD_URL_PREFIX: ${{ vars.CTRLV_DOWNLOADS_BASE_URL }}
+          RELEASE_NOTES_URL_PREFIX: ${{ vars.CTRLV_RELEASE_NOTES_BASE_URL }}
+        run: |
+          DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://control-v.info/downloads}"
+          NOTES_PREFIX="${RELEASE_NOTES_URL_PREFIX:-https://control-v.info/release-notes}"
+          ./scripts/generate-appcast.sh "${VERSION}" "${DOWNLOAD_PREFIX}" "${NOTES_PREFIX}"
+
+      - name: Build landing metadata
+        env:
+          DOWNLOAD_URL_PREFIX: ${{ vars.CTRLV_DOWNLOADS_BASE_URL }}
+        run: |
+          DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://control-v.info/downloads}"
+          CHECKSUMS="dist/${VERSION}/SHA256SUMS.txt"
+          ZIP_SHA=$(awk '/ctrlv-.*\.zip/{print $1}' "${CHECKSUMS}" | head -n 1)
+          DMG_SHA=$(awk '/ctrlv-.*\.dmg/{print $1}' "${CHECKSUMS}" | head -n 1)
+          cat > docs/latest.json <<EOF
+          {
+            "version": "${VERSION}",
+            "dmg_url": "${DOWNLOAD_PREFIX}/ctrlv-${VERSION}.dmg",
+            "zip_url": "${DOWNLOAD_PREFIX}/ctrlv-${VERSION}.zip",
+            "dmg_sha256": "${DMG_SHA}",
+            "zip_sha256": "${ZIP_SHA}"
+          }
+          EOF
+          cp "dist/${VERSION}/SHA256SUMS.txt" "docs/SHA256SUMS.txt"
+
+      - name: Copy binaries to Pages
+        run: |
+          mkdir -p docs/downloads docs/release-notes
+          cp "dist/${VERSION}/ctrlv-${VERSION}.dmg" "docs/downloads/"
+          cp "dist/${VERSION}/ctrlv-latest.dmg" "docs/downloads/"
+          cp "dist/${VERSION}/ctrlv-${VERSION}.zip" "docs/downloads/"
+          cp "dist/${VERSION}/release-notes.md" "docs/release-notes/ctrlv-${VERSION}.md"
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          generate_release_notes: true
+          files: |
+            dist/${{ env.VERSION }}/ctrlv-${{ env.VERSION }}.dmg
+            dist/${{ env.VERSION }}/ctrlv-latest.dmg
+            dist/${{ env.VERSION }}/ctrlv-${{ env.VERSION }}.zip
+            dist/${{ env.VERSION }}/SHA256SUMS.txt
+            dist/${{ env.VERSION }}/release-notes.md
+            updates/stable/appcast.xml
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy Pages
+        id: deploy-pages
+        uses: actions/deploy-pages@v4
