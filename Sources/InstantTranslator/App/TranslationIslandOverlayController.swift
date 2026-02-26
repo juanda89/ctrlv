@@ -1,13 +1,16 @@
 import AppKit
 import QuartzCore
 import SwiftUI
+import os
 
 @MainActor
 final class TranslationIslandOverlayController {
+    private let log = Logger(subsystem: "com.instanttranslator.app", category: "translation-island")
+
     private enum Metrics {
         static let expandedSize = NSSize(width: 224, height: 44)
         static let collapsedSize = NSSize(width: 158, height: 10)
-        static let topInset: CGFloat = 1
+        static let topInset: CGFloat = 6
         static let visibleDuration: TimeInterval = 0.36
         static let hideDuration: TimeInterval = 0.62
         static let minimumVisibleDuration: TimeInterval = 0.95
@@ -36,6 +39,7 @@ final class TranslationIslandOverlayController {
         shownAt = Date()
 
         let visibleFrame = frame(for: .visible)
+        log.info("show overlay frame: \(String(describing: visibleFrame), privacy: .public)")
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Metrics.visibleDuration
             context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1.0, 0.36, 1.0)
@@ -77,6 +81,7 @@ final class TranslationIslandOverlayController {
         scheduledHide = nil
         isVisible = false
         shownAt = nil
+        log.info("hide overlay frame: \(String(describing: hiddenFrame), privacy: .public)")
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Metrics.hideDuration
             context.timingFunction = CAMediaTimingFunction(controlPoints: 0.40, 0.0, 0.20, 1.0)
@@ -98,7 +103,7 @@ final class TranslationIslandOverlayController {
             defer: false
         )
         panel.isFloatingPanel = true
-        panel.level = .statusBar
+        panel.level = .popUpMenu
         panel.backgroundColor = .clear
         panel.isOpaque = false
         panel.hasShadow = true
@@ -119,6 +124,18 @@ final class TranslationIslandOverlayController {
         self.panel = panel
     }
 
+    func debugPulse() {
+        show()
+        let workItem = DispatchWorkItem { [weak self] in
+            Task { @MainActor in
+                self?.hide()
+            }
+        }
+        scheduledHide?.cancel()
+        scheduledHide = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.4, execute: workItem)
+    }
+
     private func repositionIfNeeded() {
         guard let panel else { return }
         panel.setFrame(frame(for: isVisible ? .visible : .hidden), display: false)
@@ -130,30 +147,35 @@ final class TranslationIslandOverlayController {
     }
 
     private func frame(for state: OverlayState) -> NSRect {
-        let bounds = targetScreenBounds()
+        let screen = targetScreen()
+        let bounds = screen.frame
+        let visibleBounds = screen.visibleFrame
         let size = (state == .visible) ? Metrics.expandedSize : Metrics.collapsedSize
         let x = bounds.midX - (size.width / 2)
 
         switch state {
         case .visible:
-            let y = bounds.maxY - size.height - Metrics.topInset
+            let y = visibleBounds.maxY - size.height - Metrics.topInset
             return NSRect(x: x, y: y, width: size.width, height: size.height)
         case .hidden:
-            let y = bounds.maxY + 4
+            let y = visibleBounds.maxY + 4
             return NSRect(x: x, y: y, width: size.width, height: size.height)
         }
     }
 
-    private func targetScreenBounds() -> NSRect {
-        if let underMouse = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })?.frame {
+    private func targetScreen() -> NSScreen {
+        if let underMouse = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) {
             return underMouse
         }
 
-        if let main = NSScreen.main?.frame {
+        if let main = NSScreen.main {
             return main
         }
 
-        return NSScreen.screens.first?.frame ?? .zero
+        guard let fallback = NSScreen.screens.first else {
+            fatalError("No NSScreen available for translation island overlay")
+        }
+        return fallback
     }
 }
 

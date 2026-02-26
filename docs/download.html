@@ -140,12 +140,15 @@
             Download the latest `.dmg`, move the app to <span class="font-semibold text-text-light dark:text-text-dark">Applications</span>, then open it and start translating.
           </p>
           <div class="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
-            <a id="download-button" href="https://github.com/juanda89/ctrlv/releases/latest/download/ctrlv-latest.dmg" class="w-full rounded-lg bg-primary px-8 py-3.5 font-medium text-white shadow-lg shadow-blue-500/30 transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-blue-500/50 sm:w-auto">Download latest .dmg</a>
+            <a id="download-button" href="https://github.com/juanda89/ctrlv/releases/latest/download/ctrlv-latest.dmg" class="w-full rounded-lg bg-primary px-8 py-3.5 font-medium text-white shadow-lg shadow-blue-500/30 transition-all duration-200 hover:-translate-y-0.5 hover:bg-primary-hover hover:shadow-blue-500/50 sm:w-auto">Download .dmg</a>
             <a href="index.html" class="w-full rounded-lg border border-gray-300 px-8 py-3.5 font-medium text-text-light transition-colors hover:bg-gray-100 dark:border-white/20 dark:text-text-dark dark:hover:bg-white/10 sm:w-auto">Back to landing</a>
           </div>
+          <p id="latest-version-label" class="mt-2 text-xs text-muted-light dark:text-muted-dark">
+            Resolving latest version...
+          </p>
           <p class="mt-3 text-sm text-muted-light dark:text-muted-dark">
             If download does not start,
-            <a href="https://github.com/juanda89/ctrlv/releases/latest/download/ctrlv-latest.dmg" class="font-semibold text-primary hover:text-primary-hover">click here again</a>.
+            <a id="retry-download-link" href="https://github.com/juanda89/ctrlv/releases/latest/download/ctrlv-latest.dmg" class="font-semibold text-primary hover:text-primary-hover">click here again</a>.
           </p>
         </div>
 
@@ -157,7 +160,7 @@
                 <div class="flex items-center justify-between rounded-lg bg-slate-900 px-3 py-2 text-white shadow">
                   <span class="flex items-center gap-2">
                     <span class="material-icons text-base text-amber-300">download</span>
-                    ctrlv-latest.dmg
+                    <span data-latest-dmg-name>ctrlv-latest.dmg</span>
                   </span>
                   <span class="text-xs text-slate-300">new</span>
                 </div>
@@ -168,7 +171,7 @@
             <div class="p-6">
               <p class="text-xl font-bold">1. Open the DMG</p>
               <p class="mt-2 text-sm leading-relaxed text-muted-light dark:text-muted-dark">
-                Find <span class="font-semibold">ctrlv-latest.dmg</span> in Downloads and double-click it.
+                Find <span class="font-semibold" data-latest-dmg-name>ctrlv-latest.dmg</span> in Downloads and double-click it.
               </p>
             </div>
           </article>
@@ -233,14 +236,90 @@
     </footer>
 
     <script>
+      const FALLBACK_URL = "https://github.com/juanda89/ctrlv/releases/latest/download/ctrlv-latest.dmg";
+      const FALLBACK_FILE_NAME = "ctrlv-latest.dmg";
+      const GH_LATEST_RELEASE_API = "https://api.github.com/repos/juanda89/ctrlv/releases/latest";
+
       const downloadButton = document.getElementById("download-button");
+      const retryDownloadLink = document.getElementById("retry-download-link");
+      const latestVersionLabel = document.getElementById("latest-version-label");
+      const filenameTargets = Array.from(document.querySelectorAll("[data-latest-dmg-name]"));
+
       const urlParams = new URLSearchParams(window.location.search);
       const shouldAutostart = urlParams.get("autostart") === "1";
-      if (downloadButton && shouldAutostart) {
-        setTimeout(() => {
-          downloadButton.click();
-        }, 650);
+
+      function applyDownloadMeta({ url, fileName, versionText }) {
+        if (downloadButton) {
+          downloadButton.href = url;
+          downloadButton.textContent = `Download ${fileName}`;
+        }
+
+        if (retryDownloadLink) {
+          retryDownloadLink.href = url;
+        }
+
+        filenameTargets.forEach((element) => {
+          element.textContent = fileName;
+        });
+
+        if (latestVersionLabel) {
+          latestVersionLabel.textContent = versionText
+            ? `Latest version: ${versionText}`
+            : "Latest version available";
+        }
       }
+
+      async function resolveLatestVersionedDMG() {
+        const response = await fetch(GH_LATEST_RELEASE_API, {
+          headers: { Accept: "application/vnd.github+json" }
+        });
+        if (!response.ok) {
+          throw new Error(`GitHub API failed with ${response.status}`);
+        }
+
+        const release = await response.json();
+        const assets = Array.isArray(release.assets) ? release.assets : [];
+
+        const versionedDMG = assets.find((asset) =>
+          /^ctrlv-\d+\.\d+\.\d+\.dmg$/i.test(asset.name || "")
+        );
+
+        if (!versionedDMG?.browser_download_url) {
+          throw new Error("No versioned DMG asset found in latest release");
+        }
+
+        const tag = typeof release.tag_name === "string" ? release.tag_name : "";
+        const normalizedTag = tag.startsWith("v") ? tag : `v${tag}`;
+
+        return {
+          url: versionedDMG.browser_download_url,
+          fileName: versionedDMG.name,
+          versionText: normalizedTag
+        };
+      }
+
+      async function initializeDownload() {
+        applyDownloadMeta({
+          url: FALLBACK_URL,
+          fileName: FALLBACK_FILE_NAME,
+          versionText: ""
+        });
+
+        try {
+          const latest = await resolveLatestVersionedDMG();
+          applyDownloadMeta(latest);
+        } catch (error) {
+          console.warn("Could not resolve versioned DMG, using fallback link.", error);
+        }
+
+        if (downloadButton && shouldAutostart) {
+          setTimeout(() => {
+            downloadButton.click();
+          }, 650);
+        }
+      }
+
+      initializeDownload();
     </script>
   </body>
 </html>

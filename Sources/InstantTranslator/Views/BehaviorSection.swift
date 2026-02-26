@@ -4,9 +4,16 @@ import SwiftUI
 struct BehaviorSection: View {
     @Bindable var settingsVM: SettingsViewModel
     @Bindable var translatorVM: TranslatorViewModel
+    let onUpgradeToUltimate: () -> Void
     @State private var isAccessibilityGranted = false
     @State private var pollingTimer: Timer?
     @State private var isShortcutSettingsPresented = false
+    @State private var isProviderHelpPresented = false
+    @State private var isEditingAPIKey = false
+    @State private var draftAPIKey = ""
+    @State private var apiKeyValidationByProvider: [ProviderType: APIKeyFieldValidationState] = [:]
+
+    private let apiKeyValidationService = APIKeyValidationService()
 
     var body: some View {
         VStack(spacing: 8) {
@@ -20,9 +27,16 @@ struct BehaviorSection: View {
             if !isAccessibilityGranted {
                 startPolling()
             }
+            syncAPIKeyDraft()
         }
         .onDisappear {
             stopPolling()
+        }
+        .onChange(of: settingsVM.settings.selectedProvider, initial: false) { _, _ in
+            syncAPIKeyDraft()
+        }
+        .sheet(isPresented: $isProviderHelpPresented) {
+            APIKeyTutorialSheet(provider: settingsVM.settings.selectedProvider)
         }
     }
 
@@ -107,13 +121,62 @@ struct BehaviorSection: View {
                 }
 
                 APIKeyField(
-                    apiKey: Binding(
-                        get: { settingsVM.apiKeyForSelectedProvider() },
-                        set: { settingsVM.setAPIKey($0, for: settingsVM.settings.selectedProvider) }
-                    ),
-                    placeholder: settingsVM.apiKeyPlaceholder
+                    storedKey: settingsVM.apiKeyForSelectedProvider(),
+                    draftKey: $draftAPIKey,
+                    placeholder: settingsVM.apiKeyPlaceholder,
+                    isEditing: isEditingAPIKey,
+                    validationState: validationStateForSelectedProvider(),
+                    onEdit: beginEditingAPIKey,
+                    onCancel: cancelEditingAPIKey,
+                    onSave: {
+                        Task { @MainActor in
+                            await saveAPIKeyChanges()
+                        }
+                    }
                 )
             }
+
+            Button {
+                isProviderHelpPresented = true
+            } label: {
+                Label(settingsVM.settings.selectedProvider.apiKeyHelpTitle, systemImage: "questionmark.circle")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(MenuTheme.blue)
+            }
+            .buttonStyle(.plain)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Upgrade to Ultimate")
+                            .font(.system(size: 13, weight: .semibold))
+                        Text("No manual API key setup. Managed access is handled by ctrl+v.")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    Button("Upgrade to Ultimate") {
+                        onUpgradeToUltimate()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.mini)
+                }
+
+                Text("Security: managed keys are never shown in the app UI.")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(8)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(MenuTheme.blue.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(MenuTheme.blue.opacity(0.2), lineWidth: 1)
+            )
         }
     }
 
@@ -203,6 +266,14 @@ struct BehaviorSection: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
             .frame(maxHeight: 96)
+
+            HStack(spacing: 6) {
+                Button("Test Island") {
+                    translatorVM.debugPreviewTranslationIsland()
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.mini)
+            }
         }
     }
 
@@ -225,6 +296,55 @@ struct BehaviorSection: View {
     private func stopPolling() {
         pollingTimer?.invalidate()
         pollingTimer = nil
+    }
+
+    private func beginEditingAPIKey() {
+        isEditingAPIKey = true
+        draftAPIKey = settingsVM.apiKeyForSelectedProvider()
+    }
+
+    private func cancelEditingAPIKey() {
+        isEditingAPIKey = false
+        draftAPIKey = settingsVM.apiKeyForSelectedProvider()
+    }
+
+    private func syncAPIKeyDraft() {
+        isEditingAPIKey = false
+        draftAPIKey = settingsVM.apiKeyForSelectedProvider()
+    }
+
+    private func saveAPIKeyChanges() async {
+        let provider = settingsVM.settings.selectedProvider
+        let newValue = draftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentValue = settingsVM.apiKey(for: provider)
+
+        guard newValue != currentValue else {
+            isEditingAPIKey = false
+            return
+        }
+
+        if newValue.isEmpty {
+            settingsVM.setAPIKey("", for: provider)
+            apiKeyValidationByProvider[provider] = APIKeyFieldValidationState.none
+            isEditingAPIKey = false
+            return
+        }
+
+        apiKeyValidationByProvider[provider] = .checking
+        let result = await apiKeyValidationService.validate(apiKey: newValue, for: provider)
+
+        if result.isValid {
+            settingsVM.setAPIKey(newValue, for: provider)
+            apiKeyValidationByProvider[provider] = .valid(result.message)
+            isEditingAPIKey = false
+        } else {
+            apiKeyValidationByProvider[provider] = .invalid(result.message)
+        }
+    }
+
+    private func validationStateForSelectedProvider() -> APIKeyFieldValidationState {
+        let provider = settingsVM.settings.selectedProvider
+        return apiKeyValidationByProvider[provider] ?? .none
     }
 
     private var lastTriggerText: String {

@@ -133,6 +133,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         button.image = defaultMenuBarIcon()
     }
 
+    /// Debug utility to verify the translation island can be rendered.
+    func debugShowTranslationIslandPreview() {
+        translationIslandOverlay.debugPulse()
+    }
+
     private func defaultMenuBarIcon() -> NSImage? {
         NSImage(systemSymbolName: "v.square", accessibilityDescription: "ctrl+v")
     }

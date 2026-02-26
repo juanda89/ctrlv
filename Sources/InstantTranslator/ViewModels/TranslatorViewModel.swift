@@ -64,6 +64,11 @@ final class TranslatorViewModel {
         log.info("Hotkey registered: \(shortcut, privacy: .public)")
     }
 
+    func debugPreviewTranslationIsland() {
+        debugLastStage = "Debug: preview island"
+        notifyAppDelegate { $0.debugShowTranslationIslandPreview() }
+    }
+
     func performTranslation() async {
         guard !isTranslating else {
             debugLastStage = "Skipped: already translating"
@@ -95,7 +100,7 @@ final class TranslatorViewModel {
             return
         }
         debugLastStage = "API key OK"
-        log.info("API key present for \(selectedProvider.rawValue, privacy: .public) (\(apiKey.prefix(10))...)")
+        log.info("API key present for \(selectedProvider.rawValue, privacy: .public)")
 
         // 3. Get selected text
         let isTrusted = AccessibilityService.isTrusted
