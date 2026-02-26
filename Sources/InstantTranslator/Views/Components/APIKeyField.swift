@@ -17,8 +17,6 @@ struct APIKeyField: View {
     let onCancel: () -> Void
     let onSave: () -> Void
 
-    @State private var isRevealed = false
-
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 6) {
@@ -27,17 +25,9 @@ struct APIKeyField: View {
                     .foregroundStyle(.secondary)
 
                 fieldBody
+                    .frame(maxWidth: .infinity, alignment: .leading)
 
-                if shouldShowRevealToggle {
-                    Button {
-                        isRevealed.toggle()
-                    } label: {
-                        Image(systemName: isRevealed ? "eye.slash.fill" : "eye.fill")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .buttonStyle(.plain)
-                }
+                controls
             }
             .padding(.horizontal, 8)
             .padding(.vertical, 7)
@@ -50,12 +40,8 @@ struct APIKeyField: View {
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
 
-            HStack(spacing: 6) {
+            HStack(spacing: 4) {
                 statusView
-
-                Spacer()
-
-                controls
             }
         }
     }
@@ -63,20 +49,13 @@ struct APIKeyField: View {
     @ViewBuilder
     private var fieldBody: some View {
         if isEditing {
-            Group {
-                if isRevealed {
-                    TextField(placeholder, text: $draftKey)
-                } else {
-                    SecureField(placeholder, text: $draftKey)
-                }
-            }
+            SecureField(placeholder, text: $draftKey)
             .textFieldStyle(.plain)
             .font(.system(size: 12, weight: .regular, design: .monospaced))
         } else {
             Text(readOnlyLabel)
                 .font(.system(size: 12, weight: .regular, design: .monospaced))
                 .foregroundStyle(storedKey.isEmpty ? .tertiary : .secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
@@ -154,16 +133,9 @@ struct APIKeyField: View {
         }
     }
 
-    private var shouldShowRevealToggle: Bool {
-        isEditing || !storedKey.isEmpty
-    }
-
     private var readOnlyLabel: String {
         if storedKey.isEmpty {
             return placeholder
-        }
-        if isRevealed {
-            return storedKey
         }
         return masked(storedKey)
     }

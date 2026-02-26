@@ -4,7 +4,6 @@ import SwiftUI
 struct BehaviorSection: View {
     @Bindable var settingsVM: SettingsViewModel
     @Bindable var translatorVM: TranslatorViewModel
-    let onUpgradeToUltimate: () -> Void
     @State private var isAccessibilityGranted = false
     @State private var pollingTimer: Timer?
     @State private var isShortcutSettingsPresented = false
@@ -145,38 +144,6 @@ struct BehaviorSection: View {
             }
             .buttonStyle(.plain)
 
-            VStack(alignment: .leading, spacing: 6) {
-                HStack {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Upgrade to Ultimate")
-                            .font(.system(size: 13, weight: .semibold))
-                        Text("No manual API key setup. Managed access is handled by ctrl+v.")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Spacer()
-
-                    Button("Upgrade to Ultimate") {
-                        onUpgradeToUltimate()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.mini)
-                }
-
-                Text("Security: managed keys are never shown in the app UI.")
-                    .font(.system(size: 10, weight: .medium))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(8)
-            .background(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .fill(MenuTheme.blue.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(MenuTheme.blue.opacity(0.2), lineWidth: 1)
-            )
         }
     }
 

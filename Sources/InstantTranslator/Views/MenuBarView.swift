@@ -18,8 +18,7 @@ struct MenuBarView: View {
                     PreferencesSection(settingsVM: viewModel.settingsVM)
                     BehaviorSection(
                         settingsVM: viewModel.settingsVM,
-                        translatorVM: viewModel,
-                        onUpgradeToUltimate: { licenseService.openUpgrade() }
+                        translatorVM: viewModel
                     )
                 }
                 .padding(.horizontal, 10)
