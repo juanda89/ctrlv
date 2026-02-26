@@ -11,8 +11,8 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${1:?Version is required (eg 1.0.1)}"
-DOWNLOAD_URL_PREFIX="${2:-https://control-v.info/downloads}"
-RELEASE_NOTES_URL_PREFIX="${3:-https://control-v.info/release-notes}"
+DOWNLOAD_URL_PREFIX="${2:-https://github.com/juanda89/ctrlv/releases/latest/download}"
+RELEASE_NOTES_URL_PREFIX="${3:-https://github.com/juanda89/ctrlv/releases/latest/download}"
 
 DIST_DIR="${PROJECT_DIR}/dist/${VERSION}"
 DOCS_DIR="${PROJECT_DIR}/docs"

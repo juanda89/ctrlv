@@ -75,6 +75,7 @@ jobs:
           - Improvements and fixes.
           EOF
           fi
+          cp "${NOTES_FILE}" "dist/${VERSION}/ctrlv-${VERSION}.md"
 
       - name: Prepare stable latest DMG alias
         run: |
@@ -94,8 +95,8 @@ jobs:
           DOWNLOAD_URL_PREFIX: ${{ vars.CTRLV_DOWNLOADS_BASE_URL }}
           RELEASE_NOTES_URL_PREFIX: ${{ vars.CTRLV_RELEASE_NOTES_BASE_URL }}
         run: |
-          DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://control-v.info/downloads}"
-          NOTES_PREFIX="${RELEASE_NOTES_URL_PREFIX:-https://control-v.info/release-notes}"
+          DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://github.com/juanda89/ctrlv/releases/latest/download}"
+          NOTES_PREFIX="${RELEASE_NOTES_URL_PREFIX:-https://github.com/juanda89/ctrlv/releases/latest/download}"
           ./scripts/generate-appcast.sh "${VERSION}" "${DOWNLOAD_PREFIX}" "${NOTES_PREFIX}"
 
       - name: Validate appcast is universal-compatible
@@ -118,7 +119,7 @@ jobs:
         env:
           DOWNLOAD_URL_PREFIX: ${{ vars.CTRLV_DOWNLOADS_BASE_URL }}
         run: |
-          DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://control-v.info/downloads}"
+          DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://github.com/juanda89/ctrlv/releases/latest/download}"
           CHECKSUMS="dist/${VERSION}/SHA256SUMS.txt"
           ZIP_SHA=$(awk '/ctrlv-.*\.zip/{print $1}' "${CHECKSUMS}" | head -n 1)
           DMG_SHA=$(awk '/ctrlv-.*\.dmg/{print $1}' "${CHECKSUMS}" | head -n 1)
@@ -150,6 +151,7 @@ jobs:
             dist/${{ env.VERSION }}/ctrlv-${{ env.VERSION }}.dmg
             dist/${{ env.VERSION }}/ctrlv-latest.dmg
             dist/${{ env.VERSION }}/ctrlv-${{ env.VERSION }}.zip
+            dist/${{ env.VERSION }}/ctrlv-${{ env.VERSION }}.md
             dist/${{ env.VERSION }}/SHA256SUMS.txt
             dist/${{ env.VERSION }}/release-notes.md
             updates/stable/appcast.xml
