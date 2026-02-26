@@ -12,7 +12,10 @@ final class TranslatorViewModel {
     private(set) var debugHotkeyTriggerCount = 0
     private(set) var debugLastTriggerSource = "none"
     private(set) var debugLastTriggerAt: Date?
-    private(set) var debugLastStage = "Idle"
+    private(set) var debugLastStage = "Idle" {
+        didSet { appendDebugEvent(debugLastStage) }
+    }
+    private(set) var debugEvents: [String] = []
 
     let settingsVM = SettingsViewModel()
 
@@ -20,6 +23,13 @@ final class TranslatorViewModel {
     private let clipboardService = ClipboardService()
     private let hotkeyService = HotkeyService()
     private let licenseService: LicenseService
+    private let debugEventLimit = 40
+    private static let debugTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .medium
+        return formatter
+    }()
 
     init(licenseService: LicenseService) {
         self.licenseService = licenseService
@@ -150,12 +160,31 @@ final class TranslatorViewModel {
 
             // 5. Output
             if settings.autoPaste {
-                if isTrusted,
-                   accessibilityService.replaceSelectedText(with: response.translatedText) {
-                    debugLastStage = "Output: replaced via AX"
-                    log.info("Replaced via AX")
-                    notifyAppDelegate { $0.flashMenuBarIcon() }
-                    return
+                if isTrusted {
+                    let axDidSet = accessibilityService.replaceSelectedText(with: response.translatedText)
+                    if axDidSet {
+                        try? await Task.sleep(nanoseconds: 120_000_000)
+                        let afterAX = accessibilityService.getSelectedText()
+                        let originalNormalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let translatedNormalized = response.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let afterNormalized = afterAX?.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                        if let afterNormalized, afterNormalized == originalNormalized {
+                            debugLastStage = "AX replace reported success but selection unchanged"
+                            log.warning("AX replace returned success but selected text is unchanged")
+                        } else {
+                            if afterNormalized == translatedNormalized {
+                                debugLastStage = "Output: replaced via AX (verified)"
+                            } else {
+                                debugLastStage = "Output: replaced via AX (unverified)"
+                            }
+                            log.info("Replaced via AX")
+                            notifyAppDelegate { $0.flashMenuBarIcon() }
+                            return
+                        }
+                    } else {
+                        debugLastStage = "AX replace failed"
+                    }
                 }
 
                 debugLastStage = "Output: pasted via clipboard"
@@ -202,5 +231,14 @@ final class TranslatorViewModel {
     private func selectionState(_ value: String?) -> String {
         guard let value else { return "nil" }
         return value.isEmpty ? "empty" : "non-empty"
+    }
+
+    private func appendDebugEvent(_ message: String) {
+        let timestamp = Self.debugTimeFormatter.string(from: Date())
+        let line = "[\(timestamp)] \(message)"
+        debugEvents.insert(line, at: 0)
+        if debugEvents.count > debugEventLimit {
+            debugEvents.removeSubrange(debugEventLimit..<debugEvents.count)
+        }
     }
 }

@@ -174,12 +174,29 @@ struct BehaviorSection: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
 
-            Button("Run Debug Translation") {
-                translatorVM.debugTriggerTranslationFromUI()
+            Text("Last error: \(translatorVM.lastError ?? "none")")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Divider()
+
+            Text("Event log")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(Array(translatorVM.debugEvents.prefix(8).enumerated()), id: \.offset) { _, event in
+                        Text(event)
+                            .font(.system(size: 10, weight: .medium, design: .monospaced))
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.mini)
-            .tint(MenuTheme.blue)
+            .frame(maxHeight: 96)
         }
     }
 

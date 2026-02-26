@@ -89,10 +89,29 @@ final class AccessibilityService {
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
 
         var focusedElement: AnyObject?
-        AXUIElementCopyAttributeValue(axApp, kAXFocusedUIElementAttribute as CFString, &focusedElement)
+        let focusResult = AXUIElementCopyAttributeValue(axApp, kAXFocusedUIElementAttribute as CFString, &focusedElement)
+        guard focusResult == .success else {
+            log.error("replaceSelectedText: failed to get focused element. AXError: \(focusResult.rawValue)")
+            return false
+        }
 
         guard let element = focusedElement else {
             log.error("replaceSelectedText: no focused element")
+            return false
+        }
+
+        var isSettable = DarwinBoolean(false)
+        let settableResult = AXUIElementIsAttributeSettable(
+            element as! AXUIElement,
+            kAXSelectedTextAttribute as CFString,
+            &isSettable
+        )
+        if settableResult != .success {
+            log.error("replaceSelectedText: failed settable check. AXError: \(settableResult.rawValue)")
+            return false
+        }
+        if !isSettable.boolValue {
+            log.warning("replaceSelectedText: kAXSelectedTextAttribute is not settable")
             return false
         }
 
