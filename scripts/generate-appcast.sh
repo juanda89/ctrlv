@@ -19,6 +19,12 @@ SOURCE_NOTES="${DIST_DIR}/release-notes.md"
 UPDATES_DIR="${PROJECT_DIR}/updates/stable"
 DOCS_UPDATES_DIR="${PROJECT_DIR}/docs/updates"
 GENERATE_BIN="${PROJECT_DIR}/.build/artifacts/sparkle/Sparkle/bin/generate_appcast"
+TMP_FEED_DIR="$(mktemp -d "${TMPDIR:-/tmp}/ctrlv-appcast.XXXXXX")"
+
+cleanup() {
+    rm -rf "${TMP_FEED_DIR}"
+}
+trap cleanup EXIT
 
 ensure_trailing_slash() {
     local value="$1"
@@ -43,26 +49,34 @@ if [[ ! -f "${SOURCE_ZIP}" ]]; then
 fi
 
 mkdir -p "${UPDATES_DIR}" "${DOCS_UPDATES_DIR}"
-cp -f "${SOURCE_ZIP}" "${UPDATES_DIR}/"
+rm -f "${UPDATES_DIR}/appcast.xml" "${DOCS_UPDATES_DIR}/appcast.xml"
+cp -f "${SOURCE_ZIP}" "${TMP_FEED_DIR}/"
 
 if [[ -f "${SOURCE_NOTES}" ]]; then
-    cp -f "${SOURCE_NOTES}" "${UPDATES_DIR}/ctrlv-${VERSION}.md"
+    cp -f "${SOURCE_NOTES}" "${TMP_FEED_DIR}/ctrlv-${VERSION}.md"
 fi
 
-echo "==> Generating appcast in ${UPDATES_DIR}"
+echo "==> Generating appcast from ${SOURCE_ZIP}"
 if [[ -n "${SPARKLE_EDDSA_PRIVATE_KEY:-}" ]]; then
     printf '%s\n' "${SPARKLE_EDDSA_PRIVATE_KEY}" | "${GENERATE_BIN}" \
         --ed-key-file - \
         --download-url-prefix "${DOWNLOAD_URL_PREFIX}" \
         --release-notes-url-prefix "${RELEASE_NOTES_URL_PREFIX}" \
+        --maximum-deltas 0 \
         -o "${UPDATES_DIR}/appcast.xml" \
-        "${UPDATES_DIR}"
+        "${TMP_FEED_DIR}"
 else
     "${GENERATE_BIN}" \
         --download-url-prefix "${DOWNLOAD_URL_PREFIX}" \
         --release-notes-url-prefix "${RELEASE_NOTES_URL_PREFIX}" \
+        --maximum-deltas 0 \
         -o "${UPDATES_DIR}/appcast.xml" \
-        "${UPDATES_DIR}"
+        "${TMP_FEED_DIR}"
+fi
+
+cp -f "${SOURCE_ZIP}" "${UPDATES_DIR}/"
+if [[ -f "${SOURCE_NOTES}" ]]; then
+    cp -f "${SOURCE_NOTES}" "${UPDATES_DIR}/ctrlv-${VERSION}.md"
 fi
 
 cp -f "${UPDATES_DIR}/appcast.xml" "${DOCS_UPDATES_DIR}/appcast.xml"

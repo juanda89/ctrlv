@@ -18,7 +18,7 @@ INFO_PLIST="${RESOURCES_DIR}/Info.plist"
 ENTITLEMENTS="${RESOURCES_DIR}/InstantTranslator.entitlements"
 ASSET_CATALOG="${RESOURCES_DIR}/Assets.xcassets"
 BIN_NAME="InstantTranslator"
-BUNDLE_NAME="ctrl+v.app"
+BUNDLE_NAME="ctrlv.app"
 SPARKLE_SIGN_BIN="${PROJECT_DIR}/.build/artifacts/sparkle/Sparkle/bin/sign_update"
 ARM_BUILD_TRIPLE="${CTRLV_ARM_BUILD_TRIPLE:-arm64-apple-macosx14.0}"
 X86_BUILD_TRIPLE="${CTRLV_X86_BUILD_TRIPLE:-x86_64-apple-macosx14.0}"
@@ -33,8 +33,19 @@ clean_xattrs() {
     find -L "${target}" -exec xattr -c {} + 2>/dev/null || true
 }
 
+derive_build_number_from_version() {
+    local version="$1"
+    local major minor patch
+    IFS='.' read -r major minor patch <<< "${version}"
+    if [[ "${major}" =~ ^[0-9]+$ && "${minor}" =~ ^[0-9]+$ && "${patch}" =~ ^[0-9]+$ ]]; then
+        echo $((major * 10000 + minor * 100 + patch))
+    else
+        read_plist_value CFBundleVersion
+    fi
+}
+
 VERSION="${1:-$(read_plist_value CFBundleShortVersionString)}"
-BUILD_NUMBER="${2:-$(read_plist_value CFBundleVersion)}"
+BUILD_NUMBER="${2:-$(derive_build_number_from_version "${VERSION}")}"
 DIST_BASE_DIR="${CTRLV_DIST_DIR_BASE:-${PROJECT_DIR}/dist}"
 DIST_DIR="${DIST_BASE_DIR}/${VERSION}"
 APP_BUNDLE="${DIST_DIR}/${BUNDLE_NAME}"
@@ -147,7 +158,7 @@ echo "==> Packaging DMG"
 DMG_STAGING="${DIST_DIR}/dmg-staging"
 rm -rf "${DMG_STAGING}"
 mkdir -p "${DMG_STAGING}"
-ditto --norsrc "${APP_BUNDLE}" "${DMG_STAGING}/ctrl+v.app"
+ditto --norsrc "${APP_BUNDLE}" "${DMG_STAGING}/ctrlv.app"
 ln -s /Applications "${DMG_STAGING}/Applications"
 hdiutil create -volname "ctrl+v" -srcfolder "${DMG_STAGING}" -ov -format UDZO "${DMG_PATH}"
 rm -rf "${DMG_STAGING}"

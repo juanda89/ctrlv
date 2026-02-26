@@ -33,6 +33,17 @@ jobs:
           fi
           echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
 
+      - name: Derive Sparkle build number from semantic version
+        run: |
+          IFS='.' read -r MAJOR MINOR PATCH <<< "${VERSION}"
+          if [[ ! "${MAJOR}" =~ ^[0-9]+$ || ! "${MINOR}" =~ ^[0-9]+$ || ! "${PATCH}" =~ ^[0-9]+$ ]]; then
+            echo "VERSION must follow semantic format x.y.z. Got: ${VERSION}"
+            exit 1
+          fi
+          BUILD_NUMBER=$((MAJOR * 10000 + MINOR * 100 + PATCH))
+          echo "BUILD_NUMBER=${BUILD_NUMBER}" >> "${GITHUB_ENV}"
+          echo "Resolved BUILD_NUMBER=${BUILD_NUMBER}"
+
       - name: Ensure scripts are executable
         run: chmod +x scripts/*.sh
 
@@ -52,7 +63,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
           SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
-        run: ./scripts/build-release.sh "${VERSION}"
+        run: ./scripts/build-release.sh "${VERSION}" "${BUILD_NUMBER}"
 
       - name: Ensure release notes file
         run: |
@@ -86,6 +97,22 @@ jobs:
           DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://control-v.info/downloads}"
           NOTES_PREFIX="${RELEASE_NOTES_URL_PREFIX:-https://control-v.info/release-notes}"
           ./scripts/generate-appcast.sh "${VERSION}" "${DOWNLOAD_PREFIX}" "${NOTES_PREFIX}"
+
+      - name: Validate appcast is universal-compatible
+        run: |
+          APPCAST="updates/stable/appcast.xml"
+          if [[ ! -s "${APPCAST}" ]]; then
+            echo "Missing appcast.xml"
+            exit 1
+          fi
+          if ! grep -q "<sparkle:shortVersionString>${VERSION}</sparkle:shortVersionString>" "${APPCAST}"; then
+            echo "Appcast does not contain release version ${VERSION}"
+            exit 1
+          fi
+          if grep -q "<sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>" "${APPCAST}"; then
+            echo "Appcast is arm64-only; this would break Intel updates."
+            exit 1
+          fi
 
       - name: Build landing metadata
         env:
