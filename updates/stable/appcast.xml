@@ -1,16 +1,15 @@
 <?xml version="1.0" standalone="yes"?>
 <rss xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle" version="2.0">
     <channel>
-        <title>ctrl+v</title>
+        <title>ctrlv</title>
         <item>
-            <title>1.0.1</title>
-            <pubDate>Tue, 24 Feb 2026 18:17:22 -0500</pubDate>
-            <sparkle:version>101</sparkle:version>
-            <sparkle:shortVersionString>1.0.1</sparkle:shortVersionString>
+            <title>1.1.3</title>
+            <pubDate>Thu, 26 Feb 2026 20:00:22 +0000</pubDate>
+            <sparkle:version>10103</sparkle:version>
+            <sparkle:shortVersionString>1.1.3</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:hardwareRequirements>arm64</sparkle:hardwareRequirements>
-            <sparkle:releaseNotesLink>https://control-v.info/release-notes/ctrlv-1.0.1.md</sparkle:releaseNotesLink>
-            <enclosure url="https://control-v.info/downloads/ctrlv-1.0.1.zip" length="1382717" type="application/octet-stream" sparkle:edSignature="hFDygHZad4uZVMpfBL3WhOliltV1kQFkD1dkduD3WffA7CUSYj2icQqpoeST1nXvoR3kYORMD3FZtfALI2K6BA=="/>
+            <sparkle:releaseNotesLink>https://github.com/juanda89/ctrlv/releases/tag/v1.1.3</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/juanda89/ctrlv/releases/latest/download/ctrlv-1.1.3.zip" length="2882185" type="application/octet-stream" sparkle:edSignature="uNOz+3RAR8eWnP8siTtNxRLAaIEG9gKMrM+HzJ//kMqziY7EgGKfKc80zdYwtaRvy9eGUPNWljysEHcca2p6BA=="/>
         </item>
     </channel>
 </rss>
