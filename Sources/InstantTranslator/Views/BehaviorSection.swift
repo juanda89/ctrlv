@@ -126,17 +126,27 @@ struct BehaviorSection: View {
                 Spacer()
 
                 if !isAccessibilityGranted {
-                    Button("Open Settings") {
-                        AccessibilityService.openAccessibilitySettings()
-                        startPolling()
+                    HStack(spacing: 4) {
+                        Button("Reset") {
+                            AccessibilityService.resetAndReRequest()
+                            startPolling()
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.mini)
+                        .tint(.orange)
+
+                        Button("Open Settings") {
+                            AccessibilityService.openAccessibilitySettings()
+                            startPolling()
+                        }
+                        .buttonStyle(.bordered)
+                        .controlSize(.mini)
                     }
-                    .buttonStyle(.bordered)
-                    .controlSize(.mini)
                 }
             }
 
             if !isAccessibilityGranted {
-                Text("Add ctrl+v in System Settings -> Privacy -> Accessibility. If running from Xcode, add Xcode too.")
+                Text("If you already granted permission but it still shows Not Granted, click Reset. This happens when the app is rebuilt with a new code signature.")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
                     .fixedSize(horizontal: false, vertical: true)

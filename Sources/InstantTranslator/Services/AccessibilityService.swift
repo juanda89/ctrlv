@@ -25,6 +25,32 @@ final class AccessibilityService {
         }
     }
 
+    /// Resets the Accessibility TCC entry for this app's bundle ID via tccutil,
+    /// then re-requests permission. Useful when rebuilds invalidate the old code signature.
+    static func resetAndReRequest() {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.instanttranslator.app"
+        log.info("Resetting TCC Accessibility for \(bundleID)")
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/tccutil")
+        process.arguments = ["reset", "Accessibility", bundleID]
+        try? process.run()
+        process.waitUntilExit()
+        log.info("tccutil exit code: \(process.terminationStatus)")
+        // Small delay then re-request so the OS shows the prompt
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            Self.requestPermission()
+        }
+    }
+
+    /// Returns diagnostic info about the current process for debugging.
+    static var diagnosticInfo: String {
+        let bundleID = Bundle.main.bundleIdentifier ?? "unknown"
+        let bundlePath = Bundle.main.bundlePath
+        let pid = ProcessInfo.processInfo.processIdentifier
+        let trusted = AXIsProcessTrusted()
+        return "Bundle: \(bundleID)\nPath: \(bundlePath)\nPID: \(pid)\nTrusted: \(trusted)"
+    }
+
     func getSelectedText() -> String? {
         guard let app = NSWorkspace.shared.frontmostApplication else {
             log.error("No frontmost application found")
