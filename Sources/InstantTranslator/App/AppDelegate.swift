@@ -6,24 +6,17 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
-    private var installerWindow: NSWindow?
     private let updateService = UpdateService()
     private let userDefaults = UserDefaults.standard
     private let onboardingShownKey = "didShowInitialOnboarding"
     private let clickDebounceInterval: TimeInterval = 0.3
     private var lastClickDate = Date.distantPast
-    private let installerState = InstallerWindowState()
     private let translationIslandOverlay = TranslationIslandOverlayController()
 
     let licenseService = LicenseService()
     lazy var translatorViewModel = TranslatorViewModel(licenseService: licenseService)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if needsInstallation() {
-            presentInstallerWindow()
-            return
-        }
-
         setupMenuBar()
 
         // Hide dock icon — menu bar only
@@ -71,102 +64,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         await requestAccessibilityIfNeeded()
-    }
-
-    private func needsInstallation() -> Bool {
-        let bundlePath = Bundle.main.bundleURL.path
-        let userApplicationsPrefix = "\(NSHomeDirectory())/Applications/"
-        return !(bundlePath.hasPrefix("/Applications/") || bundlePath.hasPrefix(userApplicationsPrefix))
-    }
-
-    private func preferredInstallDestinationURL() -> URL {
-        let appName = Bundle.main.bundleURL.lastPathComponent
-        return URL(fileURLWithPath: "/Applications", isDirectory: true).appendingPathComponent(appName)
-    }
-
-    private func fallbackInstallDestinationURL() -> URL {
-        let appName = Bundle.main.bundleURL.lastPathComponent
-        return URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
-            .appendingPathComponent("Applications", isDirectory: true)
-            .appendingPathComponent(appName)
-    }
-
-    private func presentInstallerWindow() {
-        NSApp.setActivationPolicy(.regular)
-
-        let destinationHint = preferredInstallDestinationURL().path
-        let rootView = InstallerWindowView(
-            state: installerState,
-            destinationHint: destinationHint,
-            onInstall: { [weak self] in
-                Task { @MainActor in
-                    await self?.installAndRelaunch()
-                }
-            },
-            onQuit: {
-                NSApp.terminate(nil)
-            }
-        )
-
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 460, height: 260),
-            styleMask: [.titled],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "Install ctrl+v"
-        window.center()
-        window.isReleasedWhenClosed = false
-        window.contentViewController = NSHostingController(rootView: rootView)
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
-        installerWindow = window
-    }
-
-    private func installAndRelaunch() async {
-        guard !installerState.isInstalling else { return }
-
-        installerState.isInstalling = true
-        installerState.errorMessage = nil
-
-        let fileManager = FileManager.default
-        let sourceURL = Bundle.main.bundleURL
-        let destinations = [preferredInstallDestinationURL(), fallbackInstallDestinationURL()]
-        var errors: [String] = []
-
-        for destinationURL in destinations {
-            do {
-                try fileManager.createDirectory(
-                    at: destinationURL.deletingLastPathComponent(),
-                    withIntermediateDirectories: true,
-                    attributes: nil
-                )
-
-                if sourceURL.path != destinationURL.path {
-                    if fileManager.fileExists(atPath: destinationURL.path) {
-                        _ = try? fileManager.trashItem(at: destinationURL, resultingItemURL: nil)
-                        if fileManager.fileExists(atPath: destinationURL.path) {
-                            try fileManager.removeItem(at: destinationURL)
-                        }
-                    }
-                    try fileManager.copyItem(at: sourceURL, to: destinationURL)
-                }
-
-                installerState.isInstalling = false
-                NSWorkspace.shared.open(destinationURL)
-                NSApp.terminate(nil)
-                return
-            } catch {
-                errors.append("\(destinationURL.path): \(error.localizedDescription)")
-            }
-        }
-
-        installerState.isInstalling = false
-        installerState.errorMessage = """
-        Could not install automatically.
-        Try drag-and-drop to /Applications and open again.
-        \(errors.joined(separator: "\n"))
-        """
     }
 
     private func showPopoverIfPossible() {
