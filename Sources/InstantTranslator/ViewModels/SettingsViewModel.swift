@@ -6,15 +6,7 @@ final class SettingsViewModel {
         didSet { settings.save() }
     }
 
-    var apiKey: String {
-        didSet {
-            if apiKey.isEmpty {
-                EncryptedAPIKeyStore.delete()
-            } else {
-                EncryptedAPIKeyStore.save(apiKey)
-            }
-        }
-    }
+    private var apiKeysByProvider: [ProviderType: String]
 
     var shortcutOptions: [ShortcutKeyOption] {
         ShortcutConfiguration.letterOptions
@@ -32,6 +24,10 @@ final class SettingsViewModel {
         ["⌘", "⇧", selectedShortcutOption.letter]
     }
 
+    var apiKeyPlaceholder: String {
+        settings.selectedProvider.apiKeyPlaceholder
+    }
+
     init() {
         var loaded = AppSettings.load()
         loaded.shortcutModifiers = UInt(ShortcutConfiguration.fixedModifiers)
@@ -40,11 +36,30 @@ final class SettingsViewModel {
         }
 
         self.settings = loaded
-        self.apiKey = EncryptedAPIKeyStore.read() ?? ""
+        self.apiKeysByProvider = Dictionary(uniqueKeysWithValues: ProviderType.allCases.map { provider in
+            (provider, EncryptedAPIKeyStore.read(for: provider) ?? "")
+        })
     }
 
     func setShortcut(_ option: ShortcutKeyOption) {
         settings.shortcutKeyCode = option.carbonKeyCode
         settings.shortcutModifiers = UInt(ShortcutConfiguration.fixedModifiers)
+    }
+
+    func apiKey(for provider: ProviderType) -> String {
+        apiKeysByProvider[provider] ?? ""
+    }
+
+    func setAPIKey(_ value: String, for provider: ProviderType) {
+        apiKeysByProvider[provider] = value
+        if value.isEmpty {
+            EncryptedAPIKeyStore.delete(for: provider)
+        } else {
+            EncryptedAPIKeyStore.save(value, for: provider)
+        }
+    }
+
+    func apiKeyForSelectedProvider() -> String {
+        apiKey(for: settings.selectedProvider)
     }
 }

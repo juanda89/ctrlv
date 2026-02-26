@@ -101,12 +101,18 @@ struct BehaviorSection: View {
             VStack(alignment: .leading, spacing: 5) {
                 HStack(spacing: 8) {
                     IconBubble(systemName: "key.fill", tint: .orange)
-                    Text("API Key")
+                    Text("\(settingsVM.settings.selectedProvider.rawValue) API Key")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
 
-                APIKeyField(apiKey: $settingsVM.apiKey)
+                APIKeyField(
+                    apiKey: Binding(
+                        get: { settingsVM.apiKeyForSelectedProvider() },
+                        set: { settingsVM.setAPIKey($0, for: settingsVM.settings.selectedProvider) }
+                    ),
+                    placeholder: settingsVM.apiKeyPlaceholder
+                )
             }
         }
     }

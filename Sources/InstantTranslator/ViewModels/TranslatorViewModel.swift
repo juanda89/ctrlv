@@ -86,7 +86,8 @@ final class TranslatorViewModel {
         log.info("License OK")
 
         // 2. Get API key
-        let apiKey = settingsVM.apiKey
+        let selectedProvider = settingsVM.settings.selectedProvider
+        let apiKey = settingsVM.apiKey(for: selectedProvider)
         guard !apiKey.isEmpty else {
             debugLastStage = "Blocked: missing API key"
             log.error("API key is empty")
@@ -94,7 +95,7 @@ final class TranslatorViewModel {
             return
         }
         debugLastStage = "API key OK"
-        log.info("API key present (\(apiKey.prefix(10))...)")
+        log.info("API key present for \(selectedProvider.rawValue, privacy: .public) (\(apiKey.prefix(10))...)")
 
         // 3. Get selected text
         let isTrusted = AccessibilityService.isTrusted
@@ -143,7 +144,15 @@ final class TranslatorViewModel {
         }
 
         let settings = settingsVM.settings
-        let provider = ClaudeProvider(apiKey: apiKey)
+        let provider: TranslationProvider
+        switch selectedProvider {
+        case .claude:
+            provider = ClaudeProvider(apiKey: apiKey)
+        case .openAI:
+            provider = OpenAIProvider(apiKey: apiKey)
+        case .gemini:
+            provider = GeminiProvider(apiKey: apiKey)
+        }
         let service = TranslationService(provider: provider)
         let customPrompt = settings.customTonePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let request = TranslationRequest(

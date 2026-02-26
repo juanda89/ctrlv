@@ -2,6 +2,7 @@ import SwiftUI
 
 struct APIKeyField: View {
     @Binding var apiKey: String
+    let placeholder: String
     @State private var isRevealed = false
 
     var body: some View {
@@ -12,9 +13,9 @@ struct APIKeyField: View {
 
             Group {
                 if isRevealed {
-                    TextField("sk-ant-...", text: $apiKey)
+                    TextField(placeholder, text: $apiKey)
                 } else {
-                    SecureField("sk-ant-...", text: $apiKey)
+                    SecureField(placeholder, text: $apiKey)
                 }
             }
             .textFieldStyle(.plain)

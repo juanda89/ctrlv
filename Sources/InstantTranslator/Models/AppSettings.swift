@@ -29,6 +29,19 @@ struct AppSettings: Codable {
 
 enum ProviderType: String, Codable, CaseIterable, Identifiable {
     case claude = "Claude"
+    case openAI = "OpenAI"
+    case gemini = "Gemini"
 
     var id: String { rawValue }
+
+    var apiKeyPlaceholder: String {
+        switch self {
+        case .claude:
+            return "sk-ant-..."
+        case .openAI:
+            return "sk-..."
+        case .gemini:
+            return "AIza..."
+        }
+    }
 }

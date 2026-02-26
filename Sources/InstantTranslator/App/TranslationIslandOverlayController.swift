@@ -7,17 +7,22 @@ final class TranslationIslandOverlayController {
     private enum Metrics {
         static let expandedSize = NSSize(width: 224, height: 44)
         static let collapsedSize = NSSize(width: 158, height: 10)
-        static let topInset: CGFloat = 3
-        static let visibleDuration: TimeInterval = 0.78
+        static let topInset: CGFloat = 1
+        static let visibleDuration: TimeInterval = 0.36
         static let hideDuration: TimeInterval = 0.62
+        static let minimumVisibleDuration: TimeInterval = 0.95
     }
 
     private var panel: NSPanel?
     private var isVisible = false
+    private var shownAt: Date?
+    private var scheduledHide: DispatchWorkItem?
 
     func show() {
         ensurePanel()
         guard let panel else { return }
+        scheduledHide?.cancel()
+        scheduledHide = nil
 
         if isVisible {
             repositionIfNeeded()
@@ -28,6 +33,7 @@ final class TranslationIslandOverlayController {
         panel.alphaValue = 0
         panel.orderFrontRegardless()
         isVisible = true
+        shownAt = Date()
 
         let visibleFrame = frame(for: .visible)
         NSAnimationContext.runAnimationGroup { context in
@@ -45,8 +51,32 @@ final class TranslationIslandOverlayController {
             return
         }
 
+        if let shownAt {
+            let elapsed = Date().timeIntervalSince(shownAt)
+            if elapsed < Metrics.minimumVisibleDuration {
+                let remaining = Metrics.minimumVisibleDuration - elapsed
+                scheduledHide?.cancel()
+                let workItem = DispatchWorkItem { [weak self] in
+                    Task { @MainActor in
+                        self?.hideNow()
+                    }
+                }
+                scheduledHide = workItem
+                DispatchQueue.main.asyncAfter(deadline: .now() + remaining, execute: workItem)
+                return
+            }
+        }
+
+        hideNow()
+    }
+
+    private func hideNow() {
+        guard let panel else { return }
         let hiddenFrame = frame(for: .hidden)
+        scheduledHide?.cancel()
+        scheduledHide = nil
         isVisible = false
+        shownAt = nil
         NSAnimationContext.runAnimationGroup { context in
             context.duration = Metrics.hideDuration
             context.timingFunction = CAMediaTimingFunction(controlPoints: 0.40, 0.0, 0.20, 1.0)
@@ -115,15 +145,15 @@ final class TranslationIslandOverlayController {
     }
 
     private func targetScreenBounds() -> NSRect {
-        if let main = NSScreen.main?.visibleFrame {
-            return main
-        }
-
-        if let underMouse = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })?.visibleFrame {
+        if let underMouse = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) })?.frame {
             return underMouse
         }
 
-        return NSScreen.screens.first?.visibleFrame ?? .zero
+        if let main = NSScreen.main?.frame {
+            return main
+        }
+
+        return NSScreen.screens.first?.frame ?? .zero
     }
 }
 
