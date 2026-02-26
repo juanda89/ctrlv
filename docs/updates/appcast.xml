@@ -3,13 +3,13 @@
     <channel>
         <title>ctrlv</title>
         <item>
-            <title>1.1.8</title>
-            <pubDate>Thu, 26 Feb 2026 21:28:47 +0000</pubDate>
-            <sparkle:version>10108</sparkle:version>
-            <sparkle:shortVersionString>1.1.8</sparkle:shortVersionString>
+            <title>1.1.9</title>
+            <pubDate>Thu, 26 Feb 2026 21:34:18 +0000</pubDate>
+            <sparkle:version>10109</sparkle:version>
+            <sparkle:shortVersionString>1.1.9</sparkle:shortVersionString>
             <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
-            <sparkle:releaseNotesLink>https://github.com/juanda89/ctrlv/releases/download/v1.1.8/ctrlv-1.1.8.md</sparkle:releaseNotesLink>
-            <enclosure url="https://github.com/juanda89/ctrlv/releases/download/v1.1.8/ctrlv-1.1.8.zip" length="2936446" type="application/octet-stream" sparkle:edSignature="LsU8uHgYYElb3AeJbErptN49/huZ41g5FJpIvtxKAqWikdnJ0Hn3y80A/KyWPCqtMiZEEBThhbbNvFKmwLvDDw=="/>
+            <sparkle:releaseNotesLink>https://github.com/juanda89/ctrlv/releases/download/v1.1.9/ctrlv-1.1.9.md</sparkle:releaseNotesLink>
+            <enclosure url="https://github.com/juanda89/ctrlv/releases/download/v1.1.9/ctrlv-1.1.9.zip" length="2936486" type="application/octet-stream" sparkle:edSignature="151XQvtzihjsalcBeoAds4rVyxhq1G4IoNrI+eo3wk4ncBCs7IshAaSM2smeJS/cQc3pA5o7DvCL956mLzOcDw=="/>
         </item>
     </channel>
 </rss>
