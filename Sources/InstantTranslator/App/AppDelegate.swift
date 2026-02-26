@@ -50,6 +50,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             rootView: MenuBarView(
                 viewModel: translatorViewModel,
                 licenseService: licenseService,
+                updateService: updateService,
                 onOpenFeedback: { [weak self] in self?.openFeedback() },
                 onCheckForUpdates: { [weak self] in self?.updateService.checkForUpdates() },
                 onShowAbout: { [weak self] in self?.showAbout() }

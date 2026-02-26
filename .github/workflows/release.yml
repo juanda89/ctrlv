@@ -65,6 +65,41 @@ jobs:
           SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
         run: ./scripts/build-release.sh "${VERSION}" "${BUILD_NUMBER}"
 
+      - name: Validate packaged app integrity
+        run: |
+          ZIP_PATH="dist/${VERSION}/ctrlv-${VERSION}.zip"
+          if [[ ! -s "${ZIP_PATH}" ]]; then
+            echo "Missing Sparkle zip artifact: ${ZIP_PATH}"
+            exit 1
+          fi
+
+          TMP_DIR="$(mktemp -d)"
+          trap 'rm -rf "${TMP_DIR}"' EXIT
+          ditto -x -k "${ZIP_PATH}" "${TMP_DIR}"
+
+          APP_PATH="${TMP_DIR}/ctrlv.app"
+          if [[ ! -d "${APP_PATH}" ]]; then
+            echo "Sparkle zip does not contain ctrlv.app"
+            exit 1
+          fi
+
+          codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
+
+          SPARKLE_BASE="${APP_PATH}/Contents/Frameworks/Sparkle.framework/Versions/B"
+          REQUIRED_EXECUTABLES=(
+            "${SPARKLE_BASE}/Autoupdate"
+            "${SPARKLE_BASE}/Updater.app/Contents/MacOS/Updater"
+            "${SPARKLE_BASE}/XPCServices/Downloader.xpc/Contents/MacOS/Downloader"
+            "${SPARKLE_BASE}/XPCServices/Installer.xpc/Contents/MacOS/Installer"
+          )
+
+          for executable in "${REQUIRED_EXECUTABLES[@]}"; do
+            if [[ ! -x "${executable}" ]]; then
+              echo "Missing Sparkle executable: ${executable}"
+              exit 1
+            fi
+          done
+
       - name: Ensure release notes file
         run: |
           NOTES_FILE="dist/${VERSION}/release-notes.md"

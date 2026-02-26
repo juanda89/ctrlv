@@ -4,6 +4,7 @@ import SwiftUI
 struct BehaviorSection: View {
     @Bindable var settingsVM: SettingsViewModel
     @Bindable var translatorVM: TranslatorViewModel
+    @Bindable var updateService: UpdateService
     @State private var isAccessibilityGranted = false
     @State private var pollingTimer: Timer?
     @State private var isShortcutSettingsPresented = false
@@ -211,6 +212,18 @@ struct BehaviorSection: View {
                 .lineLimit(2)
 
             Text("Last error: \(translatorVM.lastError ?? "none")")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Divider()
+
+            Text(updateService.debugSummaryLine)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+
+            Text(updateService.debugDetailsLine)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)

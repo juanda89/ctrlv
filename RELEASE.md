@@ -63,3 +63,19 @@ Manualmente debes configurar:
 - URL de checkout
 - URL de portal/manage
 - License key de sandbox para QA
+
+## 5. Manual QA de updates (Sparkle + fallback)
+
+### Caso A: instalación correcta desde `/Applications`
+1. Instala y ejecuta `ctrlv.app` desde `/Applications`.
+2. Usa `Check for Updates`.
+3. Si hay una versión nueva, instala y confirma relaunch sin errores.
+
+### Caso B: ejecución incorrecta desde `.dmg` o fallo de instalador
+1. Abre `ctrlv.app` directamente desde el volumen del `.dmg` (o en entorno con permisos restringidos).
+2. Usa `Check for Updates` y fuerza instalación.
+3. Si Sparkle falla, valida que aparezca el fallback con:
+   - `Download latest .dmg`
+   - `Open install guide`
+   - `Copy diagnostics`
+4. Confirma que el enlace guía explica mover la app a `/Applications`.

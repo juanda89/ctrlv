@@ -4,6 +4,7 @@ import SwiftUI
 struct MenuBarView: View {
     @Bindable var viewModel: TranslatorViewModel
     @Bindable var licenseService: LicenseService
+    @Bindable var updateService: UpdateService
     let onOpenFeedback: () -> Void
     let onCheckForUpdates: () -> Void
     let onShowAbout: () -> Void
@@ -18,7 +19,8 @@ struct MenuBarView: View {
                     PreferencesSection(settingsVM: viewModel.settingsVM)
                     BehaviorSection(
                         settingsVM: viewModel.settingsVM,
-                        translatorVM: viewModel
+                        translatorVM: viewModel,
+                        updateService: updateService
                     )
                 }
                 .padding(.horizontal, 10)
@@ -46,6 +48,9 @@ struct MenuBarView: View {
                 endPoint: .bottom
             )
         )
+        .sheet(isPresented: $updateService.isShowingManualUpdateFallback) {
+            UpdateFailureSheet(updateService: updateService)
+        }
     }
 
     private var header: some View {
