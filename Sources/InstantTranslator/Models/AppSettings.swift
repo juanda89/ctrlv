@@ -8,7 +8,7 @@ struct AppSettings: Codable {
     var selectedProvider: ProviderType = .claude
 
     // Shortcut stored as raw values.
-    // Modifiers are fixed to Control + Shift; only the final letter is configurable.
+    // Modifiers are fixed to Command + Shift; only the final letter is configurable.
     var shortcutKeyCode: UInt32 = ShortcutConfiguration.defaultOption.carbonKeyCode
     var shortcutModifiers: UInt = UInt(ShortcutConfiguration.fixedModifiers)
 

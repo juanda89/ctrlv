@@ -25,11 +25,11 @@ final class SettingsViewModel {
     }
 
     var shortcutDisplay: String {
-        "Ctrl + Shift + \(selectedShortcutOption.letter)"
+        "Command + Shift + \(selectedShortcutOption.letter)"
     }
 
     var shortcutKeyCaps: [String] {
-        ["Ctrl", "Shift", selectedShortcutOption.letter]
+        ["⌘", "⇧", selectedShortcutOption.letter]
     }
 
     init() {

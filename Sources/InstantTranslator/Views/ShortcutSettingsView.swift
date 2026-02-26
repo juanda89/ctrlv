@@ -12,7 +12,7 @@ struct ShortcutSettingsView: View {
             Text("Shortcut")
                 .font(.system(size: 18, weight: .bold))
 
-            Text("Control + Shift stay fixed. Choose only the final letter.")
+            Text("Command + Shift stay fixed. Choose only the final letter.")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
 

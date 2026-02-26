@@ -9,8 +9,8 @@ struct ShortcutKeyOption: Identifiable, Hashable {
 }
 
 enum ShortcutConfiguration {
-    static let fixedModifiers: UInt32 = UInt32(controlKey | shiftKey)
-    static let defaultOption: ShortcutKeyOption = option(forLetter: "J")
+    static let fixedModifiers: UInt32 = UInt32(cmdKey | shiftKey)
+    static let defaultOption: ShortcutKeyOption = option(forLetter: "V")
 
     static let letterOptions: [ShortcutKeyOption] = {
         let letters = (65...90).compactMap { UnicodeScalar($0).map { String($0) } }
@@ -30,6 +30,6 @@ enum ShortcutConfiguration {
 
     static func option(forLetter letter: String) -> ShortcutKeyOption {
         letterOptions.first(where: { $0.letter == letter.uppercased() }) ??
-            ShortcutKeyOption(letter: "J", carbonKeyCode: Key.j.carbonKeyCode)
+            ShortcutKeyOption(letter: "V", carbonKeyCode: Key.v.carbonKeyCode)
     }
 }
