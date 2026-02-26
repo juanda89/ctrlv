@@ -11,8 +11,8 @@ set -euo pipefail
 
 PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${1:?Version is required (eg 1.0.0)}"
-DOWNLOAD_URL_PREFIX="${2:-https://github.com/juanda89/ctrlv/releases/latest/download}"
-RELEASE_NOTES_URL_PREFIX="${3:-https://github.com/juanda89/ctrlv/releases/latest/download}"
+DOWNLOAD_URL_PREFIX="${2:-https://github.com/juanda89/ctrlv/releases/download/v${VERSION}}"
+RELEASE_NOTES_URL_PREFIX="${3:-https://github.com/juanda89/ctrlv/releases/download/v${VERSION}}"
 DIST_DIR="${PROJECT_DIR}/dist/${VERSION}"
 SOURCE_ZIP="${DIST_DIR}/ctrlv-${VERSION}.zip"
 SOURCE_NOTES="${DIST_DIR}/release-notes.md"

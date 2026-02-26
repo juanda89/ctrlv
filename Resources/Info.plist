@@ -37,7 +37,7 @@
 	<key>SUEnableAutomaticChecks</key>
 	<true/>
 	<key>SUFeedURL</key>
-	<string>https://control-v.info/updates/appcast.xml</string>
+	<string>https://github.com/juanda89/ctrlv/releases/latest/download/appcast.xml</string>
 	<key>SUPublicEDKey</key>
 	<string>g3N0vRaq2m6T5wAf7qoKkc8iuwdhhIxKdOeAT0lGA7Y=</string>
 </dict>

@@ -95,8 +95,8 @@ jobs:
           DOWNLOAD_URL_PREFIX: ${{ vars.CTRLV_DOWNLOADS_BASE_URL }}
           RELEASE_NOTES_URL_PREFIX: ${{ vars.CTRLV_RELEASE_NOTES_BASE_URL }}
         run: |
-          DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://github.com/juanda89/ctrlv/releases/latest/download}"
-          NOTES_PREFIX="${RELEASE_NOTES_URL_PREFIX:-https://github.com/juanda89/ctrlv/releases/latest/download}"
+          DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://github.com/juanda89/ctrlv/releases/download/v${VERSION}}"
+          NOTES_PREFIX="${RELEASE_NOTES_URL_PREFIX:-https://github.com/juanda89/ctrlv/releases/download/v${VERSION}}"
           ./scripts/generate-appcast.sh "${VERSION}" "${DOWNLOAD_PREFIX}" "${NOTES_PREFIX}"
 
       - name: Validate appcast is universal-compatible
