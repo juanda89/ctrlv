@@ -60,23 +60,14 @@ struct StatusSection: View {
                 .foregroundStyle(.secondary)
 
             HStack {
-                Button("Manage") {
-                    licenseService.openManageSubscription()
+                Spacer()
+
+                Button("Upgrade") {
+                    prepareLicenseSheet()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.mini)
                 .tint(.green)
-
-                Spacer()
-
-                Button("Deactivate") {
-                    Task { @MainActor in
-                        localMessage = nil
-                        _ = await licenseService.deactivateCurrentLicense()
-                    }
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
             }
         }
         .background(cardTint(isOfflineGrace ? .orange : .green))
@@ -97,22 +88,12 @@ struct StatusSection: View {
                 .tint(.orange)
 
             HStack {
-                Label("License", systemImage: "key.fill")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-
                 Spacer()
 
                 Button("Upgrade") {
-                    licenseService.openUpgrade()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.mini)
-
-                Button("Enter Key") {
                     prepareLicenseSheet()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.borderedProminent)
                 .controlSize(.mini)
             }
         }
@@ -135,24 +116,14 @@ struct StatusSection: View {
                 .tint(.red)
 
             HStack {
-                Label("License", systemImage: "exclamationmark.triangle.fill")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(.secondary)
-
                 Spacer()
 
                 Button("Upgrade") {
-                    licenseService.openUpgrade()
+                    prepareLicenseSheet()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.mini)
                 .tint(.red)
-
-                Button("Enter Key") {
-                    prepareLicenseSheet()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
             }
         }
         .background(cardTint(.red))
@@ -175,20 +146,14 @@ struct StatusSection: View {
                 .foregroundStyle(.secondary)
 
             HStack {
+                Spacer()
+
                 Button("Upgrade") {
-                    licenseService.openUpgrade()
+                    prepareLicenseSheet()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.mini)
                 .tint(.red)
-
-                Spacer()
-
-                Button("Enter Key") {
-                    prepareLicenseSheet()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
             }
         }
         .background(cardTint(.red))
@@ -236,39 +201,32 @@ struct StatusSection: View {
                     .textFieldStyle(.roundedBorder)
             }
 
-            Button {
-                Task { @MainActor in
-                    localMessage = nil
-                    let ok = await licenseService.submitLicenseKey(licenseKeyInput)
-                    if ok {
-                        showLicenseSheet = false
-                    } else if licenseService.state.canTranslate {
-                        localMessage = "License key not active yet. Trial is still available."
-                    }
-                }
-            } label: {
-                Text("Activate")
-                    .frame(maxWidth: .infinity)
-            }
-            .buttonStyle(.borderedProminent)
-            .controlSize(.regular)
-            .disabled(licenseService.isLoading)
-
             HStack {
-                Button("Upgrade") {
-                    licenseService.openUpgrade()
+                Button("Close") {
+                    showLicenseSheet = false
                 }
                 .buttonStyle(.bordered)
 
                 Spacer()
 
-                if licenseService.storedLicenseKey != nil {
-                    Button("Clear Stored Key") {
-                        licenseService.clearStoredLicense()
-                        localMessage = "Stored key removed."
-                    }
-                    .buttonStyle(.bordered)
+                Button("Get your license key") {
+                    licenseService.openUpgrade()
                 }
+                .buttonStyle(.bordered)
+
+                Button("Activate") {
+                    Task { @MainActor in
+                        localMessage = nil
+                        let ok = await licenseService.submitLicenseKey(licenseKeyInput)
+                        if ok {
+                            showLicenseSheet = false
+                        } else if licenseService.state.canTranslate {
+                            localMessage = "License key not active yet. Trial is still available."
+                        }
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(licenseService.isLoading)
             }
 
             if let message = localMessage {

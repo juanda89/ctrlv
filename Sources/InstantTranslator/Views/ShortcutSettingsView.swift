@@ -8,6 +8,7 @@ struct ShortcutSettingsView: View {
 
     private let quickPickLetters = ["V", "J", "K", "L", "X", "C"]
     @State private var keyMonitor: Any?
+    @State private var pendingOption: ShortcutKeyOption = ShortcutConfiguration.defaultOption
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -36,11 +37,11 @@ struct ShortcutSettingsView: View {
                     Text("Current")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(.secondary)
-                    ShortcutBadge(keys: settingsVM.shortcutKeyCaps)
+                    ShortcutBadge(keys: ["⌘", "⇧", pendingOption.letter])
                 }
 
                 HStack(spacing: 10) {
-                    Text(settingsVM.selectedShortcutOption.letter)
+                    Text(pendingOption.letter)
                         .font(.system(size: 24, weight: .black, design: .rounded))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
@@ -74,8 +75,8 @@ struct ShortcutSettingsView: View {
 
             HStack {
                 Spacer()
-                Button("Done") {
-                    dismiss()
+                Button("Save") {
+                    saveAndClose()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -85,6 +86,7 @@ struct ShortcutSettingsView: View {
         .padding(14)
         .frame(width: 320)
         .onAppear {
+            pendingOption = settingsVM.selectedShortcutOption
             startKeyCapture()
         }
         .onDisappear {
@@ -94,10 +96,10 @@ struct ShortcutSettingsView: View {
 
     private func quickPickButton(letter: String) -> some View {
         let option = ShortcutConfiguration.option(forLetter: letter)
-        let isSelected = option.carbonKeyCode == settingsVM.selectedShortcutOption.carbonKeyCode
+        let isSelected = option.carbonKeyCode == pendingOption.carbonKeyCode
 
         return Button {
-            apply(option)
+            select(option)
         } label: {
             Text(letter)
                 .font(.system(size: 12, weight: isSelected ? .bold : .semibold))
@@ -158,11 +160,18 @@ struct ShortcutSettingsView: View {
             return
         }
 
-        apply(option)
+        select(option)
     }
 
-    private func apply(_ option: ShortcutKeyOption) {
-        settingsVM.setShortcut(option)
-        onShortcutChanged()
+    private func select(_ option: ShortcutKeyOption) {
+        pendingOption = option
+    }
+
+    private func saveAndClose() {
+        if pendingOption.carbonKeyCode != settingsVM.selectedShortcutOption.carbonKeyCode {
+            settingsVM.setShortcut(pendingOption)
+            onShortcutChanged()
+        }
+        dismiss()
     }
 }

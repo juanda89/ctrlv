@@ -135,9 +135,9 @@ struct BehaviorSection: View {
                     Button {
                         isProviderHelpPresented = true
                     } label: {
-                        Label(settingsVM.settings.selectedProvider.apiKeyHelpTitle, systemImage: "questionmark.circle")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(MenuTheme.blue)
+                        Text(settingsVM.settings.selectedProvider.apiKeyHelpTitle)
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(.tertiary)
                     }
                     .buttonStyle(.plain)
                 }
