@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 struct ShortcutSettingsView: View {
@@ -5,58 +6,54 @@ struct ShortcutSettingsView: View {
     @Bindable var settingsVM: SettingsViewModel
     let onShortcutChanged: () -> Void
 
-    private let quickPickLetters = ["J", "K", "L", "V", "X", "C"]
+    private let quickPickLetters = ["V", "J", "K", "L", "X", "C"]
+    @State private var keyMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Shortcut")
-                .font(.system(size: 18, weight: .bold))
+            HStack {
+                Text("Shortcut")
+                    .font(.system(size: 18, weight: .bold))
 
-            Text("Command + Shift stay fixed. Choose only the final letter.")
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
+
+            Text("Command + Shift stay fixed. Press only one letter key now.")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            HStack(spacing: 8) {
-                Text("Current")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-                ShortcutBadge(keys: settingsVM.shortcutKeyCaps)
-            }
-
-            HStack(spacing: 10) {
-                Button {
-                    moveSelection(offset: -1)
-                } label: {
-                    Image(systemName: "chevron.left")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 28, height: 28)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Text("Current")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                    ShortcutBadge(keys: settingsVM.shortcutKeyCaps)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
 
-                Text(settingsVM.selectedShortcutOption.letter)
-                    .font(.system(size: 20, weight: .black, design: .rounded))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .fill(MenuTheme.blue.opacity(0.12))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
-                            .stroke(MenuTheme.blue.opacity(0.35), lineWidth: 1)
-                    )
-                    .foregroundStyle(MenuTheme.blue)
-
-                Button {
-                    moveSelection(offset: 1)
-                } label: {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .bold))
-                        .frame(width: 28, height: 28)
+                HStack(spacing: 10) {
+                    Text(settingsVM.selectedShortcutOption.letter)
+                        .font(.system(size: 24, weight: .black, design: .rounded))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(MenuTheme.blue.opacity(0.12))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .stroke(MenuTheme.blue.opacity(0.35), lineWidth: 1)
+                        )
+                        .foregroundStyle(MenuTheme.blue)
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -71,23 +68,9 @@ struct ShortcutSettingsView: View {
                 }
             }
 
-            HStack {
-                Text("More letters")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
-
-                Spacer()
-
-                Picker("", selection: selectedKeyCodeBinding) {
-                    ForEach(settingsVM.shortcutOptions) { option in
-                        Text(option.letter).tag(option.carbonKeyCode)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .frame(width: 92)
-            }
+            Text("Tip: press a single letter. Invalid keys play the system warning sound.")
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.tertiary)
 
             HStack {
                 Spacer()
@@ -101,16 +84,12 @@ struct ShortcutSettingsView: View {
         }
         .padding(14)
         .frame(width: 320)
-    }
-
-    private var selectedKeyCodeBinding: Binding<UInt32> {
-        Binding(
-            get: { settingsVM.selectedShortcutOption.carbonKeyCode },
-            set: { newValue in
-                let option = ShortcutConfiguration.option(for: newValue)
-                apply(option)
-            }
-        )
+        .onAppear {
+            startKeyCapture()
+        }
+        .onDisappear {
+            stopKeyCapture()
+        }
     }
 
     private func quickPickButton(letter: String) -> some View {
@@ -136,14 +115,50 @@ struct ShortcutSettingsView: View {
         .buttonStyle(.plain)
     }
 
-    private func moveSelection(offset: Int) {
-        let options = settingsVM.shortcutOptions
-        guard let currentIndex = options.firstIndex(where: {
-            $0.carbonKeyCode == settingsVM.selectedShortcutOption.carbonKeyCode
-        }) else { return }
+    private func startKeyCapture() {
+        stopKeyCapture()
+        keyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+            handleKeyPress(event)
+            return nil
+        }
+    }
 
-        let nextIndex = (currentIndex + offset + options.count) % options.count
-        apply(options[nextIndex])
+    private func stopKeyCapture() {
+        if let keyMonitor {
+            NSEvent.removeMonitor(keyMonitor)
+            self.keyMonitor = nil
+        }
+    }
+
+    private func handleKeyPress(_ event: NSEvent) {
+        if event.keyCode == 53 {
+            dismiss()
+            return
+        }
+
+        let forbiddenModifiers = event.modifierFlags.intersection([.command, .control, .option, .function])
+        if !forbiddenModifiers.isEmpty {
+            NSSound.beep()
+            return
+        }
+
+        guard let input = event.charactersIgnoringModifiers?.uppercased(), input.count == 1 else {
+            NSSound.beep()
+            return
+        }
+
+        let scalar = input.unicodeScalars.first?.value ?? 0
+        guard scalar >= 65, scalar <= 90 else {
+            NSSound.beep()
+            return
+        }
+
+        guard let option = settingsVM.shortcutOptions.first(where: { $0.letter == input }) else {
+            NSSound.beep()
+            return
+        }
+
+        apply(option)
     }
 
     private func apply(_ option: ShortcutKeyOption) {

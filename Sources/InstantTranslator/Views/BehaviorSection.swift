@@ -94,7 +94,7 @@ struct BehaviorSection: View {
             HStack {
                 HStack(spacing: 8) {
                     IconBubble(systemName: "network", tint: .purple)
-                    Text("Provider")
+                    Text("LLM Provider")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary)
                 }
@@ -113,19 +113,13 @@ struct BehaviorSection: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                HStack(spacing: 8) {
-                    IconBubble(systemName: "key.fill", tint: .orange)
-                    Text("\(settingsVM.settings.selectedProvider.rawValue) API Key")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
-
                 APIKeyField(
                     storedKey: settingsVM.apiKeyForSelectedProvider(),
                     draftKey: $draftAPIKey,
                     placeholder: settingsVM.apiKeyPlaceholder,
                     isEditing: isEditingAPIKey,
                     validationState: validationStateForSelectedProvider(),
+                    showsStatus: false,
                     onEdit: beginEditingAPIKey,
                     onCancel: cancelEditingAPIKey,
                     onSave: {
@@ -134,16 +128,20 @@ struct BehaviorSection: View {
                         }
                     }
                 )
-            }
 
-            Button {
-                isProviderHelpPresented = true
-            } label: {
-                Label(settingsVM.settings.selectedProvider.apiKeyHelpTitle, systemImage: "questionmark.circle")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(MenuTheme.blue)
+                HStack(spacing: 8) {
+                    apiKeyInlineStatus
+                    Spacer()
+                    Button {
+                        isProviderHelpPresented = true
+                    } label: {
+                        Label(settingsVM.settings.selectedProvider.apiKeyHelpTitle, systemImage: "questionmark.circle")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(MenuTheme.blue)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
-            .buttonStyle(.plain)
 
         }
     }
@@ -325,6 +323,45 @@ struct BehaviorSection: View {
     private func validationStateForSelectedProvider() -> APIKeyFieldValidationState {
         let provider = settingsVM.settings.selectedProvider
         return apiKeyValidationByProvider[provider] ?? .none
+    }
+
+    @ViewBuilder
+    private var apiKeyInlineStatus: some View {
+        switch validationStateForSelectedProvider() {
+        case .none:
+            if settingsVM.apiKeyForSelectedProvider().isEmpty {
+                Text("No key saved")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            } else {
+                Text("Saved locally")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+        case .checking:
+            HStack(spacing: 5) {
+                ProgressView()
+                    .controlSize(.mini)
+                Text("Verifying key...")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+        case .valid(let message):
+            HStack(spacing: 4) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.green)
+                Text(message)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.green)
+            }
+        case .invalid(let message):
+            Text(message)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.red)
+                .lineLimit(1)
+                .truncationMode(.tail)
+        }
     }
 
     private var lastTriggerText: String {

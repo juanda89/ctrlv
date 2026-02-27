@@ -13,6 +13,17 @@ struct APIKeyTutorialSheet: View {
                     .foregroundStyle(MenuTheme.blue)
                 Text(provider.apiKeyHelpTitle)
                     .font(.system(size: 18, weight: .bold))
+
+                Spacer()
+
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
             }
 
             Text(provider.apiKeyHelpSubtitle)

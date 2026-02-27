@@ -13,9 +13,11 @@ struct APIKeyField: View {
     let placeholder: String
     let isEditing: Bool
     let validationState: APIKeyFieldValidationState
+    var showsStatus: Bool = true
     let onEdit: () -> Void
     let onCancel: () -> Void
     let onSave: () -> Void
+    @FocusState private var isKeyFieldFocused: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -40,8 +42,19 @@ struct APIKeyField: View {
                     .stroke(Color.primary.opacity(0.1), lineWidth: 1)
             )
 
-            HStack(spacing: 4) {
-                statusView
+            if showsStatus {
+                HStack(spacing: 4) {
+                    statusView
+                }
+            }
+        }
+        .onChange(of: isEditing, initial: true) { _, isNowEditing in
+            if isNowEditing {
+                DispatchQueue.main.async {
+                    isKeyFieldFocused = true
+                }
+            } else {
+                isKeyFieldFocused = false
             }
         }
     }
@@ -50,8 +63,9 @@ struct APIKeyField: View {
     private var fieldBody: some View {
         if isEditing {
             SecureField(placeholder, text: $draftKey)
-            .textFieldStyle(.plain)
-            .font(.system(size: 12, weight: .regular, design: .monospaced))
+                .textFieldStyle(.plain)
+                .font(.system(size: 12, weight: .regular, design: .monospaced))
+                .focused($isKeyFieldFocused)
         } else {
             Text(readOnlyLabel)
                 .font(.system(size: 12, weight: .regular, design: .monospaced))
@@ -123,9 +137,9 @@ struct APIKeyField: View {
             .disabled(validationState == .checking)
         } else {
             iconControlButton(
-                systemName: "pencil",
-                foreground: .secondary,
-                background: Color.primary.opacity(0.08),
+                systemName: "square.and.pencil",
+                foreground: .white,
+                background: MenuTheme.blue,
                 accessibilityLabel: "Edit API key"
             ) {
                 onEdit()
@@ -149,9 +163,9 @@ struct APIKeyField: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(foreground)
-                .frame(width: 20, height: 20)
+                .frame(width: 22, height: 22)
                 .background(
                     RoundedRectangle(cornerRadius: 6, style: .continuous)
                         .fill(background)

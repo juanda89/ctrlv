@@ -156,11 +156,63 @@ ditto -c -k --sequesterRsrc --keepParent "${APP_BUNDLE}" "${ZIP_PATH}"
 
 echo "==> Packaging DMG"
 DMG_STAGING="${DIST_DIR}/dmg-staging"
+DMG_BACKGROUND="${DIST_DIR}/dmg-background.png"
+RW_DMG_PATH="${DIST_DIR}/ctrlv-${VERSION}-rw.dmg"
+DMG_MOUNT_PATH="${DIST_DIR}/dmg-mount"
 rm -rf "${DMG_STAGING}"
 mkdir -p "${DMG_STAGING}"
 ditto --norsrc "${APP_BUNDLE}" "${DMG_STAGING}/ctrlv.app"
 ln -s /Applications "${DMG_STAGING}/Applications"
-hdiutil create -volname "ctrl+v" -srcfolder "${DMG_STAGING}" -ov -format UDZO "${DMG_PATH}"
+
+if swift "${PROJECT_DIR}/scripts/generate-dmg-background.swift" "${DMG_BACKGROUND}" >/dev/null 2>&1; then
+    mkdir -p "${DMG_STAGING}/.background"
+    cp -f "${DMG_BACKGROUND}" "${DMG_STAGING}/.background/background.png"
+fi
+
+rm -f "${RW_DMG_PATH}"
+rm -rf "${DMG_MOUNT_PATH}"
+mkdir -p "${DMG_MOUNT_PATH}"
+
+if hdiutil create -volname "ctrl+v" -srcfolder "${DMG_STAGING}" -ov -format UDRW "${RW_DMG_PATH}"; then
+    ATTACH_OUTPUT="$(hdiutil attach -readwrite -noverify -noautoopen "${RW_DMG_PATH}" -mountpoint "${DMG_MOUNT_PATH}" 2>/dev/null || true)"
+    DEVICE="$(printf '%s\n' "${ATTACH_OUTPUT}" | awk '/Apple_HFS/ {print $1; exit}')"
+
+    if [[ -n "${DEVICE}" ]]; then
+        osascript >/dev/null 2>&1 <<EOF || true
+tell application "Finder"
+    tell disk "ctrl+v"
+        open
+        set current view of container window to icon view
+        set toolbar visible of container window to false
+        set statusbar visible of container window to false
+        set bounds of container window to {120, 120, 900, 600}
+        set viewOptions to the icon view options of container window
+        set arrangement of viewOptions to not arranged
+        set icon size of viewOptions to 128
+        set text size of viewOptions to 14
+        try
+            set background picture of viewOptions to file ".background:background.png"
+        end try
+        set position of item "ctrlv.app" of container window to {190, 220}
+        set position of item "Applications" of container window to {520, 220}
+        close
+        open
+        update without registering applications
+        delay 1
+    end tell
+end tell
+EOF
+        sync
+        hdiutil detach "${DEVICE}" -quiet || hdiutil detach -force "${DEVICE}" -quiet || true
+    fi
+
+    hdiutil convert "${RW_DMG_PATH}" -ov -format UDZO -imagekey zlib-level=9 -o "${DMG_PATH}"
+    rm -f "${RW_DMG_PATH}"
+else
+    hdiutil create -volname "ctrl+v" -srcfolder "${DMG_STAGING}" -ov -format UDZO "${DMG_PATH}"
+fi
+
+rm -rf "${DMG_MOUNT_PATH}"
 rm -rf "${DMG_STAGING}"
 
 echo "==> Generating checksums"

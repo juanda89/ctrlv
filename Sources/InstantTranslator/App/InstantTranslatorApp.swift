@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 @main
@@ -5,6 +6,26 @@ struct InstantTranslatorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
 
     var body: some Scene {
-        Settings { EmptyView() }
+        Settings {
+            HiddenSettingsView()
+                .frame(width: 1, height: 1)
+        }
+        .commands {
+            CommandGroup(replacing: .appSettings) { }
+        }
+    }
+}
+
+private struct HiddenSettingsView: View {
+    var body: some View {
+        Color.clear
+            .onAppear {
+                DispatchQueue.main.async {
+                    for window in NSApp.windows where window.title.localizedCaseInsensitiveContains("settings") {
+                        window.orderOut(nil)
+                        window.close()
+                    }
+                }
+            }
     }
 }

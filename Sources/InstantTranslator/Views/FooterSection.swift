@@ -7,32 +7,20 @@ struct FooterSection: View {
 
     var body: some View {
         HStack {
-            Button {
-                onOpenFeedback()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "bubble.left")
-                        .font(.system(size: 12, weight: .medium))
-                    Text("Feedback")
-                        .font(.system(size: 12, weight: .medium))
-                }
-                .foregroundStyle(.secondary)
-            }
-            .buttonStyle(.plain)
-
             Spacer()
 
-            Text(appVersionLabel)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.tertiary)
-
             Menu {
+                Button("Feedback") {
+                    onOpenFeedback()
+                }
                 Button("About") {
                     onShowAbout()
                 }
                 Button("Check for Updates") {
                     onCheckForUpdates()
                 }
+                Divider()
+                Text(appVersionLabel)
                 Divider()
                 Button("Quit") {
                     NSApplication.shared.terminate(nil)

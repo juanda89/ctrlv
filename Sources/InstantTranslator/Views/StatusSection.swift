@@ -208,8 +208,21 @@ struct StatusSection: View {
 
     private var licenseSheet: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Enter License Key")
-                .font(.system(size: 18, weight: .bold))
+            HStack {
+                Text("Enter License Key")
+                    .font(.system(size: 18, weight: .bold))
+
+                Spacer()
+
+                Button {
+                    showLicenseSheet = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+            }
 
             Text("Paste your Lemon Squeezy license key to activate this device.")
                 .font(.system(size: 12, weight: .medium))

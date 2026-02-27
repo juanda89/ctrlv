@@ -25,7 +25,7 @@ final class SettingsViewModel {
     }
 
     var apiKeyPlaceholder: String {
-        settings.selectedProvider.apiKeyPlaceholder
+        "\(settings.selectedProvider.rawValue) API Key: \(settings.selectedProvider.apiKeyPlaceholder)"
     }
 
     init() {
