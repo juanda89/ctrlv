@@ -82,13 +82,6 @@ struct StatusSection: View {
                 Spacer()
 
                 statusPill(text: "\(days)d left", tint: .orange)
-            }
-
-            ProgressView(value: trialProgress(days: days))
-                .tint(.orange)
-
-            HStack {
-                Spacer()
 
                 Button("Upgrade") {
                     prepareLicenseSheet()
@@ -96,6 +89,9 @@ struct StatusSection: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.mini)
             }
+
+            ProgressView(value: trialProgress(days: days))
+                .tint(.orange)
         }
         .background(cardTint(.orange))
     }

@@ -35,6 +35,7 @@ struct FooterSection: View {
                     )
                     .foregroundStyle(.secondary)
             }
+            .menuIndicator(.hidden)
             .menuStyle(.borderlessButton)
         }
     }

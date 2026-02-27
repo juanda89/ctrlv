@@ -27,6 +27,10 @@ final class UpdateService: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDe
     private var didRunLaunchCheck = false
     @ObservationIgnored
     private var latestCheckWasUserInitiated = false
+    @ObservationIgnored
+    private var periodicCheckTimer: Timer?
+    @ObservationIgnored
+    private let periodicCheckInterval: TimeInterval = 15 * 60
 
     private(set) var lastUpdateErrorSummary: String?
     private(set) var lastUpdateErrorDetails: String?
@@ -54,6 +58,19 @@ final class UpdateService: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDe
         didRunLaunchCheck = true
         latestCheckWasUserInitiated = false
         updaterController.updater.checkForUpdatesInBackground()
+    }
+
+    func startPeriodicBackgroundChecks() {
+        guard periodicCheckTimer == nil else { return }
+
+        periodicCheckTimer = Timer.scheduledTimer(withTimeInterval: periodicCheckInterval, repeats: true) { [weak self] _ in
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+                guard !self.updaterController.updater.sessionInProgress else { return }
+                self.latestCheckWasUserInitiated = false
+                self.updaterController.updater.checkForUpdatesInBackground()
+            }
+        }
     }
 
     func dismissManualUpdateFallback() {

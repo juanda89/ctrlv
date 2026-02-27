@@ -27,6 +27,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             await runPostInstallUserExperience()
             try? await Task.sleep(nanoseconds: 1_500_000_000)
             updateService.checkForUpdatesAtLaunchIfEnabled()
+            updateService.startPeriodicBackgroundChecks()
         }
     }
 
