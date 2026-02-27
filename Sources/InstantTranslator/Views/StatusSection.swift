@@ -198,17 +198,14 @@ struct StatusSection: View {
             }
 
             HStack {
-                Button("Close") {
-                    showLicenseSheet = false
-                }
-                .buttonStyle(.bordered)
-
-                Spacer()
-
                 Button("Get your license key") {
                     licenseService.openUpgrade()
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+                .underline()
+
+                Spacer()
 
                 Button("Activate") {
                     Task { @MainActor in

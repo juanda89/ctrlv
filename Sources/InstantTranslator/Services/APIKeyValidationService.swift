@@ -1,8 +1,25 @@
 import Foundation
 
+enum APIKeyValidationOutcome: Equatable {
+    case valid
+    case rateLimited
+    case invalid
+    case networkError
+}
+
 struct APIKeyValidationResult: Equatable {
-    let isValid: Bool
+    let outcome: APIKeyValidationOutcome
     let message: String
+    let retryAfter: Int?
+
+    var isValid: Bool {
+        switch outcome {
+        case .valid, .rateLimited:
+            return true
+        case .invalid, .networkError:
+            return false
+        }
+    }
 }
 
 protocol APIKeyValidating {
@@ -19,7 +36,11 @@ struct APIKeyValidationService: APIKeyValidating {
     func validate(apiKey: String, for provider: ProviderType) async -> APIKeyValidationResult {
         let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
-            return APIKeyValidationResult(isValid: false, message: "API key is empty.")
+            return APIKeyValidationResult(
+                outcome: .invalid,
+                message: "API key is empty.",
+                retryAfter: nil
+            )
         }
 
         do {
@@ -27,33 +48,46 @@ struct APIKeyValidationService: APIKeyValidating {
             let (data, response) = try await session.data(for: request)
             guard let http = response as? HTTPURLResponse else {
                 return APIKeyValidationResult(
-                    isValid: false,
-                    message: "Could not validate key. Invalid server response."
+                    outcome: .networkError,
+                    message: "Could not validate key. Invalid server response.",
+                    retryAfter: nil
                 )
             }
 
             switch http.statusCode {
             case 200:
-                return APIKeyValidationResult(isValid: true, message: "\(provider.rawValue) key verified.")
-            case 429:
                 return APIKeyValidationResult(
-                    isValid: true,
-                    message: "\(provider.rawValue) key verified (rate limited right now)."
+                    outcome: .valid,
+                    message: "\(provider.rawValue) key verified.",
+                    retryAfter: nil
+                )
+            case 429:
+                let retryAfter = http.value(forHTTPHeaderField: "Retry-After").flatMap(Int.init)
+                return APIKeyValidationResult(
+                    outcome: .rateLimited,
+                    message: "\(provider.rawValue) rate limited right now.",
+                    retryAfter: retryAfter
                 )
             case 401, 403:
                 return APIKeyValidationResult(
-                    isValid: false,
-                    message: "Invalid \(provider.rawValue) API key."
+                    outcome: .invalid,
+                    message: "Invalid \(provider.rawValue) API key.",
+                    retryAfter: nil
                 )
             default:
                 let serverMessage = errorMessage(from: data) ?? "Provider returned status \(http.statusCode)."
-                return APIKeyValidationResult(isValid: false, message: serverMessage)
+                return APIKeyValidationResult(
+                    outcome: .invalid,
+                    message: serverMessage,
+                    retryAfter: nil
+                )
             }
         } catch {
             let networkMessage = (error as? URLError)?.localizedDescription ?? error.localizedDescription
             return APIKeyValidationResult(
-                isValid: false,
-                message: "Could not validate key. \(networkMessage)"
+                outcome: .networkError,
+                message: "Could not validate key. \(networkMessage)",
+                retryAfter: nil
             )
         }
     }

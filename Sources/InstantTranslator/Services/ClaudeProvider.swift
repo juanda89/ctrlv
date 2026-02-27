@@ -30,9 +30,9 @@ struct ClaudeProvider: TranslationProvider {
         }
 
         if httpResponse.statusCode == 429 {
-            let retryAfter = httpResponse.value(forHTTPHeaderField: "retry-after")
+            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After")
                 .flatMap(Int.init)
-            throw TranslationError.rateLimited(retryAfter: retryAfter)
+            throw TranslationError.rateLimited(provider: .claude, retryAfter: retryAfter)
         }
 
         guard httpResponse.statusCode == 200 else {

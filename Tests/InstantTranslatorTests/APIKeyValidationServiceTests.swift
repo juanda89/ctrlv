@@ -31,6 +31,7 @@ final class APIKeyValidationServiceTests: XCTestCase {
         let result = await service.validate(apiKey: "sk-test", for: .openAI)
 
         XCTAssertTrue(result.isValid)
+        XCTAssertEqual(result.outcome, .valid)
         XCTAssertTrue(result.message.contains("verified"))
     }
 
@@ -48,6 +49,7 @@ final class APIKeyValidationServiceTests: XCTestCase {
         let result = await service.validate(apiKey: "sk-ant-test", for: .claude)
 
         XCTAssertFalse(result.isValid)
+        XCTAssertEqual(result.outcome, .invalid)
         XCTAssertTrue(result.message.contains("Invalid Claude API key"))
     }
 
@@ -62,6 +64,7 @@ final class APIKeyValidationServiceTests: XCTestCase {
         let result = await service.validate(apiKey: "AIza-test", for: .gemini)
 
         XCTAssertTrue(result.isValid)
+        XCTAssertEqual(result.outcome, .rateLimited)
         XCTAssertTrue(result.message.contains("rate limited"))
     }
 
@@ -74,6 +77,7 @@ final class APIKeyValidationServiceTests: XCTestCase {
         let result = await service.validate(apiKey: "sk-test", for: .openAI)
 
         XCTAssertFalse(result.isValid)
+        XCTAssertEqual(result.outcome, .networkError)
         XCTAssertTrue(result.message.contains("Could not validate key"))
     }
 }

@@ -11,6 +11,7 @@ struct BehaviorSection: View {
     @State private var isProviderHelpPresented = false
     @State private var isEditingAPIKey = false
     @State private var draftAPIKey = ""
+    @State private var isCheckingProviderStatus = false
     @State private var apiKeyValidationByProvider: [ProviderType: APIKeyFieldValidationState] = [:]
 
     private let apiKeyValidationService = APIKeyValidationService()
@@ -93,7 +94,7 @@ struct BehaviorSection: View {
         MenuCard {
             HStack {
                 HStack(spacing: 8) {
-                    IconBubble(systemName: "network", tint: .purple)
+                    IconBubble(systemName: "sparkles", tint: .purple)
                     Text("LLM Provider")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(.secondary)
@@ -130,7 +131,7 @@ struct BehaviorSection: View {
                 )
 
                 HStack(spacing: 8) {
-                    apiKeyInlineStatus
+                    providerStatusButton
                     Spacer()
                     Button {
                         isProviderHelpPresented = true
@@ -304,6 +305,7 @@ struct BehaviorSection: View {
         if newValue.isEmpty {
             settingsVM.setAPIKey("", for: provider)
             apiKeyValidationByProvider[provider] = APIKeyFieldValidationState.none
+            translatorVM.clearProviderRuntimeStatus(for: provider)
             isEditingAPIKey = false
             return
         }
@@ -311,12 +313,16 @@ struct BehaviorSection: View {
         apiKeyValidationByProvider[provider] = .checking
         let result = await apiKeyValidationService.validate(apiKey: newValue, for: provider)
 
-        if result.isValid {
+        switch result.outcome {
+        case .valid, .rateLimited:
             settingsVM.setAPIKey(newValue, for: provider)
             apiKeyValidationByProvider[provider] = .valid(result.message)
+            // New key clears old runtime status for this app session.
+            translatorVM.clearProviderRuntimeStatus(for: provider)
             isEditingAPIKey = false
-        } else {
+        case .invalid, .networkError:
             apiKeyValidationByProvider[provider] = .invalid(result.message)
+            translatorVM.updateProviderRuntimeStatus(from: result, for: provider)
         }
     }
 
@@ -325,42 +331,84 @@ struct BehaviorSection: View {
         return apiKeyValidationByProvider[provider] ?? .none
     }
 
-    @ViewBuilder
-    private var apiKeyInlineStatus: some View {
-        switch validationStateForSelectedProvider() {
-        case .none:
-            if settingsVM.apiKeyForSelectedProvider().isEmpty {
-                Text("No key saved")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.tertiary)
-            } else {
-                Text("Saved locally")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+    private var providerStatusButton: some View {
+        let style = providerStatusStyle
+
+        return Button {
+            Task { @MainActor in
+                await refreshSelectedProviderStatus()
             }
-        case .checking:
+        } label: {
             HStack(spacing: 5) {
-                ProgressView()
-                    .controlSize(.mini)
-                Text("Verifying key...")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
-        case .valid(let message):
-            HStack(spacing: 4) {
-                Image(systemName: "checkmark.circle.fill")
+                if isCheckingProviderStatus {
+                    ProgressView()
+                        .controlSize(.mini)
+                } else {
+                    Circle()
+                        .fill(style.tint)
+                        .frame(width: 6, height: 6)
+                }
+                Text(style.text)
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(.green)
-                Text(message)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.green)
             }
-        case .invalid(let message):
-            Text(message)
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.red)
-                .lineLimit(1)
-                .truncationMode(.tail)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                Capsule(style: .continuous)
+                    .fill(style.background)
+            )
+        }
+        .buttonStyle(.plain)
+        .disabled(isCheckingProviderStatus)
+    }
+
+    private var providerStatusStyle: (text: String, tint: Color, background: Color) {
+        let provider = settingsVM.settings.selectedProvider
+        let hasKey = !settingsVM.apiKey(for: provider)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty
+
+        if isCheckingProviderStatus {
+            return ("Status: Checking...", .secondary, Color.primary.opacity(0.08))
+        }
+
+        guard hasKey else {
+            return ("Status: No key", .secondary, Color.primary.opacity(0.08))
+        }
+
+        switch translatorVM.providerRuntimeStatus(for: provider) {
+        case .rateLimited:
+            return ("Status: Rate limited", .red, .red.opacity(0.12))
+        case .error:
+            return ("Status: Error", .red, .red.opacity(0.12))
+        case .ok:
+            return ("Status: OK", .green, .green.opacity(0.12))
+        case .idle:
+            return ("Status: OK", .green, .green.opacity(0.12))
+        }
+    }
+
+    private func refreshSelectedProviderStatus() async {
+        let provider = settingsVM.settings.selectedProvider
+        let key = settingsVM.apiKey(for: provider).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else {
+            translatorVM.clearProviderRuntimeStatus(for: provider)
+            return
+        }
+
+        isCheckingProviderStatus = true
+        defer { isCheckingProviderStatus = false }
+
+        let result = await apiKeyValidationService.validate(apiKey: key, for: provider)
+        translatorVM.updateProviderRuntimeStatus(from: result, for: provider)
+
+        switch result.outcome {
+        case .valid:
+            apiKeyValidationByProvider[provider] = .valid(result.message)
+        case .rateLimited:
+            apiKeyValidationByProvider[provider] = .invalid(result.message)
+        case .invalid, .networkError:
+            apiKeyValidationByProvider[provider] = .invalid(result.message)
         }
     }
 

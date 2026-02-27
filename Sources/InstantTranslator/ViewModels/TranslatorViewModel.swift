@@ -4,6 +4,13 @@ import os
 
 private let log = Logger(subsystem: "com.instanttranslator.app", category: "translator")
 
+enum ProviderRuntimeStatus: Equatable {
+    case idle
+    case ok(message: String)
+    case rateLimited(message: String, retryAfter: Int?)
+    case error(message: String)
+}
+
 @MainActor
 @Observable
 final class TranslatorViewModel {
@@ -16,6 +23,7 @@ final class TranslatorViewModel {
         didSet { appendDebugEvent(debugLastStage) }
     }
     private(set) var debugEvents: [String] = []
+    private(set) var providerStatusByType: [ProviderType: ProviderRuntimeStatus] = [:]
 
     let settingsVM = SettingsViewModel()
 
@@ -69,6 +77,29 @@ final class TranslatorViewModel {
         notifyAppDelegate { $0.debugShowTranslationIslandPreview() }
     }
 
+    func providerRuntimeStatus(for provider: ProviderType) -> ProviderRuntimeStatus {
+        providerStatusByType[provider] ?? .idle
+    }
+
+    func clearProviderRuntimeStatus(for provider: ProviderType) {
+        providerStatusByType[provider] = .idle
+    }
+
+    func updateProviderRuntimeStatus(from result: APIKeyValidationResult, for provider: ProviderType) {
+        switch result.outcome {
+        case .valid:
+            providerStatusByType[provider] = .ok(message: "OK")
+        case .rateLimited:
+            let retryText = result.retryAfter.map { "Retry in \($0)s." } ?? "Try again shortly."
+            providerStatusByType[provider] = .rateLimited(
+                message: "\(provider.rawValue) rate limited. \(retryText)",
+                retryAfter: result.retryAfter
+            )
+        case .invalid, .networkError:
+            providerStatusByType[provider] = .error(message: result.message)
+        }
+    }
+
     func performTranslation() async {
         guard !isTranslating else {
             debugLastStage = "Skipped: already translating"
@@ -97,6 +128,7 @@ final class TranslatorViewModel {
             debugLastStage = "Blocked: missing API key"
             log.error("API key is empty")
             lastError = TranslationError.apiKeyMissing.localizedDescription
+            providerStatusByType[selectedProvider] = .error(message: TranslationError.apiKeyMissing.localizedDescription)
             return
         }
         debugLastStage = "API key OK"
@@ -171,6 +203,7 @@ final class TranslatorViewModel {
             let response = try await service.translate(request, apiKey: apiKey)
             debugLastStage = "Translation received (\(response.translatedText.count) chars)"
             log.info("Translation received: \(response.translatedText.prefix(50))...")
+            providerStatusByType[selectedProvider] = .ok(message: "OK")
 
             // 5. Output
             if settings.autoPaste {
@@ -218,9 +251,20 @@ final class TranslatorViewModel {
                 notifyAppDelegate { $0.flashMenuBarIcon() }
             }
         } catch {
+            if case let TranslationError.rateLimited(provider, retryAfter) = error {
+                let retryText = retryAfter.map { "Retry in \($0)s." } ?? "Try again shortly."
+                let message = "\(provider.rawValue) rate limited. \(retryText)"
+                debugLastStage = "Error: \(provider.rawValue) 429"
+                log.error("Translation rate limited for \(provider.rawValue, privacy: .public)")
+                lastError = message
+                providerStatusByType[provider] = .rateLimited(message: message, retryAfter: retryAfter)
+                return
+            }
+
             debugLastStage = "Error: \(error.localizedDescription)"
             log.error("Translation error: \(error.localizedDescription)")
             lastError = error.localizedDescription
+            providerStatusByType[selectedProvider] = .error(message: error.localizedDescription)
         }
     }
 

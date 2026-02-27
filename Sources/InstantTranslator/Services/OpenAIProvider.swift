@@ -29,7 +29,8 @@ struct OpenAIProvider: TranslationProvider {
         }
 
         if httpResponse.statusCode == 429 {
-            throw TranslationError.rateLimited(retryAfter: nil)
+            let retryAfter = httpResponse.value(forHTTPHeaderField: "Retry-After").flatMap(Int.init)
+            throw TranslationError.rateLimited(provider: .openAI, retryAfter: retryAfter)
         }
 
         guard httpResponse.statusCode == 200 else {
