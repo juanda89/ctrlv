@@ -1,4 +1,3 @@
-import AppKit
 import SwiftUI
 
 enum APIKeyFieldValidationState: Equatable {
@@ -19,7 +18,6 @@ struct APIKeyField: View {
     let onCancel: () -> Void
     let onSave: () -> Void
     @FocusState private var isKeyFieldFocused: Bool
-    @State private var pasteKeyMonitor: Any?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -59,18 +57,12 @@ struct APIKeyField: View {
                 isKeyFieldFocused = false
             }
         }
-        .onAppear {
-            startPasteShortcutMonitor()
-        }
-        .onDisappear {
-            stopPasteShortcutMonitor()
-        }
     }
 
     @ViewBuilder
     private var fieldBody: some View {
         if isEditing {
-            SecureField(placeholder, text: $draftKey)
+            TextField(placeholder, text: $draftKey)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12, weight: .regular, design: .monospaced))
                 .focused($isKeyFieldFocused)
@@ -194,29 +186,5 @@ struct APIKeyField: View {
         let prefix = key.prefix(4)
         let suffix = key.suffix(4)
         return "\(prefix)\(String(repeating: "•", count: 8))\(suffix)"
-    }
-
-    private func startPasteShortcutMonitor() {
-        stopPasteShortcutMonitor()
-        pasteKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            guard isEditing, isKeyFieldFocused else { return event }
-            guard let typed = event.charactersIgnoringModifiers?.lowercased(), typed == "v" else { return event }
-
-            let modifiers = event.modifierFlags.intersection([.command, .control])
-            guard modifiers.contains(.command) || modifiers.contains(.control) else { return event }
-
-            if let pastedText = NSPasteboard.general.string(forType: .string), !pastedText.isEmpty {
-                draftKey += pastedText
-            }
-
-            return nil
-        }
-    }
-
-    private func stopPasteShortcutMonitor() {
-        if let pasteKeyMonitor {
-            NSEvent.removeMonitor(pasteKeyMonitor)
-            self.pasteKeyMonitor = nil
-        }
     }
 }
