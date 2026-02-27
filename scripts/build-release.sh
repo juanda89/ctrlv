@@ -29,8 +29,19 @@ read_plist_value() {
 
 clean_xattrs() {
     local target="$1"
+    [[ -e "${target}" ]] || return 0
+
+    # Remove known problematic metadata first (iCloud/FileProvider + Finder detritus).
+    find "${target}" -print0 2>/dev/null | while IFS= read -r -d '' path; do
+        xattr -d com.apple.FinderInfo "${path}" 2>/dev/null || true
+        xattr -d com.apple.ResourceFork "${path}" 2>/dev/null || true
+        xattr -d "com.apple.fileprovider.fpfs#P" "${path}" 2>/dev/null || true
+    done
+
     xattr -cr "${target}" 2>/dev/null || true
-    find -L "${target}" -exec xattr -c {} + 2>/dev/null || true
+    find "${target}" -exec xattr -c {} + 2>/dev/null || true
+    find "${target}" -name '._*' -type f -delete 2>/dev/null || true
+    dot_clean -m "${target}" 2>/dev/null || true
 }
 
 derive_build_number_from_version() {
@@ -92,8 +103,8 @@ if ! otool -l "${CONTENTS_DIR}/MacOS/${BIN_NAME}" | grep -q "@executable_path/..
     install_name_tool -add_rpath "@executable_path/../Frameworks" "${CONTENTS_DIR}/MacOS/${BIN_NAME}"
 fi
 
-cp "${INFO_PLIST}" "${CONTENTS_DIR}/Info.plist"
-cp "${ENTITLEMENTS}" "${CONTENTS_DIR}/Resources/"
+ditto --noextattr --noqtn "${INFO_PLIST}" "${CONTENTS_DIR}/Info.plist"
+ditto --noextattr --noqtn "${ENTITLEMENTS}" "${CONTENTS_DIR}/Resources/InstantTranslator.entitlements"
 
 if [[ -d "${ASSET_CATALOG}" ]]; then
     echo "==> Compiling asset catalog"
@@ -110,7 +121,8 @@ echo "==> Setting bundle version metadata"
 /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${BUILD_NUMBER}" "${CONTENTS_DIR}/Info.plist"
 
 if [[ -d "${SPARKLE_FRAMEWORK_SOURCE}" ]]; then
-    ditto --norsrc "${SPARKLE_FRAMEWORK_SOURCE}" "${CONTENTS_DIR}/Frameworks/Sparkle.framework"
+    clean_xattrs "${SPARKLE_FRAMEWORK_SOURCE}"
+    ditto --noextattr --noqtn --norsrc "${SPARKLE_FRAMEWORK_SOURCE}" "${CONTENTS_DIR}/Frameworks/Sparkle.framework"
 fi
 
 echo "==> Clearing extended attributes"
@@ -161,7 +173,7 @@ RW_DMG_PATH="${DIST_DIR}/ctrlv-${VERSION}-rw.dmg"
 DMG_MOUNT_PATH="${DIST_DIR}/dmg-mount"
 rm -rf "${DMG_STAGING}"
 mkdir -p "${DMG_STAGING}"
-ditto --norsrc "${APP_BUNDLE}" "${DMG_STAGING}/ctrlv.app"
+ditto --noextattr --noqtn --norsrc "${APP_BUNDLE}" "${DMG_STAGING}/ctrlv.app"
 ln -s /Applications "${DMG_STAGING}/Applications"
 
 if swift "${PROJECT_DIR}/scripts/generate-dmg-background.swift" "${DMG_BACKGROUND}" >/dev/null 2>&1; then
@@ -170,12 +182,18 @@ if swift "${PROJECT_DIR}/scripts/generate-dmg-background.swift" "${DMG_BACKGROUN
 fi
 
 rm -f "${RW_DMG_PATH}"
+if mount | grep -Fq "${DMG_MOUNT_PATH}"; then
+    hdiutil detach "${DMG_MOUNT_PATH}" -quiet || hdiutil detach -force "${DMG_MOUNT_PATH}" -quiet || true
+fi
 rm -rf "${DMG_MOUNT_PATH}"
 mkdir -p "${DMG_MOUNT_PATH}"
 
 if hdiutil create -volname "ctrl+v" -srcfolder "${DMG_STAGING}" -ov -format UDRW "${RW_DMG_PATH}"; then
     ATTACH_OUTPUT="$(hdiutil attach -readwrite -noverify -noautoopen "${RW_DMG_PATH}" -mountpoint "${DMG_MOUNT_PATH}" 2>/dev/null || true)"
-    DEVICE="$(printf '%s\n' "${ATTACH_OUTPUT}" | awk '/Apple_HFS/ {print $1; exit}')"
+    DEVICE="$(printf '%s\n' "${ATTACH_OUTPUT}" | awk -v mp="${DMG_MOUNT_PATH}" '$0 ~ mp {print $1; exit}')"
+    if [[ -z "${DEVICE}" ]]; then
+        DEVICE="$(printf '%s\n' "${ATTACH_OUTPUT}" | awk '/^\/dev\/disk/ {last=$1} END{print last}')"
+    fi
 
     if [[ -n "${DEVICE}" ]]; then
         osascript >/dev/null 2>&1 <<EOF || true
@@ -203,8 +221,16 @@ tell application "Finder"
 end tell
 EOF
         sync
+    fi
+
+    if mount | grep -Fq "${DMG_MOUNT_PATH}"; then
+        hdiutil detach "${DMG_MOUNT_PATH}" -quiet || hdiutil detach -force "${DMG_MOUNT_PATH}" -quiet || true
+    fi
+    if [[ -n "${DEVICE}" ]]; then
         hdiutil detach "${DEVICE}" -quiet || hdiutil detach -force "${DEVICE}" -quiet || true
     fi
+    sync
+    sleep 1
 
     hdiutil convert "${RW_DMG_PATH}" -ov -format UDZO -imagekey zlib-level=9 -o "${DMG_PATH}"
     rm -f "${RW_DMG_PATH}"
