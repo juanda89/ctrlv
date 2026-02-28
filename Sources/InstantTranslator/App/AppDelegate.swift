@@ -9,6 +9,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let updateService = UpdateService()
     private let userDefaults = UserDefaults.standard
     private let onboardingShownKey = "didShowInitialOnboarding"
+    private let accessibilityPromptShownKey = "didRequestAccessibilityPermission"
+    private let accessibilityGrantedKey = "didGrantAccessibilityPermission"
     private let clickDebounceInterval: TimeInterval = 0.3
     private var lastClickDate = Date.distantPast
     private let translationIslandOverlay = TranslationIslandOverlayController()
@@ -74,8 +76,29 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func requestAccessibilityIfNeeded() async {
-        guard !AccessibilityService.isTrusted else { return }
+        if AccessibilityService.isTrusted {
+            userDefaults.set(true, forKey: accessibilityGrantedKey)
+            return
+        }
+
+        // If this app was already granted before, avoid showing system prompts again.
+        // Trust should persist naturally across updates when release builds use stable signing.
+        if userDefaults.bool(forKey: accessibilityGrantedKey) {
+            return
+        }
+
+        // First-time request only.
+        guard !userDefaults.bool(forKey: accessibilityPromptShownKey) else { return }
+        userDefaults.set(true, forKey: accessibilityPromptShownKey)
+
         try? await Task.sleep(nanoseconds: 500_000_000)
+
+        // Re-check after delay to avoid prompting from transient startup states.
+        if AccessibilityService.isTrusted {
+            userDefaults.set(true, forKey: accessibilityGrantedKey)
+            return
+        }
+
         NSApp.activate(ignoringOtherApps: true)
         AccessibilityService.requestPermission()
     }

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 enum APIKeyFieldValidationState: Equatable {
@@ -17,7 +18,7 @@ struct APIKeyField: View {
     let onEdit: () -> Void
     let onCancel: () -> Void
     let onSave: () -> Void
-    @FocusState private var isKeyFieldFocused: Bool
+    @State private var isKeyFieldFocused = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
@@ -62,10 +63,11 @@ struct APIKeyField: View {
     @ViewBuilder
     private var fieldBody: some View {
         if isEditing {
-            TextField(placeholder, text: $draftKey)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12, weight: .regular, design: .monospaced))
-                .focused($isKeyFieldFocused)
+            NativeSecureAPIKeyField(
+                text: $draftKey,
+                placeholder: placeholder,
+                isFocused: $isKeyFieldFocused
+            )
                 .onTapGesture {
                     isKeyFieldFocused = true
                 }
@@ -186,5 +188,66 @@ struct APIKeyField: View {
         let prefix = key.prefix(4)
         let suffix = key.suffix(4)
         return "\(prefix)\(String(repeating: "•", count: 8))\(suffix)"
+    }
+}
+
+private struct NativeSecureAPIKeyField: NSViewRepresentable {
+    @Binding var text: String
+    let placeholder: String
+    @Binding var isFocused: Bool
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        private var parent: NativeSecureAPIKeyField
+
+        init(parent: NativeSecureAPIKeyField) {
+            self.parent = parent
+        }
+
+        func update(parent: NativeSecureAPIKeyField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSSecureTextField else { return }
+            parent.text = field.stringValue
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSSecureTextField {
+        let field = NSSecureTextField(frame: .zero)
+        field.isBordered = false
+        field.isBezeled = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.font = NSFont.monospacedSystemFont(ofSize: 12, weight: .regular)
+        field.placeholderString = placeholder
+        field.delegate = context.coordinator
+        field.stringValue = text
+        field.lineBreakMode = .byTruncatingMiddle
+        field.usesSingleLineMode = true
+        return field
+    }
+
+    func updateNSView(_ nsView: NSSecureTextField, context: Context) {
+        context.coordinator.update(parent: self)
+        if nsView.stringValue != text {
+            nsView.stringValue = text
+        }
+        if nsView.placeholderString != placeholder {
+            nsView.placeholderString = placeholder
+        }
+
+        if isFocused {
+            DispatchQueue.main.async {
+                guard let window = nsView.window else { return }
+                if window.firstResponder !== nsView.currentEditor() {
+                    window.makeFirstResponder(nsView)
+                }
+            }
+        }
     }
 }

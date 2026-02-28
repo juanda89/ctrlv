@@ -7,6 +7,8 @@ export COPYFILE_DISABLE=1
 #
 # Optional env vars:
 # - APPLE_DEVELOPER_ID_APPLICATION
+# - CTRLV_CODESIGN_IDENTITY (fallback non-Apple signing identity for consistent local signing)
+# - CTRLV_REQUIRE_STABLE_SIGNING (set to 1 to fail builds that would fall back to ad-hoc signing)
 # - APPLE_ID
 # - APPLE_TEAM_ID
 # - APPLE_APP_PASSWORD
@@ -129,9 +131,17 @@ echo "==> Clearing extended attributes"
 clean_xattrs "${APP_BUNDLE}"
 
 echo "==> Signing app bundle"
-SIGN_IDENTITY="${APPLE_DEVELOPER_ID_APPLICATION:--}"
+SIGN_IDENTITY="${APPLE_DEVELOPER_ID_APPLICATION:-${CTRLV_CODESIGN_IDENTITY:--}}"
+REQUIRE_STABLE_SIGNING="${CTRLV_REQUIRE_STABLE_SIGNING:-0}"
 if [[ "${SIGN_IDENTITY}" == "-" ]]; then
+    if [[ "${REQUIRE_STABLE_SIGNING}" == "1" ]]; then
+        echo "Stable code signing is required for this build, but no signing identity was provided."
+        echo "Set APPLE_DEVELOPER_ID_APPLICATION (recommended) or CTRLV_CODESIGN_IDENTITY."
+        exit 1
+    fi
+
     echo "    Using ad-hoc signing"
+    echo "    WARNING: ad-hoc signing can cause Accessibility trust to reset after updates."
     if [[ -d "${CONTENTS_DIR}/Frameworks/Sparkle.framework" ]]; then
         clean_xattrs "${CONTENTS_DIR}/Frameworks/Sparkle.framework"
         codesign --force --deep --sign - "${CONTENTS_DIR}/Frameworks/Sparkle.framework"
