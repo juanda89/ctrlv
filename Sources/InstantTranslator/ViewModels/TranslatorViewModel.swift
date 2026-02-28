@@ -26,6 +26,7 @@ final class TranslatorViewModel {
     private(set) var providerStatusByType: [ProviderType: ProviderRuntimeStatus] = [:]
 
     let settingsVM = SettingsViewModel()
+    weak var appDelegate: AppDelegate?
 
     private let accessibilityService = AccessibilityService()
     private let clipboardService = ClipboardService()
@@ -271,8 +272,11 @@ final class TranslatorViewModel {
     // MARK: - Private
 
     private func notifyAppDelegate(_ action: (AppDelegate) -> Void) {
-        guard let delegate = NSApp.delegate as? AppDelegate else { return }
-        action(delegate)
+        guard let appDelegate else {
+            log.warning("appDelegate is nil, skipping UI feedback")
+            return
+        }
+        action(appDelegate)
     }
 
     private func triggerTranslation(source: String) {

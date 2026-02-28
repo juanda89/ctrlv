@@ -179,76 +179,45 @@ ditto -c -k --sequesterRsrc --keepParent "${APP_BUNDLE}" "${ZIP_PATH}"
 echo "==> Packaging DMG"
 DMG_STAGING="${DIST_DIR}/dmg-staging"
 DMG_BACKGROUND="${DIST_DIR}/dmg-background.png"
-RW_DMG_PATH="${DIST_DIR}/ctrlv-${VERSION}-rw.dmg"
-DMG_MOUNT_PATH="${DIST_DIR}/dmg-mount"
 rm -rf "${DMG_STAGING}"
 mkdir -p "${DMG_STAGING}"
 ditto --noextattr --noqtn --norsrc "${APP_BUNDLE}" "${DMG_STAGING}/ctrlv.app"
-ln -s /Applications "${DMG_STAGING}/Applications"
 
-if swift "${PROJECT_DIR}/scripts/generate-dmg-background.swift" "${DMG_BACKGROUND}" >/dev/null 2>&1; then
-    mkdir -p "${DMG_STAGING}/.background"
-    cp -f "${DMG_BACKGROUND}" "${DMG_STAGING}/.background/background.png"
-fi
-
-rm -f "${RW_DMG_PATH}"
-if mount | grep -Fq "${DMG_MOUNT_PATH}"; then
-    hdiutil detach "${DMG_MOUNT_PATH}" -quiet || hdiutil detach -force "${DMG_MOUNT_PATH}" -quiet || true
-fi
-rm -rf "${DMG_MOUNT_PATH}"
-mkdir -p "${DMG_MOUNT_PATH}"
-
-if hdiutil create -volname "ctrl+v" -srcfolder "${DMG_STAGING}" -ov -format UDRW "${RW_DMG_PATH}"; then
-    ATTACH_OUTPUT="$(hdiutil attach -readwrite -noverify -noautoopen "${RW_DMG_PATH}" -mountpoint "${DMG_MOUNT_PATH}" 2>/dev/null || true)"
-    DEVICE="$(printf '%s\n' "${ATTACH_OUTPUT}" | awk -v mp="${DMG_MOUNT_PATH}" '$0 ~ mp {print $1; exit}')"
-    if [[ -z "${DEVICE}" ]]; then
-        DEVICE="$(printf '%s\n' "${ATTACH_OUTPUT}" | awk '/^\/dev\/disk/ {last=$1} END{print last}')"
-    fi
-
-    if [[ -n "${DEVICE}" ]]; then
-        osascript >/dev/null 2>&1 <<EOF || true
-tell application "Finder"
-    tell disk "ctrl+v"
-        open
-        set current view of container window to icon view
-        set toolbar visible of container window to false
-        set statusbar visible of container window to false
-        set bounds of container window to {120, 120, 900, 600}
-        set viewOptions to the icon view options of container window
-        set arrangement of viewOptions to not arranged
-        set icon size of viewOptions to 128
-        set text size of viewOptions to 14
-        try
-            set background picture of viewOptions to file ".background:background.png"
-        end try
-        set position of item "ctrlv.app" of container window to {190, 220}
-        set position of item "Applications" of container window to {520, 220}
-        close
-        open
-        update without registering applications
-        delay 1
-    end tell
-end tell
-EOF
-        sync
-    fi
-
-    if mount | grep -Fq "${DMG_MOUNT_PATH}"; then
-        hdiutil detach "${DMG_MOUNT_PATH}" -quiet || hdiutil detach -force "${DMG_MOUNT_PATH}" -quiet || true
-    fi
-    if [[ -n "${DEVICE}" ]]; then
-        hdiutil detach "${DEVICE}" -quiet || hdiutil detach -force "${DEVICE}" -quiet || true
-    fi
-    sync
-    sleep 1
-
-    hdiutil convert "${RW_DMG_PATH}" -ov -format UDZO -imagekey zlib-level=9 -o "${DMG_PATH}"
-    rm -f "${RW_DMG_PATH}"
+# Generate background image
+if swift "${PROJECT_DIR}/scripts/generate-dmg-background.swift" "${DMG_BACKGROUND}"; then
+    echo "    DMG background generated"
 else
+    echo "    WARNING: Failed to generate DMG background"
+fi
+
+rm -f "${DMG_PATH}"
+
+CREATE_DMG_ARGS=(
+    --volname "ctrl+v"
+    --window-pos 120 120
+    --window-size 780 480
+    --icon-size 128
+    --text-size 14
+    --icon "ctrlv.app" 190 220
+    --hide-extension "ctrlv.app"
+    --app-drop-link 520 220
+)
+
+if [[ -f "${DMG_BACKGROUND}" ]]; then
+    CREATE_DMG_ARGS+=(--background "${DMG_BACKGROUND}")
+fi
+
+# create-dmg exits 2 when it succeeds but cannot set a custom volume icon (expected)
+set +e
+create-dmg "${CREATE_DMG_ARGS[@]}" "${DMG_PATH}" "${DMG_STAGING}/"
+CREATE_DMG_EXIT=$?
+set -e
+
+if [[ ${CREATE_DMG_EXIT} -ne 0 && ${CREATE_DMG_EXIT} -ne 2 ]]; then
+    echo "    WARNING: create-dmg failed (exit ${CREATE_DMG_EXIT}), falling back to simple DMG"
     hdiutil create -volname "ctrl+v" -srcfolder "${DMG_STAGING}" -ov -format UDZO "${DMG_PATH}"
 fi
 
-rm -rf "${DMG_MOUNT_PATH}"
 rm -rf "${DMG_STAGING}"
 
 echo "==> Generating checksums"

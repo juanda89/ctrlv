@@ -16,7 +16,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let translationIslandOverlay = TranslationIslandOverlayController()
 
     let licenseService = LicenseService()
-    lazy var translatorViewModel = TranslatorViewModel(licenseService: licenseService)
+    lazy var translatorViewModel: TranslatorViewModel = {
+        let vm = TranslatorViewModel(licenseService: licenseService)
+        vm.appDelegate = self
+        return vm
+    }()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupMenuBar()
