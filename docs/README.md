@@ -16,3 +16,11 @@ Para pruebas locales sin esperar CI:
 ./scripts/build-release.sh <version> <build>
 SPARKLE_EDDSA_PRIVATE_KEY="<private-key>" ./scripts/publish-release-to-docs.sh <version>
 ```
+
+Para generar artefactos de prueba fuera de `dist/` y dejarlos en `dist-local/`:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+CTRLV_DIST_DIR_BASE="$(pwd)/dist-local" \
+./scripts/build-release.sh <version> <build>
+```

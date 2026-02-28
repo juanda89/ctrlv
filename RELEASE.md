@@ -1,81 +1,86 @@
-# Release Guide (DMG + Sparkle + Lemon Squeezy)
+# Release Guide (Source of Truth)
 
-## 1. Build and package
+Este documento define el flujo correcto para evitar desincronizaciones de versión.
+
+## 1. Regla crítica (versionado)
+
+El workflow de release se dispara por tag `v*` y toma la versión desde el tag.
+
+- Correcto: crear `v1.1.21` si quieres publicar `1.1.21`.
+- Incorrecto: hacer solo commit/push sin tag (no genera release nuevo).
+
+Referencia: `.github/workflows/release.yml` (`on.push.tags`).
+
+## 2. Flujo oficial: commit + push + tag
+
+Reemplaza `1.1.21` por la versión real:
 
 ```bash
-./scripts/build-release.sh 1.0.0
+git status
+git add <archivos>
+git commit -m "chore: <mensaje>"
+
+git tag -a v1.1.21 -m "Pre-release: stability not yet verified"
+git push origin main
+git push origin v1.1.21
 ```
 
-Genera en `dist/1.0.0/`:
+Verificaciones rápidas:
 
-- `ctrl+v.app`
-- `ctrlv-1.0.0.zip` (Sparkle)
-- `ctrlv-1.0.0.dmg`
+```bash
+git ls-remote --tags origin "v1.1.*" | sed 's#refs/tags/##' | awk '{print $2}' | sort -V | tail -n 5
+curl -Ls https://github.com/juanda89/ctrlv/releases/latest/download/appcast.xml | rg "shortVersionString|sparkle:version"
+```
+
+## 3. Build local en `dist-local` (para pruebas)
+
+Usar Xcode completo (no solo CommandLineTools), porque `actool` es necesario:
+
+```bash
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer \
+CTRLV_DIST_DIR_BASE="$(pwd)/dist-local" \
+./scripts/build-release.sh 1.1.21 10121
+```
+
+Salida esperada en `dist-local/1.1.21/`:
+
+- `ctrlv.app`
+- `ctrlv-1.1.21.zip`
+- `ctrlv-1.1.21.dmg`
 - `SHA256SUMS.txt`
 
-Para pruebas locales sin firma Apple (ad-hoc), el script ya funciona sin credenciales de notarización.
+Notas:
 
-## 2. Sparkle (para todos los usuarios)
+- `dist-local/` es para pruebas locales; no se debe commitear.
+- Si ves error de xattrs/codesign, limpiar atributos extendidos y reintentar build.
+
+## 4. Sparkle (para todos los usuarios)
 
 1. Configura la clave pública:
    - `./scripts/setup-sparkle-key.sh`
-2. Exporta la clave privada y guárdala en GitHub Secret `SPARKLE_EDDSA_PRIVATE_KEY`.
-3. Genera appcast:
-   - `./scripts/generate-appcast.sh 1.0.0`
-4. Publica `docs/updates/appcast.xml` y los binarios en `docs/downloads/` (GitHub Pages).
+2. Guarda la privada en GitHub Secret:
+   - `SPARKLE_EDDSA_PRIVATE_KEY`
+3. El release workflow publica:
+   - `ctrlv-<version>.dmg`
+   - `ctrlv-latest.dmg`
+   - `ctrlv-<version>.zip`
+   - `appcast.xml`
 
-Notas:
-- Sparkle no depende del estado de suscripción.
-- `Check for Updates` está habilitado para todos en la app.
+`Check for Updates` aplica para todos los usuarios (sin gating de suscripción).
 
-Publicación local de release (actualiza `docs/latest.json`, `docs/downloads/*`, `docs/updates/appcast.xml`):
+## 5. Secrets de CI
 
-```bash
-SPARKLE_EDDSA_PRIVATE_KEY="<private-key>" \
-./scripts/publish-release-to-docs.sh 1.0.0
-```
+- Requerido:
+  - `SPARKLE_EDDSA_PRIVATE_KEY`
+- Opcionales (firma/notarización Apple):
+  - `APPLE_DEVELOPER_ID_APPLICATION`
+  - `APPLE_ID`
+  - `APPLE_TEAM_ID`
+  - `APPLE_APP_PASSWORD`
 
-## 3. GitHub Actions
+## 6. QA manual mínimo
 
-Workflow: `.github/workflows/release.yml`
-
-- Build + sign + notarize (si hay credenciales Apple).
-- Publica release con `.dmg` + `.zip` + checksums.
-- Regenera `latest.json` y despliega `docs/` a GitHub Pages.
-
-Secrets recomendados:
-
-- `SPARKLE_EDDSA_PRIVATE_KEY` (requerido)
-- `APPLE_DEVELOPER_ID_APPLICATION`
-- `APPLE_ID`
-- `APPLE_TEAM_ID`
-- `APPLE_APP_PASSWORD`
-
-## 4. Lemon Squeezy (comercial)
-
-En la app:
-
-- Validación directa de license key contra Lemon Squeezy
-- Activación por dispositivo (instance ID)
-- Grace offline de 30 días después de validación exitosa
-
-Manualmente debes configurar:
-- URL de checkout
-- URL de portal/manage
-- License key de sandbox para QA
-
-## 5. Manual QA de updates (Sparkle + fallback)
-
-### Caso A: instalación correcta desde `/Applications`
-1. Instala y ejecuta `ctrlv.app` desde `/Applications`.
-2. Usa `Check for Updates`.
-3. Si hay una versión nueva, instala y confirma relaunch sin errores.
-
-### Caso B: ejecución incorrecta desde `.dmg` o fallo de instalador
-1. Abre `ctrlv.app` directamente desde el volumen del `.dmg` (o en entorno con permisos restringidos).
-2. Usa `Check for Updates` y fuerza instalación.
-3. Si Sparkle falla, valida que aparezca el fallback con:
-   - `Download latest .dmg`
-   - `Open install guide`
-   - `Copy diagnostics`
-4. Confirma que el enlace guía explica mover la app a `/Applications`.
+1. Instalar `ctrlv.app` en `/Applications`.
+2. Abrir app y ejecutar `Check for Updates`.
+3. Verificar que detecta la última versión del `appcast.xml`.
+4. Verificar instalación o fallback manual (`Download latest .dmg`) si Sparkle falla.

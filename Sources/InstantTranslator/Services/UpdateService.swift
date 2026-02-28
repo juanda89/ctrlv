@@ -42,6 +42,7 @@ final class UpdateService: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDe
     override init() {
         super.init()
         _ = updaterController
+        migrateLegacyFeedURLIfNeeded()
     }
 
     func checkForUpdates() {
@@ -141,6 +142,25 @@ final class UpdateService: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDe
 
     // MARK: - SPUUpdaterDelegate
 
+    nonisolated func feedURLString(for updater: SPUUpdater) -> String? {
+        guard let configuredFeedURL = Constants.updatesFeedURL else {
+            return nil
+        }
+
+        // Avoid stale "latest" redirect caching by rotating a small cache-buster bucket.
+        guard var components = URLComponents(url: configuredFeedURL, resolvingAgainstBaseURL: false) else {
+            return configuredFeedURL.absoluteString
+        }
+
+        let bucket = Int(Date().timeIntervalSince1970 / 600) // 10-minute bucket
+        var queryItems = components.queryItems ?? []
+        queryItems.removeAll(where: { $0.name == "cvcb" })
+        queryItems.append(URLQueryItem(name: "cvcb", value: String(bucket)))
+        components.queryItems = queryItems
+
+        return components.url?.absoluteString ?? configuredFeedURL.absoluteString
+    }
+
     nonisolated func updater(_ updater: SPUUpdater, didFindValidUpdate item: SUAppcastItem) {
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)
@@ -169,6 +189,12 @@ final class UpdateService: NSObject, SPUUpdaterDelegate, SPUStandardUserDriverDe
     }
 
     // MARK: - Private
+
+    private func migrateLegacyFeedURLIfNeeded() {
+        // If older versions stored a custom feed URL in UserDefaults, Sparkle prefers it
+        // over Info.plist and can get stuck on an outdated channel/feed.
+        updaterController.updater.clearFeedURLFromUserDefaults()
+    }
 
     private func captureUpdateFailure(_ error: NSError) {
         if isIgnorableSparkleError(error) {
