@@ -114,12 +114,9 @@ final class TranslationIslandOverlayController {
         let hostingView = NSHostingView(rootView: TranslationIslandOverlayView())
         hostingView.frame = NSRect(origin: .zero, size: initialFrame.size)
         hostingView.autoresizingMask = [.width, .height]
-
-        let content = NSView(frame: NSRect(origin: .zero, size: initialFrame.size))
-        content.wantsLayer = true
-        content.layer?.backgroundColor = NSColor.clear.cgColor
-        content.addSubview(hostingView)
-        panel.contentView = content
+        hostingView.wantsLayer = true
+        hostingView.layer?.backgroundColor = NSColor.clear.cgColor
+        panel.contentView = hostingView
 
         self.panel = panel
     }
@@ -210,6 +207,10 @@ private struct TranslationIslandOverlayView: View {
             }
 
             Spacer(minLength: 0)
+
+            Text("Translating")
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(aqua.opacity(0.96))
 
             TranslationWaveView(accent: aqua.opacity(0.96))
         }
