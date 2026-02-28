@@ -74,10 +74,7 @@ struct StatusSection: View {
     }
 
     private func trialCard(days: Int) -> some View {
-        let used = TrialTranslationService.usedToday()
-        let remaining = TrialTranslationService.dailyLimit - used
-
-        return MenuCard {
+        MenuCard {
             HStack {
                 Text("Trial Active")
                     .font(.system(size: 15, weight: .semibold))
@@ -95,15 +92,6 @@ struct StatusSection: View {
 
             ProgressView(value: trialProgress(days: days))
                 .tint(.orange)
-
-            HStack(spacing: 4) {
-                Image(systemName: "bolt.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(remaining > 0 ? .orange : .red)
-                Text("\(remaining)/\(TrialTranslationService.dailyLimit) translations left today")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
-            }
         }
         .background(cardTint(.orange))
     }

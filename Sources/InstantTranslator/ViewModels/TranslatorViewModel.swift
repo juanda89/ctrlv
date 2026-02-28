@@ -220,7 +220,7 @@ final class TranslatorViewModel {
         case .openAI:
             provider = OpenAIProvider(apiKey: apiKey)
         case .gemini:
-            provider = GeminiProvider(apiKey: apiKey)
+            provider = GeminiProvider(apiKey: apiKey, model: isTrialMode ? "gemini-flash-latest" : "gemini-2.0-flash")
         }
         let service = TranslationService(provider: provider)
         let customPrompt = settings.customTonePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
