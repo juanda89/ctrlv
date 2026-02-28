@@ -106,7 +106,7 @@ final class TranslationIslandOverlayController {
         panel.level = .popUpMenu
         panel.backgroundColor = .clear
         panel.isOpaque = false
-        panel.hasShadow = true
+        panel.hasShadow = false
         panel.ignoresMouseEvents = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
@@ -238,6 +238,7 @@ private struct TranslationIslandOverlayView: View {
                     )
                 )
         }
+        .clipShape(islandShape)
         .shadow(color: .black.opacity(0.42), radius: 18, x: 0, y: 9)
         .shadow(color: aqua.opacity(0.14), radius: 7, x: 0, y: 3)
     }

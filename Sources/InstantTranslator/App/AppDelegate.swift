@@ -6,6 +6,7 @@ import SwiftUI
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
     private var popover: NSPopover!
+    private var globalClickMonitor: Any?
     private let updateService = UpdateService()
     private let userDefaults = UserDefaults.standard
     private let onboardingShownKey = "didShowInitialOnboarding"
@@ -85,9 +86,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
 
-        // If this app was already granted before, avoid showing system prompts again.
-        // Trust should persist naturally across updates when release builds use stable signing.
+        // Previously granted but now revoked (e.g. code signature changed after update).
+        // Automatically reset TCC entry and re-request so the user doesn't have to do it manually.
         if userDefaults.bool(forKey: accessibilityGrantedKey) {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            if AccessibilityService.isTrusted { return }
+            AccessibilityService.resetAndReRequest()
             return
         }
 
@@ -132,9 +136,30 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem.button else { return }
 
         if popover.isShown {
-            popover.performClose(nil)
+            closePopover()
         } else {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            installGlobalClickMonitor()
+        }
+    }
+
+    private func closePopover() {
+        popover.performClose(nil)
+        removeGlobalClickMonitor()
+    }
+
+    private func installGlobalClickMonitor() {
+        removeGlobalClickMonitor()
+        globalClickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            guard let self, self.popover.isShown else { return }
+            self.closePopover()
+        }
+    }
+
+    private func removeGlobalClickMonitor() {
+        if let monitor = globalClickMonitor {
+            NSEvent.removeMonitor(monitor)
+            globalClickMonitor = nil
         }
     }
 
