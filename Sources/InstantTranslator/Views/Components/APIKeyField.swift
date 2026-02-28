@@ -68,9 +68,6 @@ struct APIKeyField: View {
                 placeholder: placeholder,
                 isFocused: $isKeyFieldFocused
             )
-                .onTapGesture {
-                    isKeyFieldFocused = true
-                }
         } else {
             Text(readOnlyLabel)
                 .font(.system(size: 12, weight: .regular, design: .monospaced))
