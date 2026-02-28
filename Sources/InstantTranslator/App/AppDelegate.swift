@@ -148,11 +148,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Show a loading indicator on the menu bar icon.
+    /// Show the translation island overlay.
     func showTranslatingIcon() {
         translationIslandOverlay.show()
-        guard let button = statusItem.button else { return }
-        button.image = NSImage(systemSymbolName: "ellipsis.circle", accessibilityDescription: "Translating")
     }
 
     /// Restore the default menu bar icon.
