@@ -29,6 +29,8 @@ struct MenuBarView: View {
             .scrollIndicators(.hidden)
 
             FooterSection(
+                translatorVM: viewModel,
+                updateService: updateService,
                 onOpenFeedback: onOpenFeedback,
                 onCheckForUpdates: onCheckForUpdates,
                 onShowAbout: onShowAbout

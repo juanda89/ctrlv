@@ -1,9 +1,14 @@
 import SwiftUI
 
+@MainActor
 struct FooterSection: View {
+    @Bindable var translatorVM: TranslatorViewModel
+    @Bindable var updateService: UpdateService
     let onOpenFeedback: () -> Void
     let onCheckForUpdates: () -> Void
     let onShowAbout: () -> Void
+
+    @State private var showDebugSheet = false
 
     var body: some View {
         HStack {
@@ -18,6 +23,10 @@ struct FooterSection: View {
                 }
                 Button("Check for Updates") {
                     onCheckForUpdates()
+                }
+                Divider()
+                Button("Debug") {
+                    showDebugSheet = true
                 }
                 Divider()
                 Text(appVersionLabel)
@@ -37,6 +46,9 @@ struct FooterSection: View {
             }
             .menuIndicator(.hidden)
             .menuStyle(.borderlessButton)
+        }
+        .sheet(isPresented: $showDebugSheet) {
+            DebugSheet(translatorVM: translatorVM, updateService: updateService)
         }
     }
 

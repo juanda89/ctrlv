@@ -8,6 +8,8 @@ enum TranslationError: LocalizedError {
     case apiError(statusCode: Int, message: String)
     case rateLimited(provider: ProviderType, retryAfter: Int?)
     case trialExpired
+    case trialQuotaExceeded(remaining: Int)
+    case trialTextTooLong(maxWords: Int)
     case replacementFailed
 
     var errorDescription: String? {
@@ -27,6 +29,10 @@ enum TranslationError: LocalizedError {
             else { "\(provider.rawValue) rate limited. Try again shortly." }
         case .trialExpired:
             "Trial expired. Enter a valid license key to continue."
+        case .trialQuotaExceeded:
+            "Daily trial limit reached (50 translations). Add your own API key or upgrade for unlimited translations."
+        case .trialTextTooLong(let maxWords):
+            "Text exceeds trial limit of \(maxWords) words. Add your own API key or upgrade for unlimited translations."
         case .replacementFailed:
             "Could not replace selected text"
         }

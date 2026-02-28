@@ -3,6 +3,30 @@ import TelemetryDeck
 
 enum TelemetryService {
 
+    private(set) static var isConfigured = false
+    private(set) static var signalsSentCount = 0
+    private(set) static var lastSignalName: String?
+    private(set) static var lastSignalAt: Date?
+    static let appID = "EAF0D438-86C4-47B0-B489-FD8ED54ECB89"
+
+    static func configure(appID: String) {
+        let config = TelemetryDeck.Config(appID: appID)
+        TelemetryDeck.initialize(config: config)
+        isConfigured = true
+    }
+
+    private static func send(_ signalName: String, parameters: [String: String] = [:]) {
+        guard isConfigured else { return }
+        TelemetryDeck.signal(signalName, parameters: parameters)
+        signalsSentCount += 1
+        lastSignalName = signalName
+        lastSignalAt = Date()
+    }
+
+    static func sendTestPing() {
+        send("Debug.testPing", parameters: ["timestamp": ISO8601DateFormatter().string(from: Date())])
+    }
+
     // MARK: - Translation
 
     static func trackTranslationCompleted(
@@ -13,7 +37,7 @@ enum TelemetryService {
         textLength: Int
     ) {
         let bucket = textLength < 50 ? "short" : textLength < 200 ? "medium" : "long"
-        TelemetryDeck.signal(
+        send(
             "Translation.completed",
             parameters: [
                 "provider": provider.rawValue,
@@ -26,7 +50,7 @@ enum TelemetryService {
     }
 
     static func trackTranslationFailed(provider: ProviderType, errorType: String) {
-        TelemetryDeck.signal(
+        send(
             "Translation.failed",
             parameters: [
                 "provider": provider.rawValue,
@@ -36,7 +60,7 @@ enum TelemetryService {
     }
 
     static func trackTranslationRateLimited(provider: ProviderType, retryAfter: Int?) {
-        TelemetryDeck.signal(
+        send(
             "Translation.rateLimited",
             parameters: [
                 "provider": provider.rawValue,
@@ -51,12 +75,12 @@ enum TelemetryService {
         switch state {
         case .trial(let days):
             let urgency = days <= 3 ? "critical" : days <= 7 ? "warning" : "healthy"
-            TelemetryDeck.signal(
+            send(
                 "License.trialDaysRemaining",
                 parameters: ["daysRemaining": String(days), "urgency": urgency]
             )
         case .active(let planName, _, let isOfflineGrace):
-            TelemetryDeck.signal(
+            send(
                 "License.activated",
                 parameters: [
                     "planName": planName ?? "unknown",
@@ -64,9 +88,9 @@ enum TelemetryService {
                 ]
             )
         case .expired:
-            TelemetryDeck.signal("License.expired")
+            send("License.expired")
         case .invalid(let reason):
-            TelemetryDeck.signal("License.invalid", parameters: ["reason": reason])
+            send("License.invalid", parameters: ["reason": reason])
         case .checking:
             break
         }
@@ -75,48 +99,48 @@ enum TelemetryService {
     // MARK: - Accessibility
 
     static func trackAccessibilityStatus(granted: Bool) {
-        TelemetryDeck.signal(
+        send(
             "Accessibility.statusOnLaunch",
             parameters: ["granted": String(granted)]
         )
     }
 
     static func trackAccessibilityResetTriggered() {
-        TelemetryDeck.signal("Accessibility.resetTriggered")
+        send("Accessibility.resetTriggered")
     }
 
     // MARK: - Settings
 
     static func trackLanguageChanged(_ language: SupportedLanguage) {
-        TelemetryDeck.signal(
+        send(
             "Settings.languageChanged",
             parameters: ["targetLanguage": language.rawValue]
         )
     }
 
     static func trackToneChanged(_ tone: Tone) {
-        TelemetryDeck.signal(
+        send(
             "Settings.toneChanged",
             parameters: ["tone": tone.rawValue]
         )
     }
 
     static func trackProviderChanged(_ provider: ProviderType) {
-        TelemetryDeck.signal(
+        send(
             "Settings.providerChanged",
             parameters: ["provider": provider.rawValue]
         )
     }
 
     static func trackAutoPasteToggled(enabled: Bool) {
-        TelemetryDeck.signal(
+        send(
             "Settings.autoPasteToggled",
             parameters: ["enabled": String(enabled)]
         )
     }
 
     static func trackAPIKeyAdded(provider: ProviderType) {
-        TelemetryDeck.signal(
+        send(
             "Settings.apiKeyAdded",
             parameters: ["provider": provider.rawValue]
         )

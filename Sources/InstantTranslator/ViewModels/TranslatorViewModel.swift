@@ -122,18 +122,32 @@ final class TranslatorViewModel {
         debugLastStage = "License OK"
         log.info("License OK")
 
-        // 2. Get API key
+        // 2. Determine provider + API key (trial mode uses bundled Gemini key)
         let selectedProvider = settingsVM.settings.selectedProvider
-        let apiKey = settingsVM.apiKey(for: selectedProvider)
-        guard !apiKey.isEmpty else {
+        let userApiKey = settingsVM.apiKey(for: selectedProvider)
+        let isTrialMode: Bool
+        let apiKey: String
+        let effectiveProvider: ProviderType
+
+        if !userApiKey.isEmpty {
+            // User has their own key — use it directly, no trial limits
+            isTrialMode = false
+            apiKey = userApiKey
+            effectiveProvider = selectedProvider
+        } else if case .trial = licenseService.state {
+            // Trial user without own key — use bundled Gemini
+            isTrialMode = true
+            apiKey = BundledTrialKey.geminiKey()
+            effectiveProvider = .gemini
+        } else {
             debugLastStage = "Blocked: missing API key"
             log.error("API key is empty")
             lastError = TranslationError.apiKeyMissing.localizedDescription
             providerStatusByType[selectedProvider] = .error(message: TranslationError.apiKeyMissing.localizedDescription)
             return
         }
-        debugLastStage = "API key OK"
-        log.info("API key present for \(selectedProvider.rawValue, privacy: .public)")
+        debugLastStage = isTrialMode ? "Trial mode (bundled Gemini)" : "API key OK"
+        log.info("Provider: \(effectiveProvider.rawValue, privacy: .public), trial: \(isTrialMode)")
 
         // 3. Get selected text
         let isTrusted = AccessibilityService.isTrusted
@@ -181,9 +195,26 @@ final class TranslatorViewModel {
             notifyAppDelegate { $0.restoreDefaultIcon() }
         }
 
+        // Trial quota checks
+        if isTrialMode {
+            guard TrialTranslationService.isTextWithinLimit(text) else {
+                let maxWords = TrialTranslationService.maxCharacters / 6
+                debugLastStage = "Blocked: trial text too long"
+                log.error("Trial text exceeds limit: \(text.count) chars")
+                lastError = TranslationError.trialTextTooLong(maxWords: maxWords).localizedDescription
+                return
+            }
+            guard TrialTranslationService.canTranslate() else {
+                debugLastStage = "Blocked: trial quota exceeded"
+                log.error("Trial daily quota exceeded")
+                lastError = TranslationError.trialQuotaExceeded(remaining: 0).localizedDescription
+                return
+            }
+        }
+
         let settings = settingsVM.settings
         let provider: TranslationProvider
-        switch selectedProvider {
+        switch effectiveProvider {
         case .claude:
             provider = ClaudeProvider(apiKey: apiKey)
         case .openAI:
@@ -204,7 +235,11 @@ final class TranslatorViewModel {
             let response = try await service.translate(request, apiKey: apiKey)
             debugLastStage = "Translation received (\(response.translatedText.count) chars)"
             log.info("Translation received: \(response.translatedText.prefix(50))...")
-            providerStatusByType[selectedProvider] = .ok(message: "OK")
+            providerStatusByType[effectiveProvider] = .ok(message: "OK")
+
+            if isTrialMode {
+                TrialTranslationService.recordTranslation()
+            }
 
             // 5. Output
             var outputMethod = "clipboard"
@@ -230,7 +265,7 @@ final class TranslatorViewModel {
                             }
                             log.info("Replaced via AX")
                             TelemetryService.trackTranslationCompleted(
-                                provider: selectedProvider, targetLanguage: settings.targetLanguage,
+                                provider: effectiveProvider, targetLanguage: settings.targetLanguage,
                                 tone: settings.tone, method: outputMethod, textLength: text.count
                             )
                             notifyAppDelegate { $0.flashMenuBarIcon() }
@@ -261,7 +296,7 @@ final class TranslatorViewModel {
             }
 
             TelemetryService.trackTranslationCompleted(
-                provider: selectedProvider, targetLanguage: settings.targetLanguage,
+                provider: effectiveProvider, targetLanguage: settings.targetLanguage,
                 tone: settings.tone, method: outputMethod, textLength: text.count
             )
         } catch {
@@ -279,8 +314,8 @@ final class TranslatorViewModel {
             debugLastStage = "Error: \(error.localizedDescription)"
             log.error("Translation error: \(error.localizedDescription)")
             lastError = error.localizedDescription
-            providerStatusByType[selectedProvider] = .error(message: error.localizedDescription)
-            TelemetryService.trackTranslationFailed(provider: selectedProvider, errorType: String(describing: error))
+            providerStatusByType[effectiveProvider] = .error(message: error.localizedDescription)
+            TelemetryService.trackTranslationFailed(provider: effectiveProvider, errorType: String(describing: error))
         }
     }
 

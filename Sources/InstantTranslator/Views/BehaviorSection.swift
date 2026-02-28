@@ -21,7 +21,6 @@ struct BehaviorSection: View {
             shortcutAndPasteCard
             providerAndKeysCard
             accessibilityCard
-            debugCard
         }
         .onAppear {
             checkAccessibility()
@@ -190,72 +189,6 @@ struct BehaviorSection: View {
         }
     }
 
-    private var debugCard: some View {
-        MenuCard {
-            Text("Debug")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-
-            Text("Hotkey events: \(translatorVM.debugHotkeyTriggerCount)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-
-            Text("Last trigger: \(lastTriggerText)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-            Text("Last stage: \(translatorVM.debugLastStage)")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-            Text("Last error: \(translatorVM.lastError ?? "none")")
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-            Divider()
-
-            Text(updateService.debugSummaryLine)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-            Text(updateService.debugDetailsLine)
-                .font(.caption2)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-
-            Divider()
-
-            Text("Event log")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(Array(translatorVM.debugEvents.prefix(8).enumerated()), id: \.offset) { _, event in
-                        Text(event)
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .frame(maxHeight: 96)
-
-            HStack(spacing: 6) {
-                Button("Test Island") {
-                    translatorVM.debugPreviewTranslationIsland()
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.mini)
-            }
-        }
-    }
-
     private func checkAccessibility() {
         isAccessibilityGranted = AXIsProcessTrusted()
     }
@@ -412,14 +345,4 @@ struct BehaviorSection: View {
         }
     }
 
-    private var lastTriggerText: String {
-        guard let timestamp = translatorVM.debugLastTriggerAt else {
-            return "none"
-        }
-
-        let formatter = DateFormatter()
-        formatter.timeStyle = .medium
-        formatter.dateStyle = .none
-        return "\(translatorVM.debugLastTriggerSource) at \(formatter.string(from: timestamp))"
-    }
 }
