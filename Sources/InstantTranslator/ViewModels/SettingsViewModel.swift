@@ -3,7 +3,10 @@ import Foundation
 @Observable
 final class SettingsViewModel {
     var settings: AppSettings {
-        didSet { settings.save() }
+        didSet {
+            settings.save()
+            trackSettingsChanges(old: oldValue, new: settings)
+        }
     }
 
     private var apiKeysByProvider: [ProviderType: String]
@@ -56,10 +59,26 @@ final class SettingsViewModel {
             EncryptedAPIKeyStore.delete(for: provider)
         } else {
             EncryptedAPIKeyStore.save(value, for: provider)
+            TelemetryService.trackAPIKeyAdded(provider: provider)
         }
     }
 
     func apiKeyForSelectedProvider() -> String {
         apiKey(for: settings.selectedProvider)
+    }
+
+    private func trackSettingsChanges(old: AppSettings, new: AppSettings) {
+        if old.targetLanguage != new.targetLanguage {
+            TelemetryService.trackLanguageChanged(new.targetLanguage)
+        }
+        if old.tone != new.tone {
+            TelemetryService.trackToneChanged(new.tone)
+        }
+        if old.selectedProvider != new.selectedProvider {
+            TelemetryService.trackProviderChanged(new.selectedProvider)
+        }
+        if old.autoPaste != new.autoPaste {
+            TelemetryService.trackAutoPasteToggled(enabled: new.autoPaste)
+        }
     }
 }

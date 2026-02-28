@@ -81,7 +81,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func requestAccessibilityIfNeeded() async {
-        if AccessibilityService.isTrusted {
+        let isTrusted = AccessibilityService.isTrusted
+        TelemetryService.trackAccessibilityStatus(granted: isTrusted)
+
+        if isTrusted {
             userDefaults.set(true, forKey: accessibilityGrantedKey)
             return
         }
@@ -91,6 +94,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if userDefaults.bool(forKey: accessibilityGrantedKey) {
             try? await Task.sleep(nanoseconds: 500_000_000)
             if AccessibilityService.isTrusted { return }
+            TelemetryService.trackAccessibilityResetTriggered()
             AccessibilityService.resetAndReRequest()
             return
         }

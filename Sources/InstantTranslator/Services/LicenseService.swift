@@ -4,7 +4,13 @@ import Foundation
 @MainActor
 @Observable
 final class LicenseService {
-    private(set) var state: LicenseState = .checking
+    private(set) var state: LicenseState = .checking {
+        didSet {
+            if state != oldValue {
+                TelemetryService.trackLicenseState(state)
+            }
+        }
+    }
     private(set) var isLoading = false
     private(set) var lastError: String?
 

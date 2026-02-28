@@ -207,6 +207,7 @@ final class TranslatorViewModel {
             providerStatusByType[selectedProvider] = .ok(message: "OK")
 
             // 5. Output
+            var outputMethod = "clipboard"
             if settings.autoPaste {
                 if isTrusted {
                     let axDidSet = accessibilityService.replaceSelectedText(with: response.translatedText)
@@ -221,12 +222,17 @@ final class TranslatorViewModel {
                             debugLastStage = "AX replace reported success but selection unchanged"
                             log.warning("AX replace returned success but selected text is unchanged")
                         } else {
+                            outputMethod = "AX"
                             if afterNormalized == translatedNormalized {
                                 debugLastStage = "Output: replaced via AX (verified)"
                             } else {
                                 debugLastStage = "Output: replaced via AX (unverified)"
                             }
                             log.info("Replaced via AX")
+                            TelemetryService.trackTranslationCompleted(
+                                provider: selectedProvider, targetLanguage: settings.targetLanguage,
+                                tone: settings.tone, method: outputMethod, textLength: text.count
+                            )
                             notifyAppDelegate { $0.flashMenuBarIcon() }
                             return
                         }
@@ -235,6 +241,7 @@ final class TranslatorViewModel {
                     }
                 }
 
+                outputMethod = "paste"
                 debugLastStage = "Output: pasted via clipboard"
                 log.info("AX replace failed, using clipboard paste")
                 clipboardService.writeText(response.translatedText)
@@ -246,11 +253,17 @@ final class TranslatorViewModel {
                     clipboardService.restoreSaved()
                 }
             } else {
+                outputMethod = "copy"
                 debugLastStage = "Output: copied to clipboard"
                 clipboardService.writeText(response.translatedText)
                 log.info("Copied to clipboard (auto-paste OFF)")
                 notifyAppDelegate { $0.flashMenuBarIcon() }
             }
+
+            TelemetryService.trackTranslationCompleted(
+                provider: selectedProvider, targetLanguage: settings.targetLanguage,
+                tone: settings.tone, method: outputMethod, textLength: text.count
+            )
         } catch {
             if case let TranslationError.rateLimited(provider, retryAfter) = error {
                 let retryText = retryAfter.map { "Retry in \($0)s." } ?? "Try again shortly."
@@ -259,6 +272,7 @@ final class TranslatorViewModel {
                 log.error("Translation rate limited for \(provider.rawValue, privacy: .public)")
                 lastError = message
                 providerStatusByType[provider] = .rateLimited(message: message, retryAfter: retryAfter)
+                TelemetryService.trackTranslationRateLimited(provider: provider, retryAfter: retryAfter)
                 return
             }
 
@@ -266,6 +280,7 @@ final class TranslatorViewModel {
             log.error("Translation error: \(error.localizedDescription)")
             lastError = error.localizedDescription
             providerStatusByType[selectedProvider] = .error(message: error.localizedDescription)
+            TelemetryService.trackTranslationFailed(provider: selectedProvider, errorType: String(describing: error))
         }
     }
 

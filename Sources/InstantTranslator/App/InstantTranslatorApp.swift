@@ -1,9 +1,15 @@
 import AppKit
 import SwiftUI
+import TelemetryDeck
 
 @main
 struct InstantTranslatorApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+
+    init() {
+        let config = TelemetryDeck.Config(appID: "EAF0D438-86C4-47B0-B489-FD8ED54ECB89")
+        TelemetryDeck.initialize(config: config)
+    }
 
     var body: some Scene {
         Settings {

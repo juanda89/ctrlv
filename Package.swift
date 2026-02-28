@@ -8,6 +8,7 @@ let package = Package(
     dependencies: [
         .package(url: "https://github.com/soffes/HotKey", from: "0.2.1"),
         .package(url: "https://github.com/sparkle-project/Sparkle", from: "2.7.0"),
+        .package(url: "https://github.com/TelemetryDeck/SwiftSDK", from: "2.11.0"),
     ],
     targets: [
         .executableTarget(
@@ -15,6 +16,7 @@ let package = Package(
             dependencies: [
                 "HotKey",
                 .product(name: "Sparkle", package: "Sparkle"),
+                .product(name: "TelemetryDeck", package: "SwiftSDK"),
             ],
             path: "Sources/InstantTranslator"
         ),

@@ -1,6 +1,6 @@
 import Foundation
 
-enum LicenseState {
+enum LicenseState: Equatable {
     case checking
     case trial(daysRemaining: Int)
     case expired
