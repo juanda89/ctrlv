@@ -11,6 +11,11 @@ enum ProviderRuntimeStatus: Equatable {
     case error(message: String)
 }
 
+private struct TranslationRunResult {
+    let translatedText: String
+    let progressivePasteUsed: Bool
+}
+
 @MainActor
 @Observable
 final class TranslatorViewModel {
@@ -32,6 +37,7 @@ final class TranslatorViewModel {
     private let clipboardService = ClipboardService()
     private let hotkeyService = HotkeyService()
     private let licenseService: LicenseService
+    private var providersForcedToFast: Set<ProviderType> = []
     private let debugEventLimit = 40
     private static let debugTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -155,6 +161,7 @@ final class TranslatorViewModel {
         log.info("Accessibility trusted: \(isTrusted)")
 
         var sourceText: String?
+        var didUseClipboardCapture = false
 
         if isTrusted {
             sourceText = accessibilityService.getSelectedText()
@@ -166,6 +173,7 @@ final class TranslatorViewModel {
         if sourceText == nil || sourceText?.isEmpty == true {
             debugLastStage = "Trying clipboard fallback"
             log.info("AX failed or empty, trying clipboard fallback...")
+            didUseClipboardCapture = true
             clipboardService.saveAndClear()
             clipboardService.simulateCopy()
             try? await Task.sleep(nanoseconds: Constants.copyWaitDelay)
@@ -213,16 +221,6 @@ final class TranslatorViewModel {
         }
 
         let settings = settingsVM.settings
-        let provider: TranslationProvider
-        switch effectiveProvider {
-        case .claude:
-            provider = ClaudeProvider(apiKey: apiKey)
-        case .openAI:
-            provider = OpenAIProvider(apiKey: apiKey)
-        case .gemini:
-            provider = GeminiProvider(apiKey: apiKey, model: isTrialMode ? "gemini-flash-latest" : "gemini-2.0-flash")
-        }
-        let service = TranslationService(provider: provider)
         let customPrompt = settings.customTonePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         let request = TranslationRequest(
             text: text,
@@ -230,11 +228,64 @@ final class TranslatorViewModel {
             tone: settings.tone,
             customTonePrompt: customPrompt.isEmpty ? nil : customPrompt
         )
+        let systemPrompt = PromptBuilder.buildSystemPrompt(
+            targetLanguage: request.targetLanguage.rawValue,
+            tone: request.tone,
+            customTonePrompt: request.customTonePrompt
+        )
+        let translationStartedAt = Date()
+        var modelDecision = resolveModelDecision(
+            provider: effectiveProvider,
+            textLength: text.count,
+            isTrialMode: isTrialMode
+        )
 
         do {
-            let response = try await service.translate(request, apiKey: apiKey)
-            debugLastStage = "Translation received (\(response.translatedText.count) chars)"
-            log.info("Translation received: \(response.translatedText.prefix(50))...")
+            let runResult: TranslationRunResult
+            do {
+                runResult = try await runTranslationAttempt(
+                    providerType: effectiveProvider,
+                    decision: modelDecision,
+                    apiKey: apiKey,
+                    text: text,
+                    systemPrompt: systemPrompt,
+                    allowProgressivePaste: Self.shouldUseProgressivePaste(
+                        provider: effectiveProvider,
+                        autoPaste: settings.autoPaste,
+                        isTrusted: isTrusted
+                    )
+                )
+            } catch {
+                if modelDecision.tier == .robust,
+                   shouldFallbackToFastModel(after: error, decision: modelDecision, isTrialMode: isTrialMode) {
+                    providersForcedToFast.insert(effectiveProvider)
+                    modelDecision = ModelRouter.route(
+                        provider: effectiveProvider,
+                        textLength: text.count,
+                        isTrialMode: isTrialMode,
+                        forceFast: true
+                    )
+                    debugLastStage = "Retrying with fast model (\(modelDecision.model))"
+                    runResult = try await runTranslationAttempt(
+                        providerType: effectiveProvider,
+                        decision: modelDecision,
+                        apiKey: apiKey,
+                        text: text,
+                        systemPrompt: systemPrompt,
+                        allowProgressivePaste: Self.shouldUseProgressivePaste(
+                            provider: effectiveProvider,
+                            autoPaste: settings.autoPaste,
+                            isTrusted: isTrusted
+                        )
+                    )
+                } else {
+                    throw error
+                }
+            }
+
+            let translatedText = runResult.translatedText
+            debugLastStage = "Translation received (\(translatedText.count) chars)"
+            log.info("Translation received: \(translatedText.prefix(50))...")
             providerStatusByType[effectiveProvider] = .ok(message: "OK")
 
             if isTrialMode {
@@ -244,13 +295,18 @@ final class TranslatorViewModel {
             // 5. Output
             var outputMethod = "clipboard"
             if settings.autoPaste {
-                if isTrusted {
-                    let axDidSet = accessibilityService.replaceSelectedText(with: response.translatedText)
+                if runResult.progressivePasteUsed {
+                    outputMethod = "AX-stream"
+                    debugLastStage = "Output: replaced progressively via AX"
+                    restoreClipboardAfterAXIfNeeded(usedClipboardCapture: didUseClipboardCapture)
+                    notifyAppDelegate { $0.flashMenuBarIcon() }
+                } else if isTrusted {
+                    let axDidSet = accessibilityService.replaceSelectedText(with: translatedText)
                     if axDidSet {
                         try? await Task.sleep(nanoseconds: 120_000_000)
                         let afterAX = accessibilityService.getSelectedText()
                         let originalNormalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let translatedNormalized = response.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let translatedNormalized = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
                         let afterNormalized = afterAX?.trimmingCharacters(in: .whitespacesAndNewlines)
 
                         if let afterNormalized, afterNormalized == originalNormalized {
@@ -264,40 +320,41 @@ final class TranslatorViewModel {
                                 debugLastStage = "Output: replaced via AX (unverified)"
                             }
                             log.info("Replaced via AX")
-                            TelemetryService.trackTranslationCompleted(
-                                provider: effectiveProvider, targetLanguage: settings.targetLanguage,
-                                tone: settings.tone, method: outputMethod, textLength: text.count
-                            )
+                            restoreClipboardAfterAXIfNeeded(usedClipboardCapture: didUseClipboardCapture)
                             notifyAppDelegate { $0.flashMenuBarIcon() }
-                            return
                         }
                     } else {
                         debugLastStage = "AX replace failed"
                     }
                 }
 
-                outputMethod = "paste"
-                debugLastStage = "Output: pasted via clipboard"
-                log.info("AX replace failed, using clipboard paste")
-                clipboardService.writeText(response.translatedText)
-                clipboardService.simulatePaste()
-                notifyAppDelegate { $0.flashMenuBarIcon() }
+                if outputMethod != "AX" && outputMethod != "AX-stream" {
+                    outputMethod = "paste"
+                    debugLastStage = "Output: pasted via clipboard"
+                    log.info("AX replace failed, using clipboard paste")
+                    clipboardService.writeText(translatedText)
+                    clipboardService.simulatePaste()
+                    notifyAppDelegate { $0.flashMenuBarIcon() }
 
-                Task {
-                    try? await Task.sleep(nanoseconds: Constants.clipboardRestoreDelay)
-                    clipboardService.restoreSaved()
+                    Task {
+                        try? await Task.sleep(nanoseconds: Constants.clipboardRestoreDelay)
+                        clipboardService.restoreSaved()
+                    }
                 }
             } else {
                 outputMethod = "copy"
                 debugLastStage = "Output: copied to clipboard"
-                clipboardService.writeText(response.translatedText)
+                clipboardService.writeText(translatedText)
                 log.info("Copied to clipboard (auto-paste OFF)")
                 notifyAppDelegate { $0.flashMenuBarIcon() }
             }
 
+            let latencyMs = Int(Date().timeIntervalSince(translationStartedAt) * 1000)
             TelemetryService.trackTranslationCompleted(
                 provider: effectiveProvider, targetLanguage: settings.targetLanguage,
-                tone: settings.tone, method: outputMethod, textLength: text.count
+                tone: settings.tone, method: outputMethod, textLength: text.count,
+                model: modelDecision.model, modelTier: modelDecision.tier, latencyMs: latencyMs,
+                progressivePasteUsed: runResult.progressivePasteUsed
             )
         } catch {
             if case let TranslationError.rateLimited(provider, retryAfter) = error {
@@ -327,6 +384,144 @@ final class TranslatorViewModel {
             return
         }
         action(appDelegate)
+    }
+
+    nonisolated static func shouldUseProgressivePaste(provider: ProviderType, autoPaste: Bool, isTrusted: Bool) -> Bool {
+        provider == .openAI && autoPaste && isTrusted
+    }
+
+    private func resolveModelDecision(provider: ProviderType, textLength: Int, isTrialMode: Bool) -> ModelRoutingDecision {
+        let forceFast = !isTrialMode && providersForcedToFast.contains(provider)
+        return ModelRouter.route(
+            provider: provider,
+            textLength: textLength,
+            isTrialMode: isTrialMode,
+            forceFast: forceFast
+        )
+    }
+
+    private func makeProvider(providerType: ProviderType, apiKey: String, model: String) -> TranslationProvider {
+        switch providerType {
+        case .claude:
+            return ClaudeProvider(apiKey: apiKey, model: model)
+        case .openAI:
+            return OpenAIProvider(apiKey: apiKey, model: model)
+        case .gemini:
+            return GeminiProvider(apiKey: apiKey, model: model)
+        }
+    }
+
+    private func shouldFallbackToFastModel(
+        after error: Error,
+        decision: ModelRoutingDecision,
+        isTrialMode: Bool
+    ) -> Bool {
+        guard !isTrialMode, decision.tier == .robust else { return false }
+        guard case let TranslationError.apiError(statusCode, message) = error else { return false }
+        guard statusCode == 400 || statusCode == 404 else { return false }
+        if statusCode == 404 { return true }
+        let lower = message.lowercased()
+        return lower.contains("model")
+            || lower.contains("not found")
+            || lower.contains("does not exist")
+            || lower.contains("unsupported")
+    }
+
+    private func runTranslationAttempt(
+        providerType: ProviderType,
+        decision: ModelRoutingDecision,
+        apiKey: String,
+        text: String,
+        systemPrompt: String,
+        allowProgressivePaste: Bool
+    ) async throws -> TranslationRunResult {
+        let provider = makeProvider(providerType: providerType, apiKey: apiKey, model: decision.model)
+        let shouldStream = allowProgressivePaste && providerType == .openAI
+
+        if shouldStream, let streamProvider = provider as? any StreamingTranslationProvider {
+            guard let session = accessibilityService.beginProgressiveInsertionSession() else {
+                TelemetryService.trackProgressivePasteFailed(
+                    provider: providerType,
+                    model: decision.model,
+                    reason: .axInitFailed
+                )
+                let translated = try await provider.translate(text: text, systemPrompt: systemPrompt)
+                return TranslationRunResult(translatedText: translated, progressivePasteUsed: false)
+            }
+
+            do {
+                return try await runProgressiveStreaming(
+                    streamProvider: streamProvider,
+                    session: session,
+                    providerType: providerType,
+                    model: decision.model,
+                    text: text,
+                    systemPrompt: systemPrompt
+                )
+            } catch {
+                TelemetryService.trackProgressivePasteFailed(
+                    provider: providerType,
+                    model: decision.model,
+                    reason: .streamFailed
+                )
+                let translated = try await provider.translate(text: text, systemPrompt: systemPrompt)
+                return TranslationRunResult(translatedText: translated, progressivePasteUsed: false)
+            }
+        }
+
+        let translated = try await provider.translate(text: text, systemPrompt: systemPrompt)
+        return TranslationRunResult(translatedText: translated, progressivePasteUsed: false)
+    }
+
+    private func runProgressiveStreaming(
+        streamProvider: any StreamingTranslationProvider,
+        session: ProgressiveInsertionSession,
+        providerType: ProviderType,
+        model: String,
+        text: String,
+        systemPrompt: String
+    ) async throws -> TranslationRunResult {
+        var streamText = ""
+        var assembler = WordFlushAssembler(forceFlushInterval: 0.12)
+        var progressiveFailure: ProgressiveInsertionFailureReason?
+
+        for try await chunk in streamProvider.translateStream(text: text, systemPrompt: systemPrompt) {
+            streamText += chunk
+
+            guard progressiveFailure == nil else { continue }
+            if let partial = assembler.append(chunk), let reason = session.apply(text: partial) {
+                progressiveFailure = reason
+                TelemetryService.trackProgressivePasteFailed(
+                    provider: providerType,
+                    model: model,
+                    reason: reason
+                )
+            }
+        }
+
+        if progressiveFailure == nil,
+           let finalPartial = assembler.forceFlush(),
+           let reason = session.apply(text: finalPartial) {
+            progressiveFailure = reason
+            TelemetryService.trackProgressivePasteFailed(
+                provider: providerType,
+                model: model,
+                reason: reason
+            )
+        }
+
+        return TranslationRunResult(
+            translatedText: streamText.trimmingCharacters(in: .whitespacesAndNewlines),
+            progressivePasteUsed: progressiveFailure == nil
+        )
+    }
+
+    private func restoreClipboardAfterAXIfNeeded(usedClipboardCapture: Bool) {
+        guard usedClipboardCapture else { return }
+        Task {
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            clipboardService.restoreSaved()
+        }
     }
 
     private func triggerTranslation(source: String) {

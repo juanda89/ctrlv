@@ -2,7 +2,12 @@ import Foundation
 
 struct ClaudeProvider: TranslationProvider {
     let apiKey: String
-    let model: String = "claude-sonnet-4-20250514"
+    let model: String
+
+    init(apiKey: String, model: String) {
+        self.apiKey = apiKey
+        self.model = model
+    }
 
     func translate(text: String, systemPrompt: String) async throws -> String {
         guard let url = URL(string: "https://api.anthropic.com/v1/messages") else {

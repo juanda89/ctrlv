@@ -125,4 +125,126 @@ final class AccessibilityService {
         log.info("replaceSelectedText: \(success ? "OK" : "FAILED (AXError: \(result.rawValue))")")
         return success
     }
+
+    func beginProgressiveInsertionSession() -> ProgressiveInsertionSession? {
+        guard let app = NSWorkspace.shared.frontmostApplication else {
+            log.error("beginProgressiveInsertionSession: no frontmost app")
+            return nil
+        }
+
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        var focusedElement: AnyObject?
+        let focusResult = AXUIElementCopyAttributeValue(
+            axApp,
+            kAXFocusedUIElementAttribute as CFString,
+            &focusedElement
+        )
+        guard focusResult == .success, let focusedElement else {
+            log.error("beginProgressiveInsertionSession: no focused element (\(focusResult.rawValue))")
+            return nil
+        }
+
+        let element = focusedElement as! AXUIElement
+        guard let selectedRange = Self.selectedTextRange(for: element) else {
+            log.error("beginProgressiveInsertionSession: missing selected text range")
+            return nil
+        }
+
+        return ProgressiveInsertionSession(
+            element: element,
+            appPID: app.processIdentifier,
+            initialRange: selectedRange
+        )
+    }
+
+    private static func selectedTextRange(for element: AXUIElement) -> CFRange? {
+        var selectedRangeValue: AnyObject?
+        let result = AXUIElementCopyAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            &selectedRangeValue
+        )
+        guard result == .success,
+              let selectedRangeValue,
+              CFGetTypeID(selectedRangeValue) == AXValueGetTypeID() else {
+            return nil
+        }
+
+        let rangeValue = selectedRangeValue as! AXValue
+        var range = CFRange(location: 0, length: 0)
+        guard AXValueGetValue(rangeValue, .cfRange, &range) else {
+            return nil
+        }
+        return range
+    }
+}
+
+enum ProgressiveInsertionFailureReason: String {
+    case axInitFailed = "ax_init_failed"
+    case streamFailed = "stream_failed"
+    case focusChanged = "focus_changed"
+    case setRangeFailed = "set_range_failed"
+    case setTextFailed = "set_text_failed"
+}
+
+struct ProgressiveInsertionState {
+    private let anchorLocation: Int
+    private(set) var insertedUTF16Length: Int
+
+    init(initialRange: CFRange) {
+        anchorLocation = initialRange.location
+        insertedUTF16Length = initialRange.length
+    }
+
+    mutating func rangeForCurrentText() -> CFRange {
+        CFRange(location: anchorLocation, length: insertedUTF16Length)
+    }
+
+    mutating func commit(text: String) {
+        insertedUTF16Length = text.utf16.count
+    }
+}
+
+final class ProgressiveInsertionSession {
+    private let element: AXUIElement
+    private let appPID: pid_t
+    private var state: ProgressiveInsertionState
+
+    init(element: AXUIElement, appPID: pid_t, initialRange: CFRange) {
+        self.element = element
+        self.appPID = appPID
+        self.state = ProgressiveInsertionState(initialRange: initialRange)
+    }
+
+    func apply(text: String) -> ProgressiveInsertionFailureReason? {
+        guard NSWorkspace.shared.frontmostApplication?.processIdentifier == appPID else {
+            return .focusChanged
+        }
+
+        var range = state.rangeForCurrentText()
+        guard let rangeValue = AXValueCreate(.cfRange, &range) else {
+            return .setRangeFailed
+        }
+
+        let rangeResult = AXUIElementSetAttributeValue(
+            element,
+            kAXSelectedTextRangeAttribute as CFString,
+            rangeValue
+        )
+        guard rangeResult == .success else {
+            return .setRangeFailed
+        }
+
+        let textResult = AXUIElementSetAttributeValue(
+            element,
+            kAXSelectedTextAttribute as CFString,
+            text as CFTypeRef
+        )
+        guard textResult == .success else {
+            return .setTextFailed
+        }
+
+        state.commit(text: text)
+        return nil
+    }
 }

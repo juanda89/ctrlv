@@ -34,7 +34,11 @@ enum TelemetryService {
         targetLanguage: SupportedLanguage,
         tone: Tone,
         method: String,
-        textLength: Int
+        textLength: Int,
+        model: String,
+        modelTier: ModelTier,
+        latencyMs: Int,
+        progressivePasteUsed: Bool
     ) {
         let bucket = textLength < 50 ? "short" : textLength < 200 ? "medium" : "long"
         send(
@@ -45,6 +49,22 @@ enum TelemetryService {
                 "tone": tone.rawValue,
                 "method": method,
                 "textLengthBucket": bucket,
+                "inputLength": String(textLength),
+                "model": model,
+                "modelTier": modelTier.rawValue,
+                "latencyMs": String(latencyMs),
+                "progressivePasteUsed": String(progressivePasteUsed),
+            ]
+        )
+    }
+
+    static func trackProgressivePasteFailed(provider: ProviderType, model: String, reason: ProgressiveInsertionFailureReason) {
+        send(
+            "Translation.progressivePasteFailed",
+            parameters: [
+                "provider": provider.rawValue,
+                "model": model,
+                "reason": reason.rawValue,
             ]
         )
     }

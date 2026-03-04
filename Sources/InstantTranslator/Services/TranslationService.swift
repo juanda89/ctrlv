@@ -5,6 +5,10 @@ protocol TranslationProvider {
     func translate(text: String, systemPrompt: String) async throws -> String
 }
 
+protocol StreamingTranslationProvider {
+    func translateStream(text: String, systemPrompt: String) -> AsyncThrowingStream<String, Error>
+}
+
 /// Abstraction layer that delegates to the active provider.
 final class TranslationService {
     private let provider: TranslationProvider

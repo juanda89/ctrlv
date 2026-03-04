@@ -2,7 +2,12 @@ import Foundation
 
 struct GeminiProvider: TranslationProvider {
     let apiKey: String
-    var model: String = "gemini-2.0-flash"
+    let model: String
+
+    init(apiKey: String, model: String) {
+        self.apiKey = apiKey
+        self.model = model
+    }
 
     func translate(text: String, systemPrompt: String) async throws -> String {
         guard let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
