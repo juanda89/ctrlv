@@ -27,6 +27,7 @@ struct MenuBarView: View {
                 .padding(.bottom, 4)
             }
             .scrollIndicators(.hidden)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
             FooterSection(
                 translatorVM: viewModel,
@@ -41,6 +42,7 @@ struct MenuBarView: View {
         .padding(.top, 10)
         .padding(.bottom, 4)
         .frame(width: 336)
+        .frame(maxHeight: .infinity, alignment: .top)
         .background(Color.clear)
         .sheet(isPresented: $updateService.isShowingManualUpdateFallback) {
             UpdateFailureSheet(updateService: updateService)
