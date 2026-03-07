@@ -74,6 +74,7 @@ struct NativeGroupCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 11) {
             content
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 18, style: .continuous)

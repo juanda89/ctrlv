@@ -10,43 +10,47 @@ struct MenuBarView: View {
     let onShowAbout: () -> Void
 
     var body: some View {
-        VStack(spacing: 12) {
-            header
+        GeometryReader { geometry in
+            VStack(spacing: 12) {
+                header
 
-            ScrollView {
-                VStack(spacing: 12) {
-                    StatusSection(licenseService: licenseService)
-                    PreferencesSection(settingsVM: viewModel.settingsVM)
-                    BehaviorSection(
-                        settingsVM: viewModel.settingsVM,
-                        translatorVM: viewModel,
-                        updateService: updateService
-                    )
+                ScrollView {
+                    VStack(spacing: 12) {
+                        StatusSection(licenseService: licenseService)
+                        PreferencesSection(settingsVM: viewModel.settingsVM)
+                        BehaviorSection(
+                            settingsVM: viewModel.settingsVM,
+                            translatorVM: viewModel,
+                            updateService: updateService
+                        )
+                    }
+                    .frame(width: max(0, geometry.size.width - 24), alignment: .topLeading)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 4)
                 }
-                .padding(.horizontal, 12)
-                .padding(.bottom, 4)
-            }
-            .scrollIndicators(.hidden)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .scrollIndicators(.hidden)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
 
-            FooterSection(
-                translatorVM: viewModel,
-                updateService: updateService,
-                onOpenFeedback: onOpenFeedback,
-                onCheckForUpdates: onCheckForUpdates,
-                onShowAbout: onShowAbout
-            )
-            .padding(.horizontal, 12)
-            .padding(.bottom, 10)
+                FooterSection(
+                    translatorVM: viewModel,
+                    updateService: updateService,
+                    onOpenFeedback: onOpenFeedback,
+                    onCheckForUpdates: onCheckForUpdates,
+                    onShowAbout: onShowAbout
+                )
+                .padding(.horizontal, 12)
+                .padding(.bottom, 10)
+            }
+            .padding(.top, 10)
+            .padding(.bottom, 4)
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .top)
+            .background(Color.clear)
+            .sheet(isPresented: $updateService.isShowingManualUpdateFallback) {
+                UpdateFailureSheet(updateService: updateService)
+            }
         }
-        .padding(.top, 10)
-        .padding(.bottom, 4)
-        .frame(width: 336)
-        .frame(maxHeight: .infinity, alignment: .top)
+        .frame(width: 336, height: 560)
         .background(Color.clear)
-        .sheet(isPresented: $updateService.isShowingManualUpdateFallback) {
-            UpdateFailureSheet(updateService: updateService)
-        }
     }
 
     private var header: some View {

@@ -26,38 +26,68 @@ enum MenuSnapshotRenderer {
         outputURL: URL
     ) throws {
         let controller = NativePopoverHostingController(rootView: rootView)
-        let window = NSWindow(contentViewController: controller)
-        window.styleMask = [.borderless]
-        window.backgroundColor = .clear
-        window.isOpaque = false
-        window.hasShadow = false
-        window.setContentSize(NSSize(width: 336, height: 560))
-        window.appearance = appearance.nsAppearance
+        let anchorWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 80, height: 36),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        anchorWindow.backgroundColor = .clear
+        anchorWindow.isOpaque = false
+        anchorWindow.hasShadow = false
+        anchorWindow.level = .floating
+        anchorWindow.alphaValue = 0.01
+        anchorWindow.center()
 
-        guard let contentView = window.contentView else {
+        let anchorView = NSView(frame: NSRect(x: 0, y: 0, width: 80, height: 36))
+        anchorWindow.contentView = anchorView
+        anchorWindow.makeKeyAndOrderFront(nil)
+
+        let popover = NSPopover()
+        popover.animates = false
+        popover.behavior = .applicationDefined
+        popover.contentSize = NSSize(width: 336, height: 560)
+        popover.contentViewController = controller
+
+        if let nsAppearance = appearance.nsAppearance {
+            anchorWindow.appearance = nsAppearance
+            controller.view.appearance = nsAppearance
+        }
+
+        popover.show(relativeTo: anchorView.bounds, of: anchorView, preferredEdge: .maxY)
+
+        guard let contentView = popover.contentViewController?.view else {
+            popover.performClose(nil)
+            anchorWindow.close()
             throw MenuSnapshotRendererError.missingContentView
         }
 
-        contentView.frame = NSRect(origin: .zero, size: NSSize(width: 336, height: 560))
-        contentView.layoutSubtreeIfNeeded()
-        window.display()
-        RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+        RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        contentView.frame = NSRect(origin: .zero, size: popover.contentSize)
         contentView.layoutSubtreeIfNeeded()
         contentView.displayIfNeeded()
 
         let bounds = contentView.bounds
         guard let bitmap = contentView.bitmapImageRepForCachingDisplay(in: bounds) else {
+            popover.performClose(nil)
+            anchorWindow.close()
             throw MenuSnapshotRendererError.bitmapCreationFailed
         }
 
         contentView.cacheDisplay(in: bounds, to: bitmap)
 
         guard let pngData = bitmap.representation(using: .png, properties: [:]) else {
+            popover.performClose(nil)
+            anchorWindow.close()
             throw MenuSnapshotRendererError.pngEncodingFailed
         }
 
         let directoryURL = outputURL.deletingLastPathComponent()
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         try pngData.write(to: outputURL)
+
+        popover.performClose(nil)
+        anchorWindow.orderOut(nil)
+        anchorWindow.close()
     }
 }
