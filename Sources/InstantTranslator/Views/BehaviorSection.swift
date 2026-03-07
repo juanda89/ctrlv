@@ -46,20 +46,15 @@ struct BehaviorSection: View {
                 isShortcutSettingsPresented = true
             } label: {
                 HStack {
-                    HStack(spacing: 8) {
-                        IconBubble(systemName: "keyboard", tint: .gray)
-                        Text("Shortcut")
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(.secondary)
-                    }
+                    NativeSectionLabel(systemName: "keyboard", tint: .gray, title: "Shortcut")
 
                     Spacer()
 
                     HStack(spacing: 6) {
                         ShortcutBadge(keys: settingsVM.shortcutKeyCaps)
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(.tertiary)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(MenuTheme.tertiaryText)
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -68,12 +63,7 @@ struct BehaviorSection: View {
             .buttonStyle(.plain)
 
             HStack {
-                HStack(spacing: 8) {
-                    IconBubble(systemName: "arrow.left.arrow.right.square", tint: .teal)
-                    Text("Auto-paste")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
+                NativeSectionLabel(systemName: "arrow.left.arrow.right.square", tint: .teal, title: "Auto-paste")
 
                 Spacer()
 
@@ -92,27 +82,24 @@ struct BehaviorSection: View {
     private var providerAndKeysCard: some View {
         MenuCard {
             HStack {
-                HStack(spacing: 8) {
-                    IconBubble(systemName: "sparkles", tint: .purple)
-                    Text("LLM Provider")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundStyle(.secondary)
-                }
+                NativeSectionLabel(systemName: "sparkles", tint: .purple, title: "LLM Provider")
 
                 Spacer()
 
-                Picker("", selection: $settingsVM.settings.selectedProvider) {
-                    ForEach(ProviderType.allCases) { provider in
-                        Text(provider.rawValue).tag(provider)
+                NativeControlSurface(cornerRadius: 11, horizontalPadding: 8, verticalPadding: 4) {
+                    Picker("", selection: $settingsVM.settings.selectedProvider) {
+                        ForEach(ProviderType.allCases) { provider in
+                            Text(provider.rawValue).tag(provider)
+                        }
                     }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .controlSize(.small)
+                    .frame(width: 124)
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
-                .controlSize(.small)
-                .frame(width: 132)
             }
 
-            VStack(alignment: .leading, spacing: 5) {
+            VStack(alignment: .leading, spacing: 7) {
                 APIKeyField(
                     storedKey: settingsVM.apiKeyForSelectedProvider(),
                     draftKey: $draftAPIKey,
@@ -136,8 +123,8 @@ struct BehaviorSection: View {
                         isProviderHelpPresented = true
                     } label: {
                         Text(settingsVM.settings.selectedProvider.apiKeyHelpTitle)
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundStyle(.tertiary)
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(MenuTheme.tertiaryText)
                     }
                     .buttonStyle(.plain)
                 }
@@ -154,8 +141,8 @@ struct BehaviorSection: View {
                         .fill(isAccessibilityGranted ? .green : .orange)
                         .frame(width: 7, height: 7)
                     Text(isAccessibilityGranted ? "Accessibility: Granted" : "Accessibility: Not Granted")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
                 }
 
                 Spacer()
@@ -182,8 +169,8 @@ struct BehaviorSection: View {
 
             if !isAccessibilityGranted {
                 Text("If you already granted permission but it still shows Not Granted, click Reset. This happens when the app is rebuilt with a new code signature.")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
+                    .font(.footnote)
+                    .foregroundStyle(MenuTheme.tertiaryText)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
@@ -282,13 +269,17 @@ struct BehaviorSection: View {
                         .frame(width: 6, height: 6)
                 }
                 Text(style.text)
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.caption.weight(.semibold))
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 9)
+            .padding(.vertical, 5)
             .background(
                 Capsule(style: .continuous)
                     .fill(style.background)
+            )
+            .overlay(
+                Capsule(style: .continuous)
+                    .stroke(style.tint.opacity(0.18), lineWidth: 1)
             )
         }
         .buttonStyle(.plain)
@@ -302,22 +293,22 @@ struct BehaviorSection: View {
             .isEmpty
 
         if isCheckingProviderStatus {
-            return ("Status: Checking...", .secondary, Color.primary.opacity(0.08))
+            return ("Status: Checking...", .secondary, MenuTheme.controlFill)
         }
 
         guard hasKey else {
-            return ("Status: No key", .secondary, Color.primary.opacity(0.08))
+            return ("Status: No key", .secondary, MenuTheme.controlFill)
         }
 
         switch translatorVM.providerRuntimeStatus(for: provider) {
         case .rateLimited:
-            return ("Status: Rate limited", .red, .red.opacity(0.12))
+            return ("Status: Rate limited", .red, MenuTheme.tintedSurface(.red))
         case .error:
-            return ("Status: Error", .red, .red.opacity(0.12))
+            return ("Status: Error", .red, MenuTheme.tintedSurface(.red))
         case .ok:
-            return ("Status: OK", .green, .green.opacity(0.12))
+            return ("Status: OK", .green, MenuTheme.tintedSurface(.green))
         case .idle:
-            return ("Status: OK", .green, .green.opacity(0.12))
+            return ("Status: OK", .green, MenuTheme.tintedSurface(.green))
         }
     }
 

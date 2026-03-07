@@ -22,26 +22,18 @@ struct APIKeyField: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 6) {
-                Image(systemName: "key.fill")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
+            NativeControlSurface(cornerRadius: 12, horizontalPadding: 10, verticalPadding: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "key.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(MenuTheme.subtleText)
 
-                fieldBody
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                    fieldBody
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
-                controls
+                    controls
+                }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-            )
 
             if showsStatus {
                 HStack(spacing: 4) {
@@ -71,7 +63,7 @@ struct APIKeyField: View {
         } else {
             Text(readOnlyLabel)
                 .font(.system(size: 12, weight: .regular, design: .monospaced))
-                .foregroundStyle(storedKey.isEmpty ? .tertiary : .secondary)
+                .foregroundStyle(storedKey.isEmpty ? MenuTheme.tertiaryText : MenuTheme.subtleText)
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
@@ -83,33 +75,33 @@ struct APIKeyField: View {
         case .none:
             if storedKey.isEmpty {
                 Text("No key saved")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.tertiary)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(MenuTheme.tertiaryText)
             } else {
                 Text("Saved locally")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(MenuTheme.subtleText)
             }
         case .checking:
             HStack(spacing: 5) {
                 ProgressView()
                     .controlSize(.mini)
                 Text("Verifying key...")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(MenuTheme.subtleText)
             }
         case .valid(let message):
             HStack(spacing: 4) {
                 Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.footnote.weight(.semibold))
                     .foregroundStyle(.green)
                 Text(message)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(.green)
             }
         case .invalid(let message):
             Text(message)
-                .font(.system(size: 11, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .foregroundStyle(.red)
                 .lineLimit(2)
                 .fixedSize(horizontal: false, vertical: true)
@@ -119,33 +111,21 @@ struct APIKeyField: View {
     @ViewBuilder
     private var controls: some View {
         if isEditing {
-            iconControlButton(
-                systemName: "xmark",
-                foreground: .secondary,
-                background: Color.primary.opacity(0.08),
-                accessibilityLabel: "Cancel editing"
-            ) {
+            NativeAccessoryButton(systemName: "xmark") {
                 onCancel()
             }
+            .accessibilityLabel("Cancel editing")
 
-            iconControlButton(
-                systemName: "checkmark",
-                foreground: .white,
-                background: MenuTheme.blue,
-                accessibilityLabel: "Save API key"
-            ) {
+            NativeAccessoryButton(systemName: "checkmark", tint: MenuTheme.blue, filled: true) {
                 onSave()
             }
+            .accessibilityLabel("Save API key")
             .disabled(validationState == .checking)
         } else {
-            iconControlButton(
-                systemName: "square.and.pencil",
-                foreground: .white,
-                background: MenuTheme.blue,
-                accessibilityLabel: "Edit API key"
-            ) {
+            NativeAccessoryButton(systemName: "square.and.pencil") {
                 onEdit()
             }
+            .accessibilityLabel("Edit API key")
         }
     }
 
@@ -154,27 +134,6 @@ struct APIKeyField: View {
             return placeholder
         }
         return masked(storedKey)
-    }
-
-    private func iconControlButton(
-        systemName: String,
-        foreground: Color,
-        background: Color,
-        accessibilityLabel: String,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(foreground)
-                .frame(width: 22, height: 22)
-                .background(
-                    RoundedRectangle(cornerRadius: 6, style: .continuous)
-                        .fill(background)
-                )
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(accessibilityLabel)
     }
 
     private func masked(_ key: String) -> String {

@@ -2,10 +2,10 @@ import SwiftUI
 
 struct ToneSelector: View {
     @Binding var selection: Tone
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 6), count: 5)
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 5)
 
     var body: some View {
-        LazyVGrid(columns: columns, spacing: 6) {
+        LazyVGrid(columns: columns, spacing: 8) {
             ForEach(Tone.allCases) { tone in
                 toneButton(tone)
             }
@@ -16,26 +16,26 @@ struct ToneSelector: View {
         Button {
             selection = tone
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 4) {
                 Image(systemName: icon(for: tone))
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(selection == tone ? MenuTheme.blue : .secondary)
+                    .foregroundStyle(selection == tone ? MenuTheme.blue : MenuTheme.subtleText)
 
                 Text(tone.rawValue)
-                    .font(.system(size: 10, weight: selection == tone ? .semibold : .medium))
-                    .foregroundStyle(selection == tone ? MenuTheme.blue : .secondary)
+                    .font(.caption2.weight(selection == tone ? .semibold : .medium))
+                    .foregroundStyle(selection == tone ? MenuTheme.blue : MenuTheme.subtleText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 6)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(selection == tone ? MenuTheme.blue.opacity(0.14) : Color.primary.opacity(0.05))
+                    .fill(selection == tone ? MenuTheme.selectedFill : MenuTheme.controlFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(selection == tone ? MenuTheme.blue.opacity(0.35) : Color.primary.opacity(0.1), lineWidth: 1)
+                    .stroke(selection == tone ? MenuTheme.selectedBorder : MenuTheme.controlBorder, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

@@ -11,28 +11,21 @@ struct LanguageDropdown: View {
                 }
             }
         } label: {
-            HStack(spacing: 6) {
-                Text(selection.rawValue)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+            NativeControlSurface(cornerRadius: 11, horizontalPadding: 10, verticalPadding: 6) {
+                HStack(spacing: 6) {
+                    Text(selection.rawValue)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
 
-                Image(systemName: "chevron.up.chevron.down")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(MenuTheme.subtleText)
+                }
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 5)
-            .background(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary.opacity(0.1), lineWidth: 1)
-            )
         }
         .buttonStyle(.plain)
-        .frame(width: 118)
+        .frame(width: 124)
     }
 }

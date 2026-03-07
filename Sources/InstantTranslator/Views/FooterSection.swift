@@ -36,13 +36,17 @@ struct FooterSection: View {
                 }
             } label: {
                 Image(systemName: "ellipsis")
-                    .font(.system(size: 13, weight: .bold))
-                    .frame(width: 22, height: 22)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(MenuTheme.subtleText)
+                    .frame(width: 26, height: 26)
                     .background(
-                        Circle()
-                            .fill(Color.primary.opacity(0.08))
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .fill(MenuTheme.controlFill)
                     )
-                    .foregroundStyle(.secondary)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9, style: .continuous)
+                            .stroke(MenuTheme.controlBorder, lineWidth: 1)
+                    )
             }
             .menuIndicator(.hidden)
             .menuStyle(.borderlessButton)

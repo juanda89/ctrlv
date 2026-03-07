@@ -10,11 +10,11 @@ struct MenuBarView: View {
     let onShowAbout: () -> Void
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 12) {
             header
 
             ScrollView {
-                VStack(spacing: 8) {
+                VStack(spacing: 12) {
                     StatusSection(licenseService: licenseService)
                     PreferencesSection(settingsVM: viewModel.settingsVM)
                     BehaviorSection(
@@ -23,8 +23,8 @@ struct MenuBarView: View {
                         updateService: updateService
                     )
                 }
-                .padding(.horizontal, 10)
-                .padding(.bottom, 2)
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
             }
             .scrollIndicators(.hidden)
 
@@ -35,33 +35,25 @@ struct MenuBarView: View {
                 onCheckForUpdates: onCheckForUpdates,
                 onShowAbout: onShowAbout
             )
-                .padding(.horizontal, 10)
-                .padding(.bottom, 8)
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
         }
-        .padding(.top, 8)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
         .frame(width: 336)
-        .background(
-            LinearGradient(
-                colors: [
-                    Color(nsColor: .windowBackgroundColor),
-                    MenuTheme.pageLight.opacity(0.7)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-        )
+        .background(Color.clear)
         .sheet(isPresented: $updateService.isShowingManualUpdateFallback) {
             UpdateFailureSheet(updateService: updateService)
         }
     }
 
     private var header: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 10) {
             HStack(spacing: 8) {
                 BrandMarkView()
 
                 Text("ctrl+v")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.title3.weight(.semibold))
                     .foregroundStyle(.primary)
             }
 
@@ -69,7 +61,7 @@ struct MenuBarView: View {
 
             ShortcutBadge(keys: viewModel.settingsVM.shortcutKeyCaps)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 4)
     }
 }

@@ -39,12 +39,12 @@ struct StatusSection: View {
 
         return MenuCard {
             HStack {
-                HStack(spacing: 8) {
+                HStack(spacing: 9) {
                     Circle()
                         .fill(isOfflineGrace ? .orange : .green)
                         .frame(width: 7, height: 7)
                     Text(displayName)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.headline.weight(.semibold))
                 }
 
                 Spacer()
@@ -52,12 +52,11 @@ struct StatusSection: View {
                 statusPill(text: isOfflineGrace ? "Offline Grace" : "Active", tint: isOfflineGrace ? .orange : .green)
             }
 
-            Divider()
-                .overlay((isOfflineGrace ? Color.orange : Color.green).opacity(0.25))
+            NativeMenuDivider()
 
             Text("Last validation: \(validationText(for: validatedAt))")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(MenuTheme.subtleText)
 
             HStack {
                 Spacer()
@@ -66,7 +65,7 @@ struct StatusSection: View {
                     prepareLicenseSheet()
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.mini)
+                .controlSize(.small)
                 .tint(.green)
             }
         }
@@ -77,7 +76,7 @@ struct StatusSection: View {
         MenuCard {
             HStack {
                 Text("Trial Active")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.headline.weight(.semibold))
 
                 Spacer()
 
@@ -87,7 +86,7 @@ struct StatusSection: View {
                     prepareLicenseSheet()
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.mini)
+                .controlSize(.small)
             }
 
             ProgressView(value: trialProgress(days: days))
@@ -100,7 +99,7 @@ struct StatusSection: View {
         MenuCard {
             HStack {
                 Text("Trial Expired")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(.red)
 
                 Spacer()
@@ -118,7 +117,7 @@ struct StatusSection: View {
                     prepareLicenseSheet()
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.mini)
+                .controlSize(.small)
                 .tint(.red)
             }
         }
@@ -129,7 +128,7 @@ struct StatusSection: View {
         MenuCard {
             HStack {
                 Text("License Invalid")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.headline.weight(.semibold))
                     .foregroundStyle(.red)
 
                 Spacer()
@@ -138,8 +137,8 @@ struct StatusSection: View {
             }
 
             Text(reason)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(MenuTheme.subtleText)
 
             HStack {
                 Spacer()
@@ -148,7 +147,7 @@ struct StatusSection: View {
                     prepareLicenseSheet()
                 }
                 .buttonStyle(.borderedProminent)
-                .controlSize(.mini)
+                .controlSize(.small)
                 .tint(.red)
             }
         }
@@ -161,8 +160,8 @@ struct StatusSection: View {
                 ProgressView()
                     .scaleEffect(0.8)
                 Text("Checking license")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(MenuTheme.subtleText)
             }
         }
     }
@@ -171,7 +170,7 @@ struct StatusSection: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Text("Enter License Key")
-                    .font(.system(size: 18, weight: .bold))
+                    .font(.title3.weight(.semibold))
 
                 Spacer()
 
@@ -180,19 +179,19 @@ struct StatusSection: View {
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(MenuTheme.subtleText)
                 }
                 .buttonStyle(.plain)
             }
 
             Text("Paste your Lemon Squeezy license key to activate this device.")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(.secondary)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(MenuTheme.subtleText)
 
             VStack(alignment: .leading, spacing: 6) {
                 Text("License Key")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(MenuTheme.subtleText)
                 TextField("XXXX-XXXX-XXXX-XXXX", text: $licenseKeyInput)
                     .textFieldStyle(.roundedBorder)
             }
@@ -224,11 +223,11 @@ struct StatusSection: View {
 
             if let message = localMessage {
                 Text(message)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(.secondary)
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(MenuTheme.subtleText)
             } else if let error = licenseService.lastError {
                 Text(error)
-                    .font(.system(size: 12, weight: .medium))
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(.red)
             }
         }
@@ -249,16 +248,20 @@ struct StatusSection: View {
     }
 
     private func cardTint(_ color: Color) -> some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-            .fill(color.opacity(0.07))
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+            .fill(MenuTheme.tintedSurface(color))
     }
 
     private func statusPill(text: String, tint: Color) -> some View {
         Text(text)
-            .font(.system(size: 11, weight: .semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 3)
-            .background(tint.opacity(0.15), in: Capsule())
+            .font(.caption.weight(.semibold))
+            .padding(.horizontal, 9)
+            .padding(.vertical, 4)
+            .background(MenuTheme.tintedSurface(tint), in: Capsule())
+            .overlay(
+                Capsule()
+                    .stroke(MenuTheme.tintedBorder(tint), lineWidth: 1)
+            )
             .foregroundStyle(tint)
     }
 
