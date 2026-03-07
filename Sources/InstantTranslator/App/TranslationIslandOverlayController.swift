@@ -11,9 +11,9 @@ final class TranslationIslandOverlayController {
         static let expandedSize = NSSize(width: 224, height: 44)
         static let collapsedSize = NSSize(width: 158, height: 10)
         static let topInset: CGFloat = 6
-        static let visibleDuration: TimeInterval = 0.36
-        static let hideDuration: TimeInterval = 0.62
-        static let minimumVisibleDuration: TimeInterval = 0.95
+        static let visibleDuration: TimeInterval = 0.24
+        static let hideDuration: TimeInterval = 0.34
+        static let minimumVisibleDuration: TimeInterval = 0.55
     }
 
     private var panel: NSPanel?

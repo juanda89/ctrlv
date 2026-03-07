@@ -311,7 +311,7 @@ final class TranslatorViewModel {
                 } else if isTrusted {
                     let axDidSet = accessibilityService.replaceSelectedText(with: translatedText)
                     if axDidSet {
-                        try? await Task.sleep(nanoseconds: 120_000_000)
+                        try? await Task.sleep(nanoseconds: Constants.axVerificationDelay)
                         let afterAX = accessibilityService.getSelectedText()
                         let originalNormalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
                         let translatedNormalized = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -395,7 +395,7 @@ final class TranslatorViewModel {
     }
 
     nonisolated static func shouldUseProgressivePaste(provider: ProviderType, autoPaste: Bool, isTrusted: Bool) -> Bool {
-        provider == .openAI && autoPaste && isTrusted
+        false
     }
 
     private func resolveModelDecision(provider: ProviderType, textLength: Int, isTrialMode: Bool) -> ModelRoutingDecision {

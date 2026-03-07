@@ -2,8 +2,9 @@ import Foundation
 
 enum Constants {
     static let appName = "ctrl+v"
-    static let clipboardRestoreDelay: UInt64 = 2_000_000_000 // 2 seconds in nanoseconds
-    static let copyWaitDelay: UInt64 = 150_000_000 // 150ms in nanoseconds
+    static let clipboardRestoreDelay: UInt64 = 1_200_000_000 // 1.2 seconds in nanoseconds
+    static let copyWaitDelay: UInt64 = 90_000_000 // 90ms in nanoseconds
+    static let axVerificationDelay: UInt64 = 45_000_000 // 45ms in nanoseconds
     static let defaultFeedbackURL = "https://control-v.info/feedback"
     static let defaultManualUpdateURL = "https://control-v.info/download.html?autostart=1"
     static let defaultLemonCheckoutURL = "https://control-v.info/upgrade"
