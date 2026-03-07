@@ -4,12 +4,15 @@ import Foundation
 final class SettingsViewModel {
     var settings: AppSettings {
         didSet {
-            settings.save()
+            if persistsToDisk {
+                settings.save()
+            }
             trackSettingsChanges(old: oldValue, new: settings)
         }
     }
 
     private var apiKeysByProvider: [ProviderType: String]
+    private let persistsToDisk: Bool
 
     var shortcutOptions: [ShortcutKeyOption] {
         ShortcutConfiguration.letterOptions
@@ -31,8 +34,10 @@ final class SettingsViewModel {
         "\(settings.selectedProvider.rawValue) API Key: \(settings.selectedProvider.apiKeyPlaceholder)"
     }
 
-    init() {
-        var loaded = AppSettings.load()
+    init(persistToDisk: Bool = true) {
+        self.persistsToDisk = persistToDisk
+
+        var loaded = persistToDisk ? AppSettings.load() : AppSettings()
         loaded.shortcutModifiers = UInt(ShortcutConfiguration.fixedModifiers)
         if !ShortcutConfiguration.isValid(keyCode: loaded.shortcutKeyCode) {
             loaded.shortcutKeyCode = ShortcutConfiguration.defaultOption.carbonKeyCode
@@ -40,7 +45,8 @@ final class SettingsViewModel {
 
         self.settings = loaded
         self.apiKeysByProvider = Dictionary(uniqueKeysWithValues: ProviderType.allCases.map { provider in
-            (provider, EncryptedAPIKeyStore.read(for: provider) ?? "")
+            let value = persistToDisk ? (EncryptedAPIKeyStore.read(for: provider) ?? "") : ""
+            return (provider, value)
         })
     }
 
@@ -55,6 +61,8 @@ final class SettingsViewModel {
 
     func setAPIKey(_ value: String, for provider: ProviderType) {
         apiKeysByProvider[provider] = value
+        guard persistsToDisk else { return }
+
         if value.isEmpty {
             EncryptedAPIKeyStore.delete(for: provider)
         } else {

@@ -253,6 +253,13 @@ final class LicenseService {
         openURL(Constants.lemonPortalURL)
     }
 
+    func applyDebugState(_ debugState: LicenseState) {
+        revalidationTask?.cancel()
+        isLoading = false
+        lastError = nil
+        state = debugState
+    }
+
     // MARK: - Private
 
     private func startPeriodicRevalidation() {

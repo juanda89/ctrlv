@@ -30,7 +30,7 @@ final class TranslatorViewModel {
     private(set) var debugEvents: [String] = []
     private(set) var providerStatusByType: [ProviderType: ProviderRuntimeStatus] = [:]
 
-    let settingsVM = SettingsViewModel()
+    let settingsVM: SettingsViewModel
     weak var appDelegate: AppDelegate?
 
     private let accessibilityService = AccessibilityService()
@@ -46,8 +46,12 @@ final class TranslatorViewModel {
         return formatter
     }()
 
-    init(licenseService: LicenseService) {
+    init(
+        licenseService: LicenseService,
+        settingsViewModel: SettingsViewModel = SettingsViewModel()
+    ) {
         self.licenseService = licenseService
+        self.settingsVM = settingsViewModel
         setupHotkey()
     }
 
@@ -105,6 +109,10 @@ final class TranslatorViewModel {
         case .invalid, .networkError:
             providerStatusByType[provider] = .error(message: result.message)
         }
+    }
+
+    func setDebugProviderRuntimeStatus(_ status: ProviderRuntimeStatus, for provider: ProviderType) {
+        providerStatusByType[provider] = status
     }
 
     func performTranslation() async {

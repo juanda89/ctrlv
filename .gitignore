@@ -10,3 +10,5 @@ dist/
 updates/stable/*
 !updates/stable/appcast.xml
 *.dmg
+artifacts/menu-previews/
+artifacts/menu-diffs/
