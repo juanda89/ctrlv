@@ -12,6 +12,12 @@ final class TranslatorViewModel {
     private(set) var debugHotkeyTriggerCount = 0
     private(set) var debugLastTriggerSource = "none"
     private(set) var debugLastTriggerAt: Date?
+    private(set) var debugLastLicenseLatencyMs: Int?
+    private(set) var debugLastCaptureLatencyMs: Int?
+    private(set) var debugLastBackendLatencyMs: Int?
+    private(set) var debugLastOutputLatencyMs: Int?
+    private(set) var debugLastTotalLatencyMs: Int?
+    private(set) var debugLastModel = Constants.hostedModelName
     private(set) var debugLastStage = "Idle" {
         didSet { appendDebugEvent(debugLastStage) }
     }
@@ -77,7 +83,12 @@ final class TranslatorViewModel {
         }
 
         debugLastStage = "Flow started"
+        let totalStartedAt = Date()
+        resetDebugTimings()
+
+        let licenseStartedAt = Date()
         await licenseService.refreshLicenseStatus(forceNetwork: false)
+        debugLastLicenseLatencyMs = elapsedMs(since: licenseStartedAt)
         guard licenseService.state.canTranslate else {
             debugLastStage = "Blocked: license"
             lastError = TranslationError.trialExpired.localizedDescription
@@ -96,7 +107,9 @@ final class TranslatorViewModel {
             return
         }
 
+        let captureStartedAt = Date()
         let capture = await captureSelectedText()
+        debugLastCaptureLatencyMs = elapsedMs(since: captureStartedAt)
         guard let text = capture.text, !text.isEmpty else {
             debugLastStage = "Blocked: no selected text"
             lastError = TranslationError.noTextSelected.localizedDescription
@@ -126,6 +139,7 @@ final class TranslatorViewModel {
         )
         let startedAt = Date()
         let routing = resolveModelDecision(textLength: text.count, isTrialMode: isTrialMode)
+        debugLastModel = routing.model
 
         isTranslating = true
         lastError = nil
@@ -138,17 +152,25 @@ final class TranslatorViewModel {
         }
 
         do {
+            let backendStartedAt = Date()
             let translatedText = try await cloudProvider.translate(text: text, systemPrompt: prompt)
+            debugLastBackendLatencyMs = elapsedMs(since: backendStartedAt)
             if isTrialMode {
                 TrialTranslationService.recordTranslation()
             }
 
+            let outputStartedAt = Date()
             try await writeTranslatedText(
                 translatedText,
                 originalText: text,
                 autoPaste: settings.autoPaste,
                 isTrusted: capture.isTrusted,
                 usedClipboardCapture: capture.usedClipboardCapture
+            )
+            debugLastOutputLatencyMs = elapsedMs(since: outputStartedAt)
+            debugLastTotalLatencyMs = elapsedMs(since: totalStartedAt)
+            appendDebugEvent(
+                "Timings license=\(debugLastLicenseLatencyMs ?? 0)ms capture=\(debugLastCaptureLatencyMs ?? 0)ms backend=\(debugLastBackendLatencyMs ?? 0)ms output=\(debugLastOutputLatencyMs ?? 0)ms total=\(debugLastTotalLatencyMs ?? 0)ms model=\(debugLastModel)"
             )
 
             let latencyMs = Int(Date().timeIntervalSince(startedAt) * 1000)
@@ -335,6 +357,19 @@ final class TranslatorViewModel {
         if debugEvents.count > debugEventLimit {
             debugEvents.removeSubrange(debugEventLimit..<debugEvents.count)
         }
+    }
+
+    private func resetDebugTimings() {
+        debugLastLicenseLatencyMs = nil
+        debugLastCaptureLatencyMs = nil
+        debugLastBackendLatencyMs = nil
+        debugLastOutputLatencyMs = nil
+        debugLastTotalLatencyMs = nil
+        debugLastModel = Constants.hostedModelName
+    }
+
+    private func elapsedMs(since start: Date) -> Int {
+        Int(Date().timeIntervalSince(start) * 1000)
     }
 
     nonisolated static func shouldUseProgressivePaste(provider: ProviderType, autoPaste: Bool, isTrusted: Bool) -> Bool {

@@ -11,7 +11,6 @@ struct BehaviorSection: View {
     var body: some View {
         VStack(spacing: 8) {
             shortcutAndPasteCard
-            hostedEngineCard
             accessibilityCard
         }
         .onAppear {
@@ -61,35 +60,6 @@ struct BehaviorSection: View {
             ShortcutSettingsView(settingsVM: settingsVM) {
                 translatorVM.refreshHotkeyRegistration()
             }
-        }
-    }
-
-    private var hostedEngineCard: some View {
-        MenuCard {
-            HStack {
-                NativeSectionLabel(systemName: "sparkles", tint: .purple, title: "AI Engine")
-
-                Spacer()
-
-                statusPill(text: "Managed", tint: .blue)
-            }
-
-            NativeMenuDivider()
-
-            HStack(alignment: .center, spacing: 10) {
-                NativeSectionLabel(systemName: "network", tint: .blue, title: settingsVM.translationEngineLabel)
-                Spacer()
-                Text(settingsVM.translationModelLabel)
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(MenuTheme.subtleText)
-                    .lineLimit(1)
-                    .multilineTextAlignment(.trailing)
-            }
-
-            Text("ctrl+v handles model access and usage limits automatically. Users do not need to configure or manage API keys.")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(MenuTheme.subtleText)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -155,17 +125,5 @@ struct BehaviorSection: View {
     private func stopPolling() {
         pollingTimer?.invalidate()
         pollingTimer = nil
-    }
-
-    private func statusPill(text: String, tint: Color) -> some View {
-        Text(text)
-            .font(.caption.weight(.semibold))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 5)
-            .background(
-                Capsule(style: .continuous)
-                    .fill(MenuTheme.tintedSurface(tint))
-            )
     }
 }

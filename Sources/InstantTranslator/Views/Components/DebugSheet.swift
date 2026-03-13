@@ -66,6 +66,12 @@ struct DebugSheet: View {
                     debugRow("Last trigger", value: lastTriggerText)
                     debugRow("Last stage", value: translatorVM.debugLastStage)
                     debugRow("Last error", value: translatorVM.lastError ?? "none")
+                    debugRow("Model", value: translatorVM.debugLastModel)
+                    debugRow("License", value: latencyText(translatorVM.debugLastLicenseLatencyMs))
+                    debugRow("Capture", value: latencyText(translatorVM.debugLastCaptureLatencyMs))
+                    debugRow("Backend", value: latencyText(translatorVM.debugLastBackendLatencyMs))
+                    debugRow("Output", value: latencyText(translatorVM.debugLastOutputLatencyMs))
+                    debugRow("Total", value: latencyText(translatorVM.debugLastTotalLatencyMs))
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(4)
@@ -160,5 +166,10 @@ struct DebugSheet: View {
         formatter.timeStyle = .medium
         formatter.dateStyle = .none
         return formatter.string(from: date)
+    }
+
+    private func latencyText(_ value: Int?) -> String {
+        guard let value else { return "n/a" }
+        return "\(value) ms"
     }
 }
