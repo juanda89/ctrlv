@@ -32,6 +32,9 @@ final class TranslatorViewModel {
     private let licenseService: LicenseService
     private let deviceIdentityStore: DeviceIdentityStore
     private let debugEventLimit = 40
+    private let gatewayWarmupInterval: TimeInterval = 15 * 60
+    private var lastGatewayWarmupAt: Date?
+    private var gatewayWarmupTask: Task<Void, Never>?
 
     private static let debugTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -49,6 +52,7 @@ final class TranslatorViewModel {
         self.settingsVM = settingsViewModel
         self.deviceIdentityStore = deviceIdentityStore
         setupHotkey()
+        scheduleGatewayWarmupIfNeeded(reason: "startup")
     }
 
     func debugTriggerTranslationFromUI() {
@@ -217,6 +221,47 @@ final class TranslatorViewModel {
         )
     }
 
+    private func scheduleGatewayWarmupIfNeeded(reason: String) {
+        guard gatewayWarmupTask == nil else { return }
+        if let lastGatewayWarmupAt,
+           Date().timeIntervalSince(lastGatewayWarmupAt) < gatewayWarmupInterval {
+            return
+        }
+
+        let isTrialMode = {
+            if case .trial = licenseService.state { return true }
+            return false
+        }()
+
+        guard let cloudProvider = makeCloudProvider(isTrialMode: isTrialMode) else {
+            return
+        }
+
+        let settings = settingsVM.settings
+        let prompt = PromptBuilder.buildSystemPrompt(
+            targetLanguage: settings.targetLanguage.rawValue,
+            tone: settings.tone,
+            customTonePrompt: normalizedCustomPrompt(settings.customTonePrompt)
+        )
+
+        gatewayWarmupTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            do {
+                try await cloudProvider.warmup(systemPrompt: prompt)
+                await MainActor.run {
+                    self?.lastGatewayWarmupAt = Date()
+                    self?.debugLastStage = "Warmup ready (\(reason))"
+                    self?.gatewayWarmupTask = nil
+                }
+            } catch {
+                await MainActor.run {
+                    self?.appendDebugEvent("Warmup skipped: \(error.localizedDescription)")
+                    self?.gatewayWarmupTask = nil
+                }
+            }
+        }
+    }
+
     private func captureSelectedText() async -> (text: String?, isTrusted: Bool, usedClipboardCapture: Bool) {
         let isTrusted = AccessibilityService.isTrusted
         debugLastStage = "Accessibility trusted: \(isTrusted)"
@@ -243,13 +288,17 @@ final class TranslatorViewModel {
     }
 
     private func makeTranslationRequest(from text: String, settings: AppSettings) -> TranslationRequest {
-        let customPrompt = settings.customTonePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
         return TranslationRequest(
             text: text,
             targetLanguage: settings.targetLanguage,
             tone: settings.tone,
-            customTonePrompt: customPrompt.isEmpty ? nil : customPrompt
+            customTonePrompt: normalizedCustomPrompt(settings.customTonePrompt)
         )
+    }
+
+    private func normalizedCustomPrompt(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private func resolveModelDecision(textLength: Int, isTrialMode: Bool) -> ModelRoutingDecision {

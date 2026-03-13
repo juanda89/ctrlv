@@ -76,12 +76,42 @@ final class CtrlVCloudProviderTests: XCTestCase {
             XCTFail("Unexpected error: \(error)")
         }
     }
+
+    func test_warmup_sendsWarmupPayload_whenRequested() async throws {
+        CloudProviderURLProtocolStub.requestHandler = { request in
+            let body = try XCTUnwrap(request.httpBody ?? requestBody(from: request.httpBodyStream))
+            let payload = try JSONDecoder().decode(TestGatewayWarmupPayload.self, from: body)
+            XCTAssertEqual(payload.text, "hola")
+            XCTAssertEqual(payload.installID, "install-1")
+            XCTAssertTrue(payload.warmupOnly)
+            return makeCloudResponse(
+                statusCode: 200,
+                json: #"{"warmed":true,"model":"moonshotai/kimi-k2.5"}"#
+            )
+        }
+
+        let provider = CtrlVCloudProvider(
+            endpoint: URL(string: "https://example.com/translate")!,
+            installID: "install-1",
+            licenseKey: "license-1",
+            licenseInstanceID: "instance-1",
+            session: session
+        )
+
+        try await provider.warmup(systemPrompt: "Translate to English")
+    }
 }
 
 private struct TestGatewayPayload: Decodable {
     let installID: String
     let licenseKey: String?
     let licenseInstanceID: String?
+}
+
+private struct TestGatewayWarmupPayload: Decodable {
+    let text: String
+    let installID: String
+    let warmupOnly: Bool
 }
 
 private final class CloudProviderURLProtocolStub: URLProtocol {

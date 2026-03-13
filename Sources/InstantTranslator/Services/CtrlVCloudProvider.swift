@@ -22,19 +22,40 @@ struct CtrlVCloudProvider: TranslationProvider {
     }
 
     func translate(text: String, systemPrompt: String) async throws -> String {
-        var request = URLRequest(url: endpoint)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.httpBody = try JSONEncoder().encode(
-            GatewayTranslationRequest(
+        let data = try await performRequest(
+            payload: GatewayTranslationRequest(
                 text: text,
                 systemPrompt: systemPrompt,
                 installID: installID,
                 licenseKey: normalized(licenseKey),
-                licenseInstanceID: normalized(licenseInstanceID)
+                licenseInstanceID: normalized(licenseInstanceID),
+                warmupOnly: false
             )
         )
+
+        let decoded = try JSONDecoder().decode(GatewayTranslationResponse.self, from: data)
+        return decoded.translatedText
+    }
+
+    func warmup(systemPrompt: String) async throws {
+        _ = try await performRequest(
+            payload: GatewayTranslationRequest(
+                text: "hola",
+                systemPrompt: systemPrompt,
+                installID: installID,
+                licenseKey: nil,
+                licenseInstanceID: nil,
+                warmupOnly: true
+            )
+        )
+    }
+
+    private func performRequest(payload: GatewayTranslationRequest) async throws -> Data {
+        var request = URLRequest(url: endpoint)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        request.httpBody = try JSONEncoder().encode(payload)
 
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -53,9 +74,7 @@ struct CtrlVCloudProvider: TranslationProvider {
                 message: body?.error ?? "Translation service unavailable"
             )
         }
-
-        let decoded = try JSONDecoder().decode(GatewayTranslationResponse.self, from: data)
-        return decoded.translatedText
+        return data
     }
 
     private func normalized(_ value: String?) -> String? {
@@ -72,6 +91,7 @@ private struct GatewayTranslationRequest: Encodable {
     let installID: String
     let licenseKey: String?
     let licenseInstanceID: String?
+    let warmupOnly: Bool
 }
 
 private struct GatewayTranslationResponse: Decodable {

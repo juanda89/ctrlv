@@ -1,5 +1,7 @@
 const defaultBaseURL = "https://openrouter.ai/api/v1";
 const defaultModel = "moonshotai/kimi-k2.5";
+const minCompletionTokens = 96;
+const maxCompletionTokens = 4096;
 
 export type OpenRouterResult = {
   translatedText: string;
@@ -26,7 +28,12 @@ export async function translateWithOpenRouter(text: string, systemPrompt: string
     },
     body: JSON.stringify({
       model,
-      temperature: 0.2,
+      temperature: 0.1,
+      max_tokens: estimateMaxTokens(text),
+      reasoning: {
+        effort: "none",
+        exclude: true,
+      },
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: text },
@@ -61,6 +68,11 @@ export class OpenRouterRateLimitError extends Error {
     this.name = "OpenRouterRateLimitError";
     this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+function estimateMaxTokens(text: string): number {
+  const estimated = Math.ceil(text.length / 3);
+  return Math.max(minCompletionTokens, Math.min(maxCompletionTokens, estimated));
 }
 
 function extractContent(payload: unknown): string | null {

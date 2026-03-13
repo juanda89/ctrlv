@@ -18,6 +18,7 @@ type TranslateRequest = {
   installID: string;
   licenseKey?: string | null;
   licenseInstanceID?: string | null;
+  warmupOnly?: boolean;
 };
 
 type AccessPlan = {
@@ -37,6 +38,11 @@ Deno.serve(async (req) => {
     const parsed = parseRequest(body);
     if (!parsed.ok) {
       return json({ error: parsed.error }, 400);
+    }
+
+    if (parsed.value.warmupOnly) {
+      const result = await translateWithOpenRouter(parsed.value.text, parsed.value.systemPrompt);
+      return json({ warmed: true, model: result.model });
     }
 
     const client = createServiceClient();
@@ -97,6 +103,7 @@ function parseRequest(body: unknown): { ok: true; value: TranslateRequest } | { 
       installID,
       licenseKey: readOptionalString(body, "licenseKey"),
       licenseInstanceID: readOptionalString(body, "licenseInstanceID"),
+      warmupOnly: readOptionalBoolean(body, "warmupOnly") ?? false,
     },
   };
 }
@@ -300,4 +307,9 @@ function readOptionalString(body: object, key: string): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+function readOptionalBoolean(body: object, key: string): boolean | null {
+  const value = body[key as keyof typeof body];
+  return typeof value === "boolean" ? value : null;
 }

@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+WARMUP=0
+if [[ "${1:-}" == "--warmup" ]]; then
+  WARMUP=1
+  shift
+fi
+
 ENDPOINT="${1:-https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate}"
 ITERATIONS="${2:-10}"
 TEXT="${3:-hola amiguita}"
@@ -62,7 +68,22 @@ percentile() {
 echo "endpoint=$ENDPOINT"
 echo "iterations=$ITERATIONS"
 echo "text_length=${#TEXT}"
+echo "warmup=$WARMUP"
 echo
+
+if [[ "$WARMUP" == "1" ]]; then
+  WARMUP_PAYLOAD=$(jq -n \
+    --arg text "hola" \
+    --arg systemPrompt "$PROMPT" \
+    --arg installID "$INSTALL_PREFIX-warmup" \
+    '{text:$text, systemPrompt:$systemPrompt, installID:$installID, warmupOnly:true}')
+
+  curl -sS \
+    -o /dev/null \
+    -X POST "$ENDPOINT" \
+    -H "Content-Type: application/json" \
+    -d "$WARMUP_PAYLOAD"
+fi
 
 for i in $(seq 1 "$ITERATIONS"); do
   INSTALL_ID="$INSTALL_PREFIX-$i"
