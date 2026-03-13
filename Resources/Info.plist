@@ -19,7 +19,7 @@
 	<key>CFBundleVersion</key>
 	<string>10</string>
 	<key>CtrlVFeedbackURL</key>
-	<string>https://control-v.info/feedback</string>
+	<string>mailto:info@control-v.info?subject=ctrl%2Bv%20Feedback</string>
 	<key>CtrlVManualUpdateURL</key>
 	<string>https://control-v.info/download.html?autostart=1</string>
 	<key>CtrlVTranslationAPIURL</key>

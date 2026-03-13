@@ -57,17 +57,6 @@ struct StatusSection: View {
             Text("Last validation: \(validationText(for: validatedAt))")
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(MenuTheme.subtleText)
-
-            HStack {
-                Spacer()
-
-                Button("Upgrade") {
-                    prepareLicenseSheet()
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.small)
-                .tint(.green)
-            }
         }
         .background(cardTint(isOfflineGrace ? .orange : .green))
     }
