@@ -18,6 +18,10 @@ final class LicenseService {
         store.read()?.licenseKey
     }
 
+    var storedInstanceID: String? {
+        store.read()?.instanceID
+    }
+
     private let installDateKey = "installDate"
     private let legacyAuthEmailKey = "subscriptionAuthEmail"
     private let legacySessionTokenKey = "subscriptionSessionToken"

@@ -141,9 +141,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         translatorViewModel.settingsVM.settings.tone = .original
         translatorViewModel.settingsVM.settings.customTonePrompt = ""
         translatorViewModel.settingsVM.settings.autoPaste = true
-        translatorViewModel.settingsVM.settings.selectedProvider = .openAI
-        translatorViewModel.settingsVM.setAPIKey("sk-preview-openai-key", for: .openAI)
-        translatorViewModel.setDebugProviderRuntimeStatus(.ok(message: "OK"), for: .openAI)
 
         switch scenario {
         case .current:

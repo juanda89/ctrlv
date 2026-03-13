@@ -17,11 +17,7 @@ final class TranslationService {
         self.provider = provider
     }
 
-    func translate(_ request: TranslationRequest, apiKey: String) async throws -> TranslationResponse {
-        guard !apiKey.isEmpty else {
-            throw TranslationError.apiKeyMissing
-        }
-
+    func translate(_ request: TranslationRequest) async throws -> TranslationResponse {
         let systemPrompt = PromptBuilder.buildSystemPrompt(
             targetLanguage: request.targetLanguage.rawValue,
             tone: request.tone,

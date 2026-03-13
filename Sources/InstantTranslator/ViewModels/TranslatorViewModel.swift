@@ -4,18 +4,6 @@ import os
 
 private let log = Logger(subsystem: "com.instanttranslator.app", category: "translator")
 
-enum ProviderRuntimeStatus: Equatable {
-    case idle
-    case ok(message: String)
-    case rateLimited(message: String, retryAfter: Int?)
-    case error(message: String)
-}
-
-private struct TranslationRunResult {
-    let translatedText: String
-    let progressivePasteUsed: Bool
-}
-
 @MainActor
 @Observable
 final class TranslatorViewModel {
@@ -28,7 +16,6 @@ final class TranslatorViewModel {
         didSet { appendDebugEvent(debugLastStage) }
     }
     private(set) var debugEvents: [String] = []
-    private(set) var providerStatusByType: [ProviderType: ProviderRuntimeStatus] = [:]
 
     let settingsVM: SettingsViewModel
     weak var appDelegate: AppDelegate?
@@ -37,8 +24,9 @@ final class TranslatorViewModel {
     private let clipboardService = ClipboardService()
     private let hotkeyService = HotkeyService()
     private let licenseService: LicenseService
-    private var providersForcedToFast: Set<ProviderType> = []
+    private let deviceIdentityStore: DeviceIdentityStore
     private let debugEventLimit = 40
+
     private static let debugTimeFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .none
@@ -48,18 +36,13 @@ final class TranslatorViewModel {
 
     init(
         licenseService: LicenseService,
-        settingsViewModel: SettingsViewModel = SettingsViewModel()
+        settingsViewModel: SettingsViewModel = SettingsViewModel(),
+        deviceIdentityStore: DeviceIdentityStore = DeviceIdentityStore()
     ) {
         self.licenseService = licenseService
         self.settingsVM = settingsViewModel
+        self.deviceIdentityStore = deviceIdentityStore
         setupHotkey()
-    }
-
-    private func setupHotkey() {
-        hotkeyService.onTrigger = { [weak self] in
-            self?.triggerTranslation(source: "hotkey")
-        }
-        refreshHotkeyRegistration()
     }
 
     func debugTriggerTranslationFromUI() {
@@ -72,15 +55,14 @@ final class TranslatorViewModel {
         if settingsVM.settings.shortcutModifiers != UInt(modifiers) {
             settingsVM.settings.shortcutModifiers = UInt(modifiers)
         }
-        let shortcut = settingsVM.shortcutDisplay
 
         hotkeyService.register(
             carbonKeyCode: keyCode,
             carbonModifiers: modifiers,
-            shortcutDisplay: shortcut
+            shortcutDisplay: settingsVM.shortcutDisplay
         )
-        debugLastStage = "Hotkey registered (\(shortcut))"
-        log.info("Hotkey registered: \(shortcut, privacy: .public)")
+        debugLastStage = "Hotkey registered (\(settingsVM.shortcutDisplay))"
+        log.info("Hotkey registered: \(self.settingsVM.shortcutDisplay, privacy: .public)")
     }
 
     func debugPreviewTranslationIsland() {
@@ -88,122 +70,66 @@ final class TranslatorViewModel {
         notifyAppDelegate { $0.debugShowTranslationIslandPreview() }
     }
 
-    func providerRuntimeStatus(for provider: ProviderType) -> ProviderRuntimeStatus {
-        providerStatusByType[provider] ?? .idle
-    }
-
-    func clearProviderRuntimeStatus(for provider: ProviderType) {
-        providerStatusByType[provider] = .idle
-    }
-
-    func updateProviderRuntimeStatus(from result: APIKeyValidationResult, for provider: ProviderType) {
-        switch result.outcome {
-        case .valid:
-            providerStatusByType[provider] = .ok(message: "OK")
-        case .rateLimited:
-            let retryText = result.retryAfter.map { "Retry in \($0)s." } ?? "Try again shortly."
-            providerStatusByType[provider] = .rateLimited(
-                message: "\(provider.rawValue) rate limited. \(retryText)",
-                retryAfter: result.retryAfter
-            )
-        case .invalid, .networkError:
-            providerStatusByType[provider] = .error(message: result.message)
-        }
-    }
-
-    func setDebugProviderRuntimeStatus(_ status: ProviderRuntimeStatus, for provider: ProviderType) {
-        providerStatusByType[provider] = status
-    }
-
     func performTranslation() async {
         guard !isTranslating else {
             debugLastStage = "Skipped: already translating"
-            log.warning("Already translating, skipping")
             return
         }
+
         debugLastStage = "Flow started"
-
         await licenseService.refreshLicenseStatus(forceNetwork: false)
-
-        // 1. Check license
         guard licenseService.state.canTranslate else {
             debugLastStage = "Blocked: license"
-            log.error("License check failed: \(String(describing: self.licenseService.state))")
             lastError = TranslationError.trialExpired.localizedDescription
             notifyAppDelegate { $0.flashMenuBarIcon() }
             return
         }
-        debugLastStage = "License OK"
-        log.info("License OK")
 
-        // 2. Determine provider + API key (trial mode uses bundled Gemini key)
-        let selectedProvider = settingsVM.settings.selectedProvider
-        let userApiKey = settingsVM.apiKey(for: selectedProvider)
-        let isTrialMode: Bool
-        let apiKey: String
-        let effectiveProvider: ProviderType
+        let isTrialMode = {
+            if case .trial = licenseService.state { return true }
+            return false
+        }()
 
-        if !userApiKey.isEmpty {
-            // User has their own key — use it directly, no trial limits
-            isTrialMode = false
-            apiKey = userApiKey
-            effectiveProvider = selectedProvider
-        } else if case .trial = licenseService.state {
-            // Trial user without own key — use bundled Gemini
-            isTrialMode = true
-            apiKey = BundledTrialKey.geminiKey()
-            effectiveProvider = .gemini
-        } else {
-            debugLastStage = "Blocked: missing API key"
-            log.error("API key is empty")
-            lastError = TranslationError.apiKeyMissing.localizedDescription
-            providerStatusByType[selectedProvider] = .error(message: TranslationError.apiKeyMissing.localizedDescription)
+        guard let cloudProvider = makeCloudProvider(isTrialMode: isTrialMode) else {
+            debugLastStage = "Blocked: backend not configured"
+            lastError = TranslationError.backendNotConfigured.localizedDescription
             return
         }
-        debugLastStage = isTrialMode ? "Trial mode (bundled Gemini)" : "API key OK"
-        log.info("Provider: \(effectiveProvider.rawValue, privacy: .public), trial: \(isTrialMode)")
 
-        // 3. Get selected text
-        let isTrusted = AccessibilityService.isTrusted
-        debugLastStage = "Accessibility trusted: \(isTrusted)"
-        log.info("Accessibility trusted: \(isTrusted)")
-
-        var sourceText: String?
-        var didUseClipboardCapture = false
-
-        if isTrusted {
-            sourceText = accessibilityService.getSelectedText()
-            debugLastStage = "AX read result: \(selectionState(sourceText))"
-            log.info("AX selected text: \(sourceText ?? "<nil>")")
-        }
-
-        // Fallback: clipboard simulation
-        if sourceText == nil || sourceText?.isEmpty == true {
-            debugLastStage = "Trying clipboard fallback"
-            log.info("AX failed or empty, trying clipboard fallback...")
-            didUseClipboardCapture = true
-            clipboardService.saveAndClear()
-            clipboardService.simulateCopy()
-            try? await Task.sleep(nanoseconds: Constants.copyWaitDelay)
-            sourceText = clipboardService.readText()
-            debugLastStage = "Clipboard read result: \(selectionState(sourceText))"
-            log.info("Clipboard text: \(sourceText ?? "<nil>")")
-        }
-
-        guard let text = sourceText, !text.isEmpty else {
+        let capture = await captureSelectedText()
+        guard let text = capture.text, !text.isEmpty else {
             debugLastStage = "Blocked: no selected text"
-            log.error("No text captured from any method")
             lastError = TranslationError.noTextSelected.localizedDescription
             return
         }
 
-        debugLastStage = "Text captured (\(text.count) chars)"
-        log.info("Translating \(text.count) chars to \(self.settingsVM.settings.targetLanguage.rawValue) [\(self.settingsVM.settings.tone.rawValue)]")
+        if isTrialMode {
+            guard TrialTranslationService.isTextWithinLimit(text) else {
+                let maxWords = TrialTranslationService.maxCharacters / 6
+                debugLastStage = "Blocked: trial text too long"
+                lastError = TranslationError.trialTextTooLong(maxWords: maxWords).localizedDescription
+                return
+            }
+            guard TrialTranslationService.canTranslate() else {
+                debugLastStage = "Blocked: trial quota exceeded"
+                lastError = TranslationError.trialQuotaExceeded(remaining: 0).localizedDescription
+                return
+            }
+        }
 
-        // 4. Translate
+        let settings = settingsVM.settings
+        let request = makeTranslationRequest(from: text, settings: settings)
+        let prompt = PromptBuilder.buildSystemPrompt(
+            targetLanguage: request.targetLanguage.rawValue,
+            tone: request.tone,
+            customTonePrompt: request.customTonePrompt
+        )
+        let startedAt = Date()
+        let routing = resolveModelDecision(textLength: text.count, isTrialMode: isTrialMode)
+
         isTranslating = true
         lastError = nil
-        debugLastStage = "Calling translation provider"
+        debugLastStage = "Calling ctrl+v Cloud"
         notifyAppDelegate { $0.showTranslatingIcon() }
 
         defer {
@@ -211,317 +137,166 @@ final class TranslatorViewModel {
             notifyAppDelegate { $0.restoreDefaultIcon() }
         }
 
-        // Trial quota checks
-        if isTrialMode {
-            guard TrialTranslationService.isTextWithinLimit(text) else {
-                let maxWords = TrialTranslationService.maxCharacters / 6
-                debugLastStage = "Blocked: trial text too long"
-                log.error("Trial text exceeds limit: \(text.count) chars")
-                lastError = TranslationError.trialTextTooLong(maxWords: maxWords).localizedDescription
-                return
+        do {
+            let translatedText = try await cloudProvider.translate(text: text, systemPrompt: prompt)
+            if isTrialMode {
+                TrialTranslationService.recordTranslation()
             }
-            guard TrialTranslationService.canTranslate() else {
-                debugLastStage = "Blocked: trial quota exceeded"
-                log.error("Trial daily quota exceeded")
-                lastError = TranslationError.trialQuotaExceeded(remaining: 0).localizedDescription
-                return
-            }
+
+            try await writeTranslatedText(
+                translatedText,
+                originalText: text,
+                autoPaste: settings.autoPaste,
+                isTrusted: capture.isTrusted,
+                usedClipboardCapture: capture.usedClipboardCapture
+            )
+
+            let latencyMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            TelemetryService.trackTranslationCompleted(
+                provider: .ctrlVCloud,
+                targetLanguage: settings.targetLanguage,
+                tone: settings.tone,
+                method: outputMethod(autoPaste: settings.autoPaste, isTrusted: capture.isTrusted),
+                textLength: text.count,
+                model: routing.model,
+                modelTier: routing.tier,
+                latencyMs: latencyMs,
+                progressivePasteUsed: false
+            )
+        } catch let error as TranslationError {
+            handleTranslationError(error)
+        } catch {
+            debugLastStage = "Error: \(error.localizedDescription)"
+            lastError = error.localizedDescription
+            TelemetryService.trackTranslationFailed(provider: .ctrlVCloud, errorType: String(describing: error))
+        }
+    }
+
+    private func setupHotkey() {
+        hotkeyService.onTrigger = { [weak self] in
+            self?.triggerTranslation(source: "hotkey")
+        }
+        refreshHotkeyRegistration()
+    }
+
+    private func makeCloudProvider(isTrialMode: Bool) -> CtrlVCloudProvider? {
+        guard let endpoint = Constants.translationAPIURL else {
+            return nil
         }
 
-        let settings = settingsVM.settings
+        let licenseKey = isTrialMode ? nil : licenseService.storedLicenseKey
+        let instanceID = isTrialMode ? nil : licenseService.storedInstanceID
+
+        return CtrlVCloudProvider(
+            endpoint: endpoint,
+            installID: deviceIdentityStore.currentInstallID(),
+            licenseKey: licenseKey,
+            licenseInstanceID: instanceID
+        )
+    }
+
+    private func captureSelectedText() async -> (text: String?, isTrusted: Bool, usedClipboardCapture: Bool) {
+        let isTrusted = AccessibilityService.isTrusted
+        debugLastStage = "Accessibility trusted: \(isTrusted)"
+
+        var sourceText: String?
+        var usedClipboardCapture = false
+
+        if isTrusted {
+            sourceText = accessibilityService.getSelectedText()
+            debugLastStage = "AX read result: \(selectionState(sourceText))"
+        }
+
+        if sourceText == nil || sourceText?.isEmpty == true {
+            debugLastStage = "Trying clipboard fallback"
+            usedClipboardCapture = true
+            clipboardService.saveAndClear()
+            clipboardService.simulateCopy()
+            try? await Task.sleep(nanoseconds: Constants.copyWaitDelay)
+            sourceText = clipboardService.readText()
+            debugLastStage = "Clipboard read result: \(selectionState(sourceText))"
+        }
+
+        return (sourceText, isTrusted, usedClipboardCapture)
+    }
+
+    private func makeTranslationRequest(from text: String, settings: AppSettings) -> TranslationRequest {
         let customPrompt = settings.customTonePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
-        let request = TranslationRequest(
+        return TranslationRequest(
             text: text,
             targetLanguage: settings.targetLanguage,
             tone: settings.tone,
             customTonePrompt: customPrompt.isEmpty ? nil : customPrompt
         )
-        let systemPrompt = PromptBuilder.buildSystemPrompt(
-            targetLanguage: request.targetLanguage.rawValue,
-            tone: request.tone,
-            customTonePrompt: request.customTonePrompt
-        )
-        let translationStartedAt = Date()
-        var modelDecision = resolveModelDecision(
-            provider: effectiveProvider,
-            textLength: text.count,
-            isTrialMode: isTrialMode
-        )
-
-        do {
-            let runResult: TranslationRunResult
-            do {
-                runResult = try await runTranslationAttempt(
-                    providerType: effectiveProvider,
-                    decision: modelDecision,
-                    apiKey: apiKey,
-                    text: text,
-                    systemPrompt: systemPrompt,
-                    allowProgressivePaste: Self.shouldUseProgressivePaste(
-                        provider: effectiveProvider,
-                        autoPaste: settings.autoPaste,
-                        isTrusted: isTrusted
-                    )
-                )
-            } catch {
-                if modelDecision.tier == .robust,
-                   shouldFallbackToFastModel(after: error, decision: modelDecision, isTrialMode: isTrialMode) {
-                    providersForcedToFast.insert(effectiveProvider)
-                    modelDecision = ModelRouter.route(
-                        provider: effectiveProvider,
-                        textLength: text.count,
-                        isTrialMode: isTrialMode,
-                        forceFast: true
-                    )
-                    debugLastStage = "Retrying with fast model (\(modelDecision.model))"
-                    runResult = try await runTranslationAttempt(
-                        providerType: effectiveProvider,
-                        decision: modelDecision,
-                        apiKey: apiKey,
-                        text: text,
-                        systemPrompt: systemPrompt,
-                        allowProgressivePaste: Self.shouldUseProgressivePaste(
-                            provider: effectiveProvider,
-                            autoPaste: settings.autoPaste,
-                            isTrusted: isTrusted
-                        )
-                    )
-                } else {
-                    throw error
-                }
-            }
-
-            let translatedText = runResult.translatedText
-            debugLastStage = "Translation received (\(translatedText.count) chars)"
-            log.info("Translation received: \(translatedText.prefix(50))...")
-            providerStatusByType[effectiveProvider] = .ok(message: "OK")
-
-            if isTrialMode {
-                TrialTranslationService.recordTranslation()
-            }
-
-            // 5. Output
-            var outputMethod = "clipboard"
-            if settings.autoPaste {
-                if runResult.progressivePasteUsed {
-                    outputMethod = "AX-stream"
-                    debugLastStage = "Output: replaced progressively via AX"
-                    restoreClipboardAfterAXIfNeeded(usedClipboardCapture: didUseClipboardCapture)
-                    notifyAppDelegate { $0.flashMenuBarIcon() }
-                } else if isTrusted {
-                    let axDidSet = accessibilityService.replaceSelectedText(with: translatedText)
-                    if axDidSet {
-                        try? await Task.sleep(nanoseconds: Constants.axVerificationDelay)
-                        let afterAX = accessibilityService.getSelectedText()
-                        let originalNormalized = text.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let translatedNormalized = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
-                        let afterNormalized = afterAX?.trimmingCharacters(in: .whitespacesAndNewlines)
-
-                        if let afterNormalized, afterNormalized == originalNormalized {
-                            debugLastStage = "AX replace reported success but selection unchanged"
-                            log.warning("AX replace returned success but selected text is unchanged")
-                        } else {
-                            outputMethod = "AX"
-                            if afterNormalized == translatedNormalized {
-                                debugLastStage = "Output: replaced via AX (verified)"
-                            } else {
-                                debugLastStage = "Output: replaced via AX (unverified)"
-                            }
-                            log.info("Replaced via AX")
-                            restoreClipboardAfterAXIfNeeded(usedClipboardCapture: didUseClipboardCapture)
-                            notifyAppDelegate { $0.flashMenuBarIcon() }
-                        }
-                    } else {
-                        debugLastStage = "AX replace failed"
-                    }
-                }
-
-                if outputMethod != "AX" && outputMethod != "AX-stream" {
-                    outputMethod = "paste"
-                    debugLastStage = "Output: pasted via clipboard"
-                    log.info("AX replace failed, using clipboard paste")
-                    clipboardService.writeText(translatedText)
-                    clipboardService.simulatePaste()
-                    notifyAppDelegate { $0.flashMenuBarIcon() }
-
-                    Task {
-                        try? await Task.sleep(nanoseconds: Constants.clipboardRestoreDelay)
-                        clipboardService.restoreSaved()
-                    }
-                }
-            } else {
-                outputMethod = "copy"
-                debugLastStage = "Output: copied to clipboard"
-                clipboardService.writeText(translatedText)
-                log.info("Copied to clipboard (auto-paste OFF)")
-                notifyAppDelegate { $0.flashMenuBarIcon() }
-            }
-
-            let latencyMs = Int(Date().timeIntervalSince(translationStartedAt) * 1000)
-            TelemetryService.trackTranslationCompleted(
-                provider: effectiveProvider, targetLanguage: settings.targetLanguage,
-                tone: settings.tone, method: outputMethod, textLength: text.count,
-                model: modelDecision.model, modelTier: modelDecision.tier, latencyMs: latencyMs,
-                progressivePasteUsed: runResult.progressivePasteUsed
-            )
-        } catch {
-            if case let TranslationError.rateLimited(provider, retryAfter) = error {
-                let retryText = retryAfter.map { "Retry in \($0)s." } ?? "Try again shortly."
-                let message = "\(provider.rawValue) rate limited. \(retryText)"
-                debugLastStage = "Error: \(provider.rawValue) 429"
-                log.error("Translation rate limited for \(provider.rawValue, privacy: .public)")
-                lastError = message
-                providerStatusByType[provider] = .rateLimited(message: message, retryAfter: retryAfter)
-                TelemetryService.trackTranslationRateLimited(provider: provider, retryAfter: retryAfter)
-                return
-            }
-
-            debugLastStage = "Error: \(error.localizedDescription)"
-            log.error("Translation error: \(error.localizedDescription)")
-            lastError = error.localizedDescription
-            providerStatusByType[effectiveProvider] = .error(message: error.localizedDescription)
-            TelemetryService.trackTranslationFailed(provider: effectiveProvider, errorType: String(describing: error))
-        }
     }
 
-    // MARK: - Private
-
-    private func notifyAppDelegate(_ action: (AppDelegate) -> Void) {
-        guard let appDelegate else {
-            log.warning("appDelegate is nil, skipping UI feedback")
-            return
-        }
-        action(appDelegate)
-    }
-
-    nonisolated static func shouldUseProgressivePaste(provider: ProviderType, autoPaste: Bool, isTrusted: Bool) -> Bool {
-        false
-    }
-
-    private func resolveModelDecision(provider: ProviderType, textLength: Int, isTrialMode: Bool) -> ModelRoutingDecision {
-        let forceFast = !isTrialMode && providersForcedToFast.contains(provider)
-        return ModelRouter.route(
-            provider: provider,
+    private func resolveModelDecision(textLength: Int, isTrialMode: Bool) -> ModelRoutingDecision {
+        ModelRouter.route(
+            provider: .ctrlVCloud,
             textLength: textLength,
             isTrialMode: isTrialMode,
-            forceFast: forceFast
+            forceFast: false
         )
     }
 
-    private func makeProvider(providerType: ProviderType, apiKey: String, model: String) -> TranslationProvider {
-        switch providerType {
-        case .claude:
-            return ClaudeProvider(apiKey: apiKey, model: model)
-        case .openAI:
-            return OpenAIProvider(apiKey: apiKey, model: model)
-        case .gemini:
-            return GeminiProvider(apiKey: apiKey, model: model)
+    private func writeTranslatedText(
+        _ translatedText: String,
+        originalText: String,
+        autoPaste: Bool,
+        isTrusted: Bool,
+        usedClipboardCapture: Bool
+    ) async throws {
+        if !autoPaste {
+            clipboardService.writeText(translatedText)
+            debugLastStage = "Output: copied to clipboard"
+            notifyAppDelegate { $0.flashMenuBarIcon() }
+            return
         }
-    }
 
-    private func shouldFallbackToFastModel(
-        after error: Error,
-        decision: ModelRoutingDecision,
-        isTrialMode: Bool
-    ) -> Bool {
-        guard !isTrialMode, decision.tier == .robust else { return false }
-        guard case let TranslationError.apiError(statusCode, message) = error else { return false }
-        guard statusCode == 400 || statusCode == 404 else { return false }
-        if statusCode == 404 { return true }
-        let lower = message.lowercased()
-        return lower.contains("model")
-            || lower.contains("not found")
-            || lower.contains("does not exist")
-            || lower.contains("unsupported")
-    }
+        if isTrusted, accessibilityService.replaceSelectedText(with: translatedText) {
+            try? await Task.sleep(nanoseconds: Constants.axVerificationDelay)
+            let current = accessibilityService.getSelectedText()?.trimmingCharacters(in: .whitespacesAndNewlines)
+            let original = originalText.trimmingCharacters(in: .whitespacesAndNewlines)
 
-    private func runTranslationAttempt(
-        providerType: ProviderType,
-        decision: ModelRoutingDecision,
-        apiKey: String,
-        text: String,
-        systemPrompt: String,
-        allowProgressivePaste: Bool
-    ) async throws -> TranslationRunResult {
-        let provider = makeProvider(providerType: providerType, apiKey: apiKey, model: decision.model)
-        let shouldStream = allowProgressivePaste && providerType == .openAI
-
-        if shouldStream, let streamProvider = provider as? any StreamingTranslationProvider {
-            guard let session = accessibilityService.beginProgressiveInsertionSession() else {
-                TelemetryService.trackProgressivePasteFailed(
-                    provider: providerType,
-                    model: decision.model,
-                    reason: .axInitFailed
-                )
-                let translated = try await provider.translate(text: text, systemPrompt: systemPrompt)
-                return TranslationRunResult(translatedText: translated, progressivePasteUsed: false)
-            }
-
-            do {
-                return try await runProgressiveStreaming(
-                    streamProvider: streamProvider,
-                    session: session,
-                    providerType: providerType,
-                    model: decision.model,
-                    text: text,
-                    systemPrompt: systemPrompt
-                )
-            } catch {
-                TelemetryService.trackProgressivePasteFailed(
-                    provider: providerType,
-                    model: decision.model,
-                    reason: .streamFailed
-                )
-                let translated = try await provider.translate(text: text, systemPrompt: systemPrompt)
-                return TranslationRunResult(translatedText: translated, progressivePasteUsed: false)
+            if current != original {
+                debugLastStage = "Output: replaced via AX"
+                restoreClipboardAfterAXIfNeeded(usedClipboardCapture: usedClipboardCapture)
+                notifyAppDelegate { $0.flashMenuBarIcon() }
+                return
             }
         }
 
-        let translated = try await provider.translate(text: text, systemPrompt: systemPrompt)
-        return TranslationRunResult(translatedText: translated, progressivePasteUsed: false)
+        clipboardService.writeText(translatedText)
+        clipboardService.simulatePaste()
+        debugLastStage = "Output: pasted via clipboard"
+        notifyAppDelegate { $0.flashMenuBarIcon() }
+
+        Task {
+            try? await Task.sleep(nanoseconds: Constants.clipboardRestoreDelay)
+            clipboardService.restoreSaved()
+        }
     }
 
-    private func runProgressiveStreaming(
-        streamProvider: any StreamingTranslationProvider,
-        session: ProgressiveInsertionSession,
-        providerType: ProviderType,
-        model: String,
-        text: String,
-        systemPrompt: String
-    ) async throws -> TranslationRunResult {
-        var streamText = ""
-        var assembler = WordFlushAssembler(forceFlushInterval: 0.12)
-        var progressiveFailure: ProgressiveInsertionFailureReason?
-
-        for try await chunk in streamProvider.translateStream(text: text, systemPrompt: systemPrompt) {
-            streamText += chunk
-
-            guard progressiveFailure == nil else { continue }
-            if let partial = assembler.append(chunk), let reason = session.apply(text: partial) {
-                progressiveFailure = reason
-                TelemetryService.trackProgressivePasteFailed(
-                    provider: providerType,
-                    model: model,
-                    reason: reason
-                )
-            }
+    private func outputMethod(autoPaste: Bool, isTrusted: Bool) -> String {
+        if !autoPaste {
+            return "copy"
         }
+        return isTrusted ? "AX" : "paste"
+    }
 
-        if progressiveFailure == nil,
-           let finalPartial = assembler.forceFlush(),
-           let reason = session.apply(text: finalPartial) {
-            progressiveFailure = reason
-            TelemetryService.trackProgressivePasteFailed(
-                provider: providerType,
-                model: model,
-                reason: reason
-            )
+    private func handleTranslationError(_ error: TranslationError) {
+        switch error {
+        case .rateLimited(_, let retryAfter):
+            let retryText = retryAfter.map { "Retry in \($0)s." } ?? "Try again shortly."
+            let message = "ctrl+v Cloud rate limited. \(retryText)"
+            debugLastStage = "Error: 429"
+            lastError = message
+            TelemetryService.trackTranslationRateLimited(provider: .ctrlVCloud, retryAfter: retryAfter)
+        default:
+            debugLastStage = "Error: \(error.localizedDescription)"
+            lastError = error.localizedDescription
+            TelemetryService.trackTranslationFailed(provider: .ctrlVCloud, errorType: String(describing: error))
         }
-
-        return TranslationRunResult(
-            translatedText: streamText.trimmingCharacters(in: .whitespacesAndNewlines),
-            progressivePasteUsed: progressiveFailure == nil
-        )
     }
 
     private func restoreClipboardAfterAXIfNeeded(usedClipboardCapture: Bool) {
@@ -530,6 +305,11 @@ final class TranslatorViewModel {
             try? await Task.sleep(nanoseconds: 50_000_000)
             clipboardService.restoreSaved()
         }
+    }
+
+    private func notifyAppDelegate(_ action: (AppDelegate) -> Void) {
+        guard let appDelegate else { return }
+        action(appDelegate)
     }
 
     private func triggerTranslation(source: String) {
@@ -555,5 +335,9 @@ final class TranslatorViewModel {
         if debugEvents.count > debugEventLimit {
             debugEvents.removeSubrange(debugEventLimit..<debugEvents.count)
         }
+    }
+
+    nonisolated static func shouldUseProgressivePaste(provider: ProviderType, autoPaste: Bool, isTrusted: Bool) -> Bool {
+        false
     }
 }

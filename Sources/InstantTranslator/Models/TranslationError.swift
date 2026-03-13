@@ -3,7 +3,7 @@ import Foundation
 enum TranslationError: LocalizedError {
     case noTextSelected
     case accessibilityNotGranted
-    case apiKeyMissing
+    case backendNotConfigured
     case networkError(underlying: Error)
     case apiError(statusCode: Int, message: String)
     case rateLimited(provider: ProviderType, retryAfter: Int?)
@@ -18,8 +18,8 @@ enum TranslationError: LocalizedError {
             "No text selected"
         case .accessibilityNotGranted:
             "Accessibility permission required. Enable in System Settings → Privacy → Accessibility."
-        case .apiKeyMissing:
-            "API key not configured"
+        case .backendNotConfigured:
+            "Translation service is not configured yet."
         case .networkError(let error):
             "Network error: \(error.localizedDescription)"
         case .apiError(let code, let message):
@@ -30,9 +30,9 @@ enum TranslationError: LocalizedError {
         case .trialExpired:
             "Trial expired. Enter a valid license key to continue."
         case .trialQuotaExceeded:
-            "Daily trial limit reached (50 translations). Add your own API key or upgrade for unlimited translations."
+            "Daily trial limit reached (50 translations). Upgrade to continue translating."
         case .trialTextTooLong(let maxWords):
-            "Text exceeds trial limit of \(maxWords) words. Add your own API key or upgrade for unlimited translations."
+            "Text exceeds trial limit of \(maxWords) words. Upgrade to translate longer selections."
         case .replacementFailed:
             "Could not replace selected text"
         }

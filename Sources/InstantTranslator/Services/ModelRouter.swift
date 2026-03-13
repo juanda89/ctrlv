@@ -14,7 +14,7 @@ struct ModelRoutingDecision {
 
 enum ModelRouter {
     static let longTextThreshold = 320
-    private static let trialGeminiModel = "gemini-flash-latest"
+    private static let hostedModel = Constants.hostedModelName
 
     static func route(
         provider: ProviderType,
@@ -22,42 +22,10 @@ enum ModelRouter {
         isTrialMode: Bool,
         forceFast: Bool = false
     ) -> ModelRoutingDecision {
-        if isTrialMode {
-            return ModelRoutingDecision(
-                provider: .gemini,
-                model: trialGeminiModel,
-                tier: .fast,
-                isFallback: false
-            )
-        }
-
-        let tier: ModelTier
-        if forceFast {
-            tier = .fast
-        } else {
-            tier = textLength >= longTextThreshold ? .robust : .fast
-        }
-
-        let model: String
-        switch (provider, tier) {
-        case (.openAI, .fast):
-            model = "gpt-5-mini"
-        case (.openAI, .robust):
-            model = "gpt-5.2"
-        case (.claude, .fast):
-            model = "claude-4-5-haiku"
-        case (.claude, .robust):
-            model = "claude-4-6-opus"
-        case (.gemini, .fast):
-            model = "gemini-2.5-flash"
-        case (.gemini, .robust):
-            model = "gemini-3.1-pro"
-        }
-
         return ModelRoutingDecision(
-            provider: provider,
-            model: model,
-            tier: tier,
+            provider: .ctrlVCloud,
+            model: hostedModel,
+            tier: .fast,
             isFallback: forceFast
         )
     }

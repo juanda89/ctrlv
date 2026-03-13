@@ -22,6 +22,8 @@
 	<string>https://control-v.info/feedback</string>
 	<key>CtrlVManualUpdateURL</key>
 	<string>https://control-v.info/download.html?autostart=1</string>
+	<key>CtrlVTranslationAPIURL</key>
+	<string>https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate</string>
 	<key>CtrlVLemonCheckoutURL</key>
 	<string>https://crtl-v.lemonsqueezy.com/checkout/buy/0dbfc2a0-1b9e-47e3-8f05-17dcce827dc4</string>
 	<key>CtrlVLemonLicenseAPIBaseURL</key>

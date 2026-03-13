@@ -10,9 +10,12 @@ enum Constants {
     static let defaultLemonCheckoutURL = "https://control-v.info/upgrade"
     static let defaultLemonPortalURL = "https://control-v.info/manage"
     static let defaultLemonLicenseAPIBaseURL = "https://api.lemonsqueezy.com"
+    static let hostedModelName = "moonshotai/kimi-k2.5"
+    static let hostedEngineName = "OpenRouter"
     static let updatesFeedURL = configuredURL(for: "SUFeedURL")
     static let manualUpdateURL = configuredURL(for: "CtrlVManualUpdateURL") ?? URL(string: defaultManualUpdateURL)
     static let feedbackURL = configuredURL(for: "CtrlVFeedbackURL") ?? URL(string: defaultFeedbackURL)
+    static let translationAPIURL = configuredURL(for: "CtrlVTranslationAPIURL")
     static let lemonCheckoutURL = configuredURL(for: "CtrlVLemonCheckoutURL") ?? URL(string: defaultLemonCheckoutURL)
     static let lemonPortalURL = configuredURL(for: "CtrlVLemonPortalURL") ?? URL(string: defaultLemonPortalURL)
     static let lemonLicenseAPIBaseURL = configuredURL(for: "CtrlVLemonLicenseAPIBaseURL") ?? URL(string: defaultLemonLicenseAPIBaseURL)

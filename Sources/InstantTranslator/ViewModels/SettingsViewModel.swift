@@ -11,7 +11,6 @@ final class SettingsViewModel {
         }
     }
 
-    private var apiKeysByProvider: [ProviderType: String]
     private let persistsToDisk: Bool
 
     var shortcutOptions: [ShortcutKeyOption] {
@@ -30,8 +29,16 @@ final class SettingsViewModel {
         ["⌘", "⇧", selectedShortcutOption.letter]
     }
 
-    var apiKeyPlaceholder: String {
-        "\(settings.selectedProvider.rawValue) API Key: \(settings.selectedProvider.apiKeyPlaceholder)"
+    var translationProvider: ProviderType {
+        .ctrlVCloud
+    }
+
+    var translationEngineLabel: String {
+        translationProvider.engineLabel
+    }
+
+    var translationModelLabel: String {
+        translationProvider.modelLabel
     }
 
     init(persistToDisk: Bool = true) {
@@ -44,35 +51,11 @@ final class SettingsViewModel {
         }
 
         self.settings = loaded
-        self.apiKeysByProvider = Dictionary(uniqueKeysWithValues: ProviderType.allCases.map { provider in
-            let value = persistToDisk ? (EncryptedAPIKeyStore.read(for: provider) ?? "") : ""
-            return (provider, value)
-        })
     }
 
     func setShortcut(_ option: ShortcutKeyOption) {
         settings.shortcutKeyCode = option.carbonKeyCode
         settings.shortcutModifiers = UInt(ShortcutConfiguration.fixedModifiers)
-    }
-
-    func apiKey(for provider: ProviderType) -> String {
-        apiKeysByProvider[provider] ?? ""
-    }
-
-    func setAPIKey(_ value: String, for provider: ProviderType) {
-        apiKeysByProvider[provider] = value
-        guard persistsToDisk else { return }
-
-        if value.isEmpty {
-            EncryptedAPIKeyStore.delete(for: provider)
-        } else {
-            EncryptedAPIKeyStore.save(value, for: provider)
-            TelemetryService.trackAPIKeyAdded(provider: provider)
-        }
-    }
-
-    func apiKeyForSelectedProvider() -> String {
-        apiKey(for: settings.selectedProvider)
     }
 
     private func trackSettingsChanges(old: AppSettings, new: AppSettings) {
@@ -81,9 +64,6 @@ final class SettingsViewModel {
         }
         if old.tone != new.tone {
             TelemetryService.trackToneChanged(new.tone)
-        }
-        if old.selectedProvider != new.selectedProvider {
-            TelemetryService.trackProviderChanged(new.selectedProvider)
         }
         if old.autoPaste != new.autoPaste {
             TelemetryService.trackAutoPasteToggled(enabled: new.autoPaste)

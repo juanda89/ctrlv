@@ -94,6 +94,8 @@ struct APIKeyValidationService: APIKeyValidating {
 
     private func validationRequest(for provider: ProviderType, apiKey: String) throws -> URLRequest {
         switch provider {
+        case .ctrlVCloud:
+            throw URLError(.unsupportedURL)
         case .openAI:
             guard let url = URL(string: "https://api.openai.com/v1/models") else {
                 throw URLError(.badURL)

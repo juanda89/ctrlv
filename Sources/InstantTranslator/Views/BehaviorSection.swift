@@ -4,22 +4,14 @@ import SwiftUI
 struct BehaviorSection: View {
     @Bindable var settingsVM: SettingsViewModel
     @Bindable var translatorVM: TranslatorViewModel
-    @Bindable var updateService: UpdateService
     @State private var isAccessibilityGranted = false
     @State private var pollingTimer: Timer?
     @State private var isShortcutSettingsPresented = false
-    @State private var isProviderHelpPresented = false
-    @State private var isEditingAPIKey = false
-    @State private var draftAPIKey = ""
-    @State private var isCheckingProviderStatus = false
-    @State private var apiKeyValidationByProvider: [ProviderType: APIKeyFieldValidationState] = [:]
-
-    private let apiKeyValidationService = APIKeyValidationService()
 
     var body: some View {
         VStack(spacing: 8) {
             shortcutAndPasteCard
-            providerAndKeysCard
+            hostedEngineCard
             accessibilityCard
         }
         .onAppear {
@@ -27,16 +19,9 @@ struct BehaviorSection: View {
             if !isAccessibilityGranted {
                 startPolling()
             }
-            syncAPIKeyDraft()
         }
         .onDisappear {
             stopPolling()
-        }
-        .onChange(of: settingsVM.settings.selectedProvider, initial: false) { _, _ in
-            syncAPIKeyDraft()
-        }
-        .sheet(isPresented: $isProviderHelpPresented) {
-            APIKeyTutorialSheet(provider: settingsVM.settings.selectedProvider)
         }
     }
 
@@ -79,57 +64,32 @@ struct BehaviorSection: View {
         }
     }
 
-    private var providerAndKeysCard: some View {
+    private var hostedEngineCard: some View {
         MenuCard {
             HStack {
-                NativeSectionLabel(systemName: "sparkles", tint: .purple, title: "LLM Provider")
+                NativeSectionLabel(systemName: "sparkles", tint: .purple, title: "AI Engine")
 
                 Spacer()
 
-                NativeControlSurface(cornerRadius: 11, horizontalPadding: 8, verticalPadding: 4) {
-                    Picker("", selection: $settingsVM.settings.selectedProvider) {
-                        ForEach(ProviderType.allCases) { provider in
-                            Text(provider.rawValue).tag(provider)
-                        }
-                    }
-                    .labelsHidden()
-                    .pickerStyle(.menu)
-                    .controlSize(.small)
-                    .frame(width: 124)
-                }
+                statusPill(text: "Managed", tint: .blue)
             }
 
-            VStack(alignment: .leading, spacing: 7) {
-                APIKeyField(
-                    storedKey: settingsVM.apiKeyForSelectedProvider(),
-                    draftKey: $draftAPIKey,
-                    placeholder: settingsVM.apiKeyPlaceholder,
-                    isEditing: isEditingAPIKey,
-                    validationState: validationStateForSelectedProvider(),
-                    showsStatus: false,
-                    onEdit: beginEditingAPIKey,
-                    onCancel: cancelEditingAPIKey,
-                    onSave: {
-                        Task { @MainActor in
-                            await saveAPIKeyChanges()
-                        }
-                    }
-                )
+            NativeMenuDivider()
 
-                HStack(spacing: 8) {
-                    providerStatusButton
-                    Spacer()
-                    Button {
-                        isProviderHelpPresented = true
-                    } label: {
-                        Text(settingsVM.settings.selectedProvider.apiKeyHelpTitle)
-                            .font(.caption2.weight(.medium))
-                            .foregroundStyle(MenuTheme.tertiaryText)
-                    }
-                    .buttonStyle(.plain)
-                }
+            HStack(alignment: .center, spacing: 10) {
+                NativeSectionLabel(systemName: "network", tint: .blue, title: settingsVM.translationEngineLabel)
+                Spacer()
+                Text(settingsVM.translationModelLabel)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(MenuTheme.subtleText)
+                    .lineLimit(1)
+                    .multilineTextAlignment(.trailing)
             }
 
+            Text("ctrl+v handles model access and usage limits automatically. Users do not need to configure or manage API keys.")
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(MenuTheme.subtleText)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -197,143 +157,15 @@ struct BehaviorSection: View {
         pollingTimer = nil
     }
 
-    private func beginEditingAPIKey() {
-        isEditingAPIKey = true
-        draftAPIKey = settingsVM.apiKeyForSelectedProvider()
-    }
-
-    private func cancelEditingAPIKey() {
-        isEditingAPIKey = false
-        draftAPIKey = settingsVM.apiKeyForSelectedProvider()
-    }
-
-    private func syncAPIKeyDraft() {
-        isEditingAPIKey = false
-        draftAPIKey = settingsVM.apiKeyForSelectedProvider()
-    }
-
-    private func saveAPIKeyChanges() async {
-        let provider = settingsVM.settings.selectedProvider
-        let newValue = draftAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        let currentValue = settingsVM.apiKey(for: provider)
-
-        guard newValue != currentValue else {
-            isEditingAPIKey = false
-            return
-        }
-
-        if newValue.isEmpty {
-            settingsVM.setAPIKey("", for: provider)
-            apiKeyValidationByProvider[provider] = APIKeyFieldValidationState.none
-            translatorVM.clearProviderRuntimeStatus(for: provider)
-            isEditingAPIKey = false
-            return
-        }
-
-        apiKeyValidationByProvider[provider] = .checking
-        let result = await apiKeyValidationService.validate(apiKey: newValue, for: provider)
-
-        switch result.outcome {
-        case .valid, .rateLimited:
-            settingsVM.setAPIKey(newValue, for: provider)
-            apiKeyValidationByProvider[provider] = .valid(result.message)
-            // New key clears old runtime status for this app session.
-            translatorVM.clearProviderRuntimeStatus(for: provider)
-            isEditingAPIKey = false
-        case .invalid, .networkError:
-            apiKeyValidationByProvider[provider] = .invalid(result.message)
-            translatorVM.updateProviderRuntimeStatus(from: result, for: provider)
-        }
-    }
-
-    private func validationStateForSelectedProvider() -> APIKeyFieldValidationState {
-        let provider = settingsVM.settings.selectedProvider
-        return apiKeyValidationByProvider[provider] ?? .none
-    }
-
-    private var providerStatusButton: some View {
-        let style = providerStatusStyle
-
-        return Button {
-            Task { @MainActor in
-                await refreshSelectedProviderStatus()
-            }
-        } label: {
-            HStack(spacing: 5) {
-                if isCheckingProviderStatus {
-                    ProgressView()
-                        .controlSize(.mini)
-                } else {
-                    Circle()
-                        .fill(style.tint)
-                        .frame(width: 6, height: 6)
-                }
-                Text(style.text)
-                    .font(.caption.weight(.semibold))
-            }
-            .padding(.horizontal, 9)
+    private func statusPill(text: String, tint: Color) -> some View {
+        Text(text)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(tint)
+            .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(
                 Capsule(style: .continuous)
-                    .fill(style.background)
+                    .fill(MenuTheme.tintedSurface(tint))
             )
-            .overlay(
-                Capsule(style: .continuous)
-                    .stroke(style.tint.opacity(0.18), lineWidth: 1)
-            )
-        }
-        .buttonStyle(.plain)
-        .disabled(isCheckingProviderStatus)
     }
-
-    private var providerStatusStyle: (text: String, tint: Color, background: Color) {
-        let provider = settingsVM.settings.selectedProvider
-        let hasKey = !settingsVM.apiKey(for: provider)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty
-
-        if isCheckingProviderStatus {
-            return ("Status: Checking...", .secondary, MenuTheme.controlFill)
-        }
-
-        guard hasKey else {
-            return ("Status: No key", .secondary, MenuTheme.controlFill)
-        }
-
-        switch translatorVM.providerRuntimeStatus(for: provider) {
-        case .rateLimited:
-            return ("Status: Rate limited", .red, MenuTheme.tintedSurface(.red))
-        case .error:
-            return ("Status: Error", .red, MenuTheme.tintedSurface(.red))
-        case .ok:
-            return ("Status: OK", .green, MenuTheme.tintedSurface(.green))
-        case .idle:
-            return ("Status: OK", .green, MenuTheme.tintedSurface(.green))
-        }
-    }
-
-    private func refreshSelectedProviderStatus() async {
-        let provider = settingsVM.settings.selectedProvider
-        let key = settingsVM.apiKey(for: provider).trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !key.isEmpty else {
-            translatorVM.clearProviderRuntimeStatus(for: provider)
-            return
-        }
-
-        isCheckingProviderStatus = true
-        defer { isCheckingProviderStatus = false }
-
-        let result = await apiKeyValidationService.validate(apiKey: key, for: provider)
-        translatorVM.updateProviderRuntimeStatus(from: result, for: provider)
-
-        switch result.outcome {
-        case .valid:
-            apiKeyValidationByProvider[provider] = .valid(result.message)
-        case .rateLimited:
-            apiKeyValidationByProvider[provider] = .invalid(result.message)
-        case .invalid, .networkError:
-            apiKeyValidationByProvider[provider] = .invalid(result.message)
-        }
-    }
-
 }

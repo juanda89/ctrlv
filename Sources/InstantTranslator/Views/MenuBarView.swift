@@ -20,8 +20,7 @@ struct MenuBarView: View {
                         PreferencesSection(settingsVM: viewModel.settingsVM)
                         BehaviorSection(
                             settingsVM: viewModel.settingsVM,
-                            translatorVM: viewModel,
-                            updateService: updateService
+                            translatorVM: viewModel
                         )
                     }
                     .frame(width: max(0, geometry.size.width - 24), alignment: .topLeading)

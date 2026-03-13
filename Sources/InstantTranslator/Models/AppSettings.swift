@@ -5,7 +5,6 @@ struct AppSettings: Codable {
     var tone: Tone = .original
     var customTonePrompt: String = ""
     var autoPaste: Bool = true
-    var selectedProvider: ProviderType = .claude
 
     // Shortcut stored as raw values.
     // Modifiers are fixed to Command + Shift; only the final letter is configurable.
@@ -28,6 +27,7 @@ struct AppSettings: Codable {
 }
 
 enum ProviderType: String, Codable, CaseIterable, Identifiable {
+    case ctrlVCloud = "ctrl+v Cloud"
     case claude = "Claude"
     case openAI = "OpenAI"
     case gemini = "Gemini"
@@ -36,6 +36,8 @@ enum ProviderType: String, Codable, CaseIterable, Identifiable {
 
     var apiKeyPlaceholder: String {
         switch self {
+        case .ctrlVCloud:
+            return ""
         case .claude:
             return "sk-ant-..."
         case .openAI:
@@ -51,6 +53,8 @@ enum ProviderType: String, Codable, CaseIterable, Identifiable {
 
     var apiKeyHelpSubtitle: String {
         switch self {
+        case .ctrlVCloud:
+            return "ctrl+v Cloud is managed by the app and does not need a user API key."
         case .claude:
             return "Create a key in Anthropic Console and paste it in ctrl+v."
         case .openAI:
@@ -62,6 +66,12 @@ enum ProviderType: String, Codable, CaseIterable, Identifiable {
 
     var apiKeyHelpSteps: [String] {
         switch self {
+        case .ctrlVCloud:
+            return [
+                "No setup required.",
+                "ctrl+v routes translations through its managed backend.",
+                "Usage limits are enforced automatically based on trial or active license."
+            ]
         case .claude:
             return [
                 "Sign in to Anthropic Console.",
@@ -85,12 +95,40 @@ enum ProviderType: String, Codable, CaseIterable, Identifiable {
 
     var apiKeyHelpURL: URL? {
         switch self {
+        case .ctrlVCloud:
+            return nil
         case .claude:
             return URL(string: "https://console.anthropic.com/settings/keys")
         case .openAI:
             return URL(string: "https://platform.openai.com/api-keys")
         case .gemini:
             return URL(string: "https://aistudio.google.com/app/apikey")
+        }
+    }
+
+    var engineLabel: String {
+        switch self {
+        case .ctrlVCloud:
+            return Constants.hostedEngineName
+        case .claude:
+            return "Anthropic"
+        case .openAI:
+            return "OpenAI"
+        case .gemini:
+            return "Google"
+        }
+    }
+
+    var modelLabel: String {
+        switch self {
+        case .ctrlVCloud:
+            return Constants.hostedModelName
+        case .claude:
+            return "claude-4-6-opus"
+        case .openAI:
+            return "gpt-5.2"
+        case .gemini:
+            return "gemini-3.1-pro"
         }
     }
 }

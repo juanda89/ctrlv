@@ -1,50 +1,55 @@
-# Legacy Paddle + Supabase Backend (Deprecated)
+# Supabase Translation Backend
 
-> Este módulo quedó como referencia histórica y **ya no es usado por el runtime de la app**.
-> La app actual usa Lemon Squeezy con license key directa (sin login por email).
+La app `ctrl+v` ya no debe pedir API keys al usuario.  
+Este directorio contiene el backend que:
 
-Este directorio implementa la capa comercial de `ctrl+v`:
+- valida licencias Lemon cuando existe una key activa,
+- mantiene trial de 14 dias,
+- aplica limites trial y fair-use pago,
+- llama a OpenRouter con la key secreta del servidor,
+- responde a la app con el texto traducido.
 
-- Webhook de Paddle (firma + idempotencia).
-- Login por `email + magic code`.
-- Endpoint de estado de suscripción para la app macOS.
+## Runtime actual
 
-## Estructura
+- Funcion Edge activa: `translate`
+- Migracion base del gateway: `migrations/20260313000100_translation_gateway.sql`
 
-- `migrations/20260224000100_paddle_subscription_foundation.sql`
-- `functions/paddle-webhook`
-- `functions/request-magic-code`
-- `functions/verify-magic-code`
-- `functions/subscription-status`
+## Variables de entorno requeridas
 
-## Variables de entorno (Edge Functions)
+- `OPENROUTER_API_KEY`
+- `OPENROUTER_MODEL=moonshotai/kimi-k2.5`
+- `OPENROUTER_REFERER=https://control-v.info`
+- `OPENROUTER_APP_NAME=ctrl+v`
+- `LEMON_LICENSE_API_BASE_URL=https://api.lemonsqueezy.com`
+- `TRIAL_DAYS=14`
 
-- `PADDLE_WEBHOOK_SECRET`
-- `MAGIC_CODE_PEPPER`
-- `MAGIC_CODE_LIFETIME_MINUTES` (opcional, default `10`)
-- `SESSION_LIFETIME_DAYS` (opcional, default `30`)
-- `TRIAL_DAYS` (opcional, default `14`)
-- `PADDLE_SIGNATURE_TOLERANCE_SECONDS` (opcional, default `300`)
-- `RESEND_API_KEY` + `RESEND_FROM_EMAIL` (opcional para envío real)
-- `ALLOW_DEV_MAGIC_CODE=true` (solo desarrollo local)
+## Limites por defecto
 
-## Despliegue rápido
+- Trial:
+  - `TRIAL_DAILY_TRANSLATION_LIMIT=50`
+  - `TRIAL_MAX_CHARACTERS=3000`
+- Pago:
+  - `PAID_REQUESTS_PER_10_MIN=80`
+  - `PAID_REQUESTS_PER_DAY=1500`
+  - `PAID_CHARACTERS_PER_DAY=1200000`
+  - `PAID_MAX_CHARACTERS=12000`
 
-1. Aplicar migración:
+## Despliegue
+
+1. Aplicar migraciones:
    - `supabase migration up`
-2. Deploy funciones:
-   - `supabase functions deploy paddle-webhook --no-verify-jwt`
-   - `supabase functions deploy request-magic-code --no-verify-jwt`
-   - `supabase functions deploy verify-magic-code --no-verify-jwt`
-   - `supabase functions deploy subscription-status --no-verify-jwt`
-3. Configurar webhook en Paddle:
-   - URL: `https://<project-ref>.functions.supabase.co/paddle-webhook`
-   - Eventos mínimos: `customer.created`, `customer.updated`, `subscription.created`, `subscription.updated`, `subscription.canceled`
+2. Deploy de la funcion:
+   - `supabase functions deploy translate --no-verify-jwt`
+3. Configurar secrets:
+   - `supabase secrets set OPENROUTER_API_KEY=...`
+   - `supabase secrets set OPENROUTER_MODEL=moonshotai/kimi-k2.5`
+   - `supabase secrets set OPENROUTER_REFERER=https://control-v.info`
+   - `supabase secrets set OPENROUTER_APP_NAME=ctrl+v`
+4. Configurar la app con:
+   - `CtrlVTranslationAPIURL=https://<project-ref>.functions.supabase.co/translate`
 
-## Endpoints consumidos por la app
+## Notas
 
-- `POST /request-magic-code` body: `{ "email": "you@example.com" }`
-- `POST /verify-magic-code` body: `{ "email": "you@example.com", "code": "123456" }`
-- `POST /subscription-status` header: `Authorization: Bearer <session_token>`
-
-La disponibilidad de updates Sparkle no depende del estado de suscripción.
+- La key de OpenRouter nunca debe ir en el repo ni en la app.
+- La app sigue validando localmente el estado trial/licencia para UX rapida, pero el backend vuelve a verificar limites antes de llamar al modelo.
+- Las funciones Paddle y magic-code que aun existen en este directorio quedan como legacy y no son parte del runtime actual.

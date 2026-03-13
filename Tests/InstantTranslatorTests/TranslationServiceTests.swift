@@ -3,31 +3,12 @@ import XCTest
 
 final class TranslationServiceTests: XCTestCase {
 
-    func test_translate_throwsApiKeyMissing_whenKeyEmpty() async {
-        let mockProvider = MockProvider(result: "Hola")
-        let service = TranslationService(provider: mockProvider)
-        let request = TranslationRequest(text: "Hello", targetLanguage: .spanish, tone: .original)
-
-        do {
-            _ = try await service.translate(request, apiKey: "")
-            XCTFail("Expected apiKeyMissing error")
-        } catch let error as TranslationError {
-            if case .apiKeyMissing = error {
-                // Expected
-            } else {
-                XCTFail("Wrong error type: \(error)")
-            }
-        } catch {
-            XCTFail("Unexpected error: \(error)")
-        }
-    }
-
-    func test_translate_returnsResponse_whenKeyProvided() async throws {
+    func test_translate_returnsResponse_whenProviderSucceeds() async throws {
         let mockProvider = MockProvider(result: "Hola mundo")
         let service = TranslationService(provider: mockProvider)
         let request = TranslationRequest(text: "Hello world", targetLanguage: .spanish, tone: .original)
 
-        let response = try await service.translate(request, apiKey: "test-key")
+        let response = try await service.translate(request)
 
         XCTAssertEqual(response.translatedText, "Hola mundo")
         XCTAssertEqual(response.originalText, "Hello world")
@@ -39,7 +20,7 @@ final class TranslationServiceTests: XCTestCase {
         let service = TranslationService(provider: mockProvider)
         let request = TranslationRequest(text: "Hello", targetLanguage: .french, tone: .formal)
 
-        _ = try await service.translate(request, apiKey: "test-key")
+        _ = try await service.translate(request)
 
         XCTAssertTrue(mockProvider.lastSystemPrompt?.contains("French") ?? false)
         XCTAssertTrue(mockProvider.lastSystemPrompt?.contains("formal") ?? false)
