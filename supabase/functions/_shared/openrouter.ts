@@ -1,5 +1,5 @@
 const defaultBaseURL = "https://openrouter.ai/api/v1";
-const defaultModel = "moonshotai/kimi-k2.5";
+const defaultModel = "x-ai/grok-4.1-fast";
 const minCompletionTokens = 96;
 const maxCompletionTokens = 4096;
 

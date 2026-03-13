@@ -17,7 +17,7 @@ Este directorio contiene el backend que:
 ## Variables de entorno requeridas
 
 - `OPENROUTER_API_KEY`
-- `OPENROUTER_MODEL=moonshotai/kimi-k2.5`
+- `OPENROUTER_MODEL=x-ai/grok-4.1-fast`
 - `OPENROUTER_REFERER=https://control-v.info`
 - `OPENROUTER_APP_NAME=ctrl+v`
 - `LEMON_LICENSE_API_BASE_URL=https://api.lemonsqueezy.com`
@@ -42,7 +42,7 @@ Este directorio contiene el backend que:
    - `supabase functions deploy translate --no-verify-jwt`
 3. Configurar secrets:
    - `supabase secrets set OPENROUTER_API_KEY=...`
-   - `supabase secrets set OPENROUTER_MODEL=moonshotai/kimi-k2.5`
+   - `supabase secrets set OPENROUTER_MODEL=x-ai/grok-4.1-fast`
    - `supabase secrets set OPENROUTER_REFERER=https://control-v.info`
    - `supabase secrets set OPENROUTER_APP_NAME=ctrl+v`
 4. Configurar la app con:
