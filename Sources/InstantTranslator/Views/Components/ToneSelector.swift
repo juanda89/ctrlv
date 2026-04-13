@@ -19,11 +19,11 @@ struct ToneSelector: View {
             VStack(spacing: 4) {
                 Image(systemName: icon(for: tone))
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(selection == tone ? MenuTheme.blue : MenuTheme.subtleText)
+                    .foregroundStyle(selection == tone ? MenuTheme.cyan : MenuTheme.subtleText)
 
                 Text(tone.rawValue)
                     .font(.caption2.weight(selection == tone ? .semibold : .medium))
-                    .foregroundStyle(selection == tone ? MenuTheme.blue : MenuTheme.subtleText)
+                    .foregroundStyle(selection == tone ? MenuTheme.cyan : MenuTheme.subtleText)
                     .lineLimit(1)
                     .minimumScaleFactor(0.8)
             }
@@ -31,11 +31,11 @@ struct ToneSelector: View {
             .padding(.vertical, 4)
             .background(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .fill(selection == tone ? MenuTheme.selectedFill : MenuTheme.controlFill)
+                    .fill(selection == tone ? MenuTheme.cyan.opacity(0.16) : MenuTheme.controlFill)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 9, style: .continuous)
-                    .stroke(selection == tone ? MenuTheme.selectedBorder : MenuTheme.controlBorder, lineWidth: 1)
+                    .stroke(selection == tone ? MenuTheme.cyan.opacity(0.28) : MenuTheme.controlBorder, lineWidth: 1)
             )
         }
         .buttonStyle(.plain)

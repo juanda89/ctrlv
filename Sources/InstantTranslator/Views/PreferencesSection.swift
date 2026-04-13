@@ -6,7 +6,7 @@ struct PreferencesSection: View {
     var body: some View {
         MenuCard {
             HStack {
-                NativeSectionLabel(systemName: "message.fill", tint: MenuTheme.blue, title: "Translate to")
+                NativeSectionLabel(systemName: "message.fill", tint: MenuTheme.cyan, title: "Translate to")
 
                 Spacer()
 
@@ -16,7 +16,7 @@ struct PreferencesSection: View {
             NativeMenuDivider()
 
             VStack(alignment: .leading, spacing: 8) {
-                NativeSectionLabel(systemName: "slider.horizontal.3", tint: .indigo, title: "Tone")
+                NativeSectionLabel(systemName: "slider.horizontal.3", tint: MenuTheme.cyan, title: "Tone")
                 ToneSelector(selection: $settingsVM.settings.tone)
 
                 if settingsVM.settings.tone == .custom {

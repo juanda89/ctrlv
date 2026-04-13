@@ -30,7 +30,7 @@ struct BehaviorSection: View {
                 isShortcutSettingsPresented = true
             } label: {
                 HStack {
-                    NativeSectionLabel(systemName: "keyboard", tint: .gray, title: "Shortcut")
+                    NativeSectionLabel(systemName: "keyboard", tint: MenuTheme.cyan, title: "Shortcut")
 
                     Spacer()
 
@@ -47,7 +47,7 @@ struct BehaviorSection: View {
             .buttonStyle(.plain)
 
             HStack {
-                NativeSectionLabel(systemName: "arrow.left.arrow.right.square", tint: .teal, title: "Auto-paste")
+                NativeSectionLabel(systemName: "arrow.left.arrow.right.square", tint: MenuTheme.cyan, title: "Auto-paste")
 
                 Spacer()
 

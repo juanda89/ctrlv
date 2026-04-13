@@ -30,8 +30,8 @@ enum MenuTheme {
         dark: NSColor.white.withAlphaComponent(0.11)
     )
     static let iconFill = dynamicColor(
-        light: NSColor.white.withAlphaComponent(0.44),
-        dark: NSColor.white.withAlphaComponent(0.06)
+        light: NSColor.white.withAlphaComponent(0.90),
+        dark: NSColor.white.withAlphaComponent(0.10)
     )
     static let shadowColor = dynamicColor(
         light: NSColor.black.withAlphaComponent(0.05),
