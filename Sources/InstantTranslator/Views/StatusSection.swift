@@ -7,12 +7,14 @@ struct StatusSection: View {
     @State private var showLicenseSheet = false
     @State private var licenseKeyInput = ""
     @State private var localMessage: String?
+    @FocusState private var isLicenseFieldFocused: Bool
 
     var body: some View {
-        section
-            .sheet(isPresented: $showLicenseSheet) {
-                licenseSheet
-            }
+        if showLicenseSheet {
+            inlineLicenseForm
+        } else {
+            section
+        }
     }
 
     @ViewBuilder
@@ -155,11 +157,11 @@ struct StatusSection: View {
         }
     }
 
-    private var licenseSheet: some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private var inlineLicenseForm: some View {
+        MenuCard {
             HStack {
                 Text("Enter License Key")
-                    .font(.title3.weight(.semibold))
+                    .font(.headline.weight(.semibold))
 
                 Spacer()
 
@@ -183,6 +185,7 @@ struct StatusSection: View {
                     .foregroundStyle(MenuTheme.subtleText)
                 TextField("XXXX-XXXX-XXXX-XXXX", text: $licenseKeyInput)
                     .textFieldStyle(.roundedBorder)
+                    .focused($isLicenseFieldFocused)
             }
 
             HStack {
@@ -220,8 +223,12 @@ struct StatusSection: View {
                     .foregroundStyle(.red)
             }
         }
-        .padding(16)
-        .frame(width: 340)
+        .onAppear {
+            isLicenseFieldFocused = true
+        }
+        .onDisappear {
+            showLicenseSheet = false
+        }
     }
 
     private func prepareLicenseSheet() {
