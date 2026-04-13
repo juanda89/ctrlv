@@ -52,6 +52,12 @@ struct StatusSection: View {
                 Spacer()
 
                 statusPill(text: isOfflineGrace ? "Offline Grace" : "Active", tint: isOfflineGrace ? .orange : .green)
+
+                Button("Manage") {
+                    licenseService.openManageSubscription()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.small)
             }
 
             NativeMenuDivider()
