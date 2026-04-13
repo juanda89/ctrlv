@@ -8,17 +8,17 @@ const trialDays = Number(Deno.env.get("TRIAL_DAYS") ?? "14");
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
-  if (req.method !== "POST") return methodNotAllowed();
+  if (req.method !== "POST") return methodNotAllowed(req);
 
   const authHeader = req.headers.get("Authorization");
   const token = bearerToken(authHeader);
   if (!token) {
-    return json({ error: "Missing bearer token" }, 401);
+    return json({ error: "Missing bearer token" }, 401, req);
   }
 
   const pepper = Deno.env.get("MAGIC_CODE_PEPPER");
   if (!pepper) {
-    return json({ error: "Missing MAGIC_CODE_PEPPER" }, 500);
+    return json({ error: "Server configuration error" }, 500, req);
   }
 
   const tokenHash = await sha256Hex(`${token}:${pepper}`);
@@ -33,10 +33,10 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (sessionError) {
-    return json({ error: sessionError.message }, 500);
+    return json({ error: "Failed to verify session" }, 500, req);
   }
   if (!session?.account_id) {
-    return json({ error: "Invalid session" }, 401);
+    return json({ error: "Invalid session" }, 401, req);
   }
 
   const { data: account, error: accountError } = await client
@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     .single();
 
   if (accountError || !account?.created_at) {
-    return json({ error: accountError?.message ?? "Account not found" }, 500);
+    return json({ error: "Account not found" }, 500, req);
   }
 
   const { data: subscription, error: subscriptionError } = await client
@@ -58,7 +58,7 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (subscriptionError) {
-    return json({ error: subscriptionError.message }, 500);
+    return json({ error: "Failed to check subscription" }, 500, req);
   }
 
   if (subscription?.status) {
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
       status: normalizePaddleSubscriptionStatus(subscription.status as string),
       planName: subscription.plan_name ?? null,
       trialDaysRemaining: null,
-    });
+    }, 200, req);
   }
 
   const installedAt = new Date(account.created_at);
@@ -77,7 +77,7 @@ Deno.serve(async (req) => {
     status: remaining > 0 ? "trial" : "expired",
     planName: null,
     trialDaysRemaining: remaining,
-  });
+  }, 200, req);
 });
 
 function bearerToken(header: string | null): string | null {

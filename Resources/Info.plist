@@ -25,7 +25,7 @@
 	<key>CtrlVTranslationAPIURL</key>
 	<string>https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate</string>
 	<key>CtrlVLemonCheckoutURL</key>
-	<string>https://crtl-v.lemonsqueezy.com/checkout/buy/0dbfc2a0-1b9e-47e3-8f05-17dcce827dc4</string>
+	<string>https://controlv.lemonsqueezy.com/checkout/buy/622e89b6-67f4-4897-aba7-5a31fb49d601</string>
 	<key>CtrlVLemonLicenseAPIBaseURL</key>
 	<string>https://api.lemonsqueezy.com</string>
 	<key>CtrlVLemonPortalURL</key>

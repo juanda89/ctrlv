@@ -11,13 +11,14 @@ struct GeminiProvider: TranslationProvider {
 
     func translate(text: String, systemPrompt: String) async throws -> String {
         guard let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-              let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModel):generateContent?key=\(apiKey)") else {
+              let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModel):generateContent") else {
             throw TranslationError.apiError(statusCode: 0, message: "Invalid URL")
         }
 
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue(apiKey, forHTTPHeaderField: "x-goog-api-key")
 
         let body = GeminiRequest(
             systemInstruction: .init(parts: [.init(text: systemPrompt)]),

@@ -31,18 +31,18 @@ type AccessPlan = {
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
-  if (req.method !== "POST") return methodNotAllowed();
+  if (req.method !== "POST") return methodNotAllowed(req);
 
   try {
     const body = await req.json();
     const parsed = parseRequest(body);
     if (!parsed.ok) {
-      return json({ error: parsed.error }, 400);
+      return json({ error: parsed.error }, 400, req);
     }
 
     if (parsed.value.warmupOnly) {
       const result = await translateWithOpenRouter(parsed.value.text, parsed.value.systemPrompt);
-      return json({ warmed: true, model: result.model });
+      return json({ warmed: true, model: result.model }, 200, req);
     }
 
     const client = createServiceClient();
@@ -51,14 +51,14 @@ Deno.serve(async (req) => {
     const plan = await resolveAccessPlan(parsed.value, identity.firstSeenAt);
 
     if (plan.plan === "trial" && plan.trialDaysRemaining <= 0) {
-      return json({ error: "Trial expired" }, 403);
+      return json({ error: "Trial expired" }, 403, req);
     }
 
     await syncIdentity(client, identityHash, plan);
 
     const rateLimit = await enforceLimits(client, identityHash, parsed.value.text.length, plan);
     if (rateLimit) {
-      return json(rateLimit.body, 429);
+      return json(rateLimit.body, 429, req);
     }
 
     const result = await translateWithOpenRouter(parsed.value.text, parsed.value.systemPrompt);
@@ -68,17 +68,16 @@ Deno.serve(async (req) => {
       translatedText: result.translatedText,
       model: result.model,
       plan: plan.plan,
-    });
+    }, 200, req);
   } catch (error) {
     if (error instanceof OpenRouterRateLimitError) {
       return json(
-        { error: error.message, retry_after_seconds: error.retryAfterSeconds },
-        429,
+        { error: "Translation service is busy. Please try again shortly.", retry_after_seconds: error.retryAfterSeconds },
+        429, req,
       );
     }
 
-    const message = error instanceof Error ? error.message : "Translation failed";
-    return json({ error: message }, 500);
+    return json({ error: "Translation failed. Please try again." }, 500, req);
   }
 });
 

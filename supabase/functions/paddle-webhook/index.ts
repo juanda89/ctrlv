@@ -14,33 +14,33 @@ const signatureToleranceSeconds = Number(Deno.env.get("PADDLE_SIGNATURE_TOLERANC
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
-  if (req.method !== "POST") return methodNotAllowed();
+  if (req.method !== "POST") return methodNotAllowed(req);
 
   const webhookSecret = Deno.env.get("PADDLE_WEBHOOK_SECRET");
   if (!webhookSecret) {
-    return json({ error: "Missing PADDLE_WEBHOOK_SECRET" }, 500);
+    return json({ error: "Server configuration error" }, 500, req);
   }
 
   const signatureHeader = req.headers.get("Paddle-Signature");
   if (!signatureHeader) {
-    return json({ error: "Missing Paddle-Signature header" }, 400);
+    return json({ error: "Missing Paddle-Signature header" }, 400, req);
   }
 
   const rawBody = await req.text();
   const verification = await verifyPaddleSignature(signatureHeader, rawBody, webhookSecret);
   if (!verification.ok) {
-    return json({ error: verification.message }, 400);
+    return json({ error: verification.message }, 400, req);
   }
 
   let event: PaddleEvent;
   try {
     event = JSON.parse(rawBody);
   } catch {
-    return json({ error: "Invalid JSON payload" }, 400);
+    return json({ error: "Invalid JSON payload" }, 400, req);
   }
 
   if (!event.event_id || !event.event_type) {
-    return json({ error: "Missing event_id or event_type" }, 400);
+    return json({ error: "Missing event_id or event_type" }, 400, req);
   }
 
   const client = createServiceClient();
@@ -54,11 +54,11 @@ Deno.serve(async (req) => {
     });
 
   if (eventInsertError?.code === "23505") {
-    return json({ ok: true, deduplicated: true });
+    return json({ ok: true, deduplicated: true }, 200, req);
   }
 
   if (eventInsertError) {
-    return json({ error: eventInsertError.message }, 500);
+    return json({ error: "Failed to process webhook" }, 500, req);
   }
 
   try {
@@ -70,10 +70,10 @@ Deno.serve(async (req) => {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown webhook processing error";
-    return json({ error: message }, 500);
+    return json({ error: message }, 500, req);
   }
 
-  return json({ ok: true });
+  return json({ ok: true }, 200, req);
 });
 
 async function verifyPaddleSignature(

@@ -7,24 +7,24 @@ const sessionLifetimeDays = Number(Deno.env.get("SESSION_LIFETIME_DAYS") ?? "30"
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
-  if (req.method !== "POST") return methodNotAllowed();
+  if (req.method !== "POST") return methodNotAllowed(req);
 
   let payload: { email?: string; code?: string };
   try {
     payload = await req.json();
   } catch {
-    return json({ error: "Invalid JSON body" }, 400);
+    return json({ error: "Invalid JSON body" }, 400, req);
   }
 
   const email = normalizeEmail(payload.email);
   const code = payload.code?.trim();
   if (!email || !code) {
-    return json({ error: "Email and code are required" }, 400);
+    return json({ error: "Email and code are required" }, 400, req);
   }
 
   const pepper = Deno.env.get("MAGIC_CODE_PEPPER");
   if (!pepper) {
-    return json({ error: "Missing MAGIC_CODE_PEPPER" }, 500);
+    return json({ error: "Server configuration error" }, 500, req);
   }
 
   const client = createServiceClient();
@@ -41,15 +41,15 @@ Deno.serve(async (req) => {
     .maybeSingle();
 
   if (lookupError) {
-    return json({ error: lookupError.message }, 500);
+    return json({ error: "Failed to verify code" }, 500, req);
   }
   if (!magicCodeRecord) {
-    return json({ error: "Code not found or expired" }, 401);
+    return json({ error: "Code not found or expired" }, 401, req);
   }
 
   const candidateHash = await sha256Hex(`${code}:${pepper}`);
   if (!secureCompare(candidateHash, magicCodeRecord.code_hash as string)) {
-    return json({ error: "Invalid code" }, 401);
+    return json({ error: "Invalid code" }, 401, req);
   }
 
   const { error: consumeError } = await client
@@ -57,7 +57,7 @@ Deno.serve(async (req) => {
     .update({ consumed_at: nowISO })
     .eq("id", magicCodeRecord.id);
   if (consumeError) {
-    return json({ error: consumeError.message }, 500);
+    return json({ error: "Failed to process code" }, 500, req);
   }
 
   const { data: account, error: accountError } = await client
@@ -66,7 +66,7 @@ Deno.serve(async (req) => {
     .eq("email", email)
     .single();
   if (accountError || !account?.id) {
-    return json({ error: accountError?.message ?? "Account not found" }, 500);
+    return json({ error: "Account not found" }, 500, req);
   }
 
   const token = randomToken(32);
@@ -79,10 +79,10 @@ Deno.serve(async (req) => {
     expires_at: expiresAt,
   });
   if (sessionError) {
-    return json({ error: sessionError.message }, 500);
+    return json({ error: "Failed to create session" }, 500, req);
   }
 
-  return json({ sessionToken: token });
+  return json({ sessionToken: token }, 200, req);
 });
 
 function normalizeEmail(input: string | undefined): string | null {
