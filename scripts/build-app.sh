@@ -19,9 +19,17 @@ echo "==> Assembling .app bundle..."
 rm -rf "${APP_BUNDLE}"
 mkdir -p "${CONTENTS}/MacOS"
 mkdir -p "${CONTENTS}/Resources"
+mkdir -p "${CONTENTS}/Frameworks"
 
 # Copy binary
 cp ".build/release/${APP_NAME}" "${CONTENTS}/MacOS/"
+
+# Copy dynamic frameworks produced by SwiftPM (e.g. Sparkle.framework).
+if compgen -G ".build/release/*.framework" > /dev/null; then
+    for framework in .build/release/*.framework; do
+        cp -R "${framework}" "${CONTENTS}/Frameworks/"
+    done
+fi
 
 # Ensure bundled frameworks resolve correctly at runtime.
 if ! otool -l "${CONTENTS}/MacOS/${APP_NAME}" | grep -q "@executable_path/../Frameworks"; then
@@ -44,10 +52,22 @@ if [[ -d "${ASSET_CATALOG}" ]]; then
         --output-partial-info-plist "${BUILD_DIR}/assetcatalog-info.plist" >/dev/null
 fi
 
-echo "==> Signing (ad-hoc for local testing)..."
-codesign --force --sign - \
+SIGN_IDENTITY="${SIGN_IDENTITY:-Developer ID Application: Viko Holdings LLC (5ZFYF422LX)}"
+echo "==> Signing with: ${SIGN_IDENTITY}..."
+xattr -cr "${APP_BUNDLE}" || true
+
+# Sign embedded frameworks first, then the main bundle.
+if compgen -G "${CONTENTS}/Frameworks/*.framework" > /dev/null; then
+    for framework in "${CONTENTS}"/Frameworks/*.framework; do
+        codesign --force --sign "${SIGN_IDENTITY}" \
+            --options runtime \
+            "${framework}"
+    done
+fi
+
+codesign --force --sign "${SIGN_IDENTITY}" \
     --entitlements "Resources/${APP_NAME}.entitlements" \
-    --deep \
+    --options runtime \
     "${APP_BUNDLE}"
 
 echo ""
