@@ -4,10 +4,13 @@ const ALLOWED_ORIGINS = [
 ];
 
 function buildCorsHeaders(req?: Request): Record<string, string> {
-  const origin = req?.headers.get("origin") ?? "";
-  const allowed = ALLOWED_ORIGINS.includes(origin) ? origin : "";
+  const origin = req?.headers.get("origin");
+  let allowedOrigin = "*";
+  if (origin) {
+    allowedOrigin = ALLOWED_ORIGINS.includes(origin) ? origin : "";
+  }
   return {
-    "Access-Control-Allow-Origin": allowed,
+    "Access-Control-Allow-Origin": allowedOrigin,
     "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, paddle-signature",
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Vary": "Origin",
