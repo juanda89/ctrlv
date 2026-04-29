@@ -12,3 +12,4 @@ updates/stable/*
 *.dmg
 artifacts/menu-previews/
 artifacts/menu-diffs/
+supabase/.temp/

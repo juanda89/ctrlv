@@ -91,7 +91,7 @@ final class TranslatorViewModel {
         resetDebugTimings()
 
         let licenseStartedAt = Date()
-        await licenseService.refreshLicenseStatus(forceNetwork: false)
+        await licenseService.refreshSubscriptionStatus(forceNetwork: false)
         debugLastLicenseLatencyMs = elapsedMs(since: licenseStartedAt)
         guard licenseService.state.canTranslate else {
             debugLastStage = "Blocked: license"
@@ -210,14 +210,12 @@ final class TranslatorViewModel {
             return nil
         }
 
-        let licenseKey = isTrialMode ? nil : licenseService.storedLicenseKey
-        let instanceID = isTrialMode ? nil : licenseService.storedInstanceID
+        let sessionToken = isTrialMode ? nil : licenseService.storedSessionToken
 
         return CtrlVCloudProvider(
             endpoint: endpoint,
             installID: deviceIdentityStore.currentInstallID(),
-            licenseKey: licenseKey,
-            licenseInstanceID: instanceID
+            sessionToken: sessionToken
         )
     }
 

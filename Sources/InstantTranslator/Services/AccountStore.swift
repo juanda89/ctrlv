@@ -1,26 +1,26 @@
 import CryptoKit
 import Foundation
 
-protocol LemonLicenseStoring {
-    func read() -> StoredLicenseRecord?
-    func save(_ record: StoredLicenseRecord)
+protocol AccountStoring {
+    func read() -> StoredAccountRecord?
+    func save(_ record: StoredAccountRecord)
     func delete()
 }
 
-final class LemonLicenseStore: LemonLicenseStoring {
-    private let fileName = "license_state.enc"
+final class AccountStore: AccountStoring {
+    private let fileName = "account.enc"
 
-    func read() -> StoredLicenseRecord? {
+    func read() -> StoredAccountRecord? {
         guard let encrypted = try? Data(contentsOf: fileURL),
               let sealed = try? AES.GCM.SealedBox(combined: encrypted),
               let decrypted = try? AES.GCM.open(sealed, using: symmetricKey),
-              let record = try? JSONDecoder().decode(StoredLicenseRecord.self, from: decrypted) else {
+              let record = try? JSONDecoder().decode(StoredAccountRecord.self, from: decrypted) else {
             return nil
         }
         return record
     }
 
-    func save(_ record: StoredLicenseRecord) {
+    func save(_ record: StoredAccountRecord) {
         guard let payload = try? JSONEncoder().encode(record),
               let sealed = try? AES.GCM.seal(payload, using: symmetricKey),
               let combined = sealed.combined else {
@@ -46,7 +46,7 @@ final class LemonLicenseStore: LemonLicenseStoring {
 
     private var symmetricKey: SymmetricKey {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.instanttranslator.app"
-        let material = "\(bundleID)|\(NSUserName())|\(Host.current().name ?? "unknown")|instanttranslator-license-v1"
+        let material = "\(bundleID)|\(NSUserName())|\(Host.current().name ?? "unknown")|instanttranslator-account-v1"
         let digest = SHA256.hash(data: Data(material.utf8))
         return SymmetricKey(data: Data(digest))
     }

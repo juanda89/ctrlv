@@ -7,18 +7,14 @@ enum Constants {
     static let axVerificationDelay: UInt64 = 45_000_000 // 45ms in nanoseconds
     static let defaultFeedbackURL = "mailto:info@control-v.info?subject=ctrl%2Bv%20Feedback"
     static let defaultManualUpdateURL = "https://control-v.info/download.html?autostart=1"
-    static let defaultLemonCheckoutURL = "https://control-v.info/upgrade"
-    static let defaultLemonPortalURL = "https://control-v.info/manage"
-    static let defaultLemonLicenseAPIBaseURL = "https://api.lemonsqueezy.com"
+    static let defaultAuthAPIBaseURL = "https://hdfhonbgkkiffhkwoivd.functions.supabase.co"
     static let hostedModelName = "x-ai/grok-4.1-fast"
     static let hostedEngineName = "OpenRouter"
     static let updatesFeedURL = configuredURL(for: "SUFeedURL")
     static let manualUpdateURL = configuredURL(for: "CtrlVManualUpdateURL") ?? URL(string: defaultManualUpdateURL)
     static let feedbackURL = configuredURL(for: "CtrlVFeedbackURL") ?? URL(string: defaultFeedbackURL)
     static let translationAPIURL = configuredURL(for: "CtrlVTranslationAPIURL")
-    static let lemonCheckoutURL = configuredURL(for: "CtrlVLemonCheckoutURL") ?? URL(string: defaultLemonCheckoutURL)
-    static let lemonPortalURL = configuredURL(for: "CtrlVLemonPortalURL") ?? URL(string: defaultLemonPortalURL)
-    static let lemonLicenseAPIBaseURL = configuredURL(for: "CtrlVLemonLicenseAPIBaseURL") ?? URL(string: defaultLemonLicenseAPIBaseURL)
+    static let authAPIBaseURL = configuredURL(for: "CtrlVAuthAPIBaseURL") ?? URL(string: defaultAuthAPIBaseURL)
 
     private static func configuredURL(for key: String) -> URL? {
         guard let rawValue = Bundle.main.object(forInfoDictionaryKey: key) as? String else {

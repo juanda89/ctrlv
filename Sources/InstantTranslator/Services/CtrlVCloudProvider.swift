@@ -3,21 +3,18 @@ import Foundation
 struct CtrlVCloudProvider: TranslationProvider {
     let endpoint: URL
     let installID: String
-    let licenseKey: String?
-    let licenseInstanceID: String?
+    let sessionToken: String?
     let session: URLSession
 
     init(
         endpoint: URL,
         installID: String,
-        licenseKey: String?,
-        licenseInstanceID: String?,
+        sessionToken: String?,
         session: URLSession = .shared
     ) {
         self.endpoint = endpoint
         self.installID = installID
-        self.licenseKey = licenseKey
-        self.licenseInstanceID = licenseInstanceID
+        self.sessionToken = sessionToken
         self.session = session
     }
 
@@ -27,8 +24,7 @@ struct CtrlVCloudProvider: TranslationProvider {
                 text: text,
                 systemPrompt: systemPrompt,
                 installID: installID,
-                licenseKey: normalized(licenseKey),
-                licenseInstanceID: normalized(licenseInstanceID),
+                sessionToken: normalized(sessionToken),
                 warmupOnly: false
             )
         )
@@ -43,8 +39,7 @@ struct CtrlVCloudProvider: TranslationProvider {
                 text: "hola",
                 systemPrompt: systemPrompt,
                 installID: installID,
-                licenseKey: nil,
-                licenseInstanceID: nil,
+                sessionToken: nil,
                 warmupOnly: true
             )
         )
@@ -89,8 +84,7 @@ private struct GatewayTranslationRequest: Encodable {
     let text: String
     let systemPrompt: String
     let installID: String
-    let licenseKey: String?
-    let licenseInstanceID: String?
+    let sessionToken: String?
     let warmupOnly: Bool
 }
 

@@ -24,12 +24,8 @@
 	<string>https://control-v.info/download.html?autostart=1</string>
 	<key>CtrlVTranslationAPIURL</key>
 	<string>https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate</string>
-	<key>CtrlVLemonCheckoutURL</key>
-	<string>https://controlv.lemonsqueezy.com/checkout/buy/622e89b6-67f4-4897-aba7-5a31fb49d601</string>
-	<key>CtrlVLemonLicenseAPIBaseURL</key>
-	<string>https://api.lemonsqueezy.com</string>
-	<key>CtrlVLemonPortalURL</key>
-	<string>https://control-v.info/manage</string>
+	<key>CtrlVAuthAPIBaseURL</key>
+	<string>https://hdfhonbgkkiffhkwoivd.functions.supabase.co</string>
 	<key>LSMinimumSystemVersion</key>
 	<string>14.0</string>
 	<key>LSUIElement</key>

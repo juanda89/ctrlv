@@ -4,14 +4,16 @@ import SwiftUI
 struct StatusSection: View {
     @Bindable var licenseService: LicenseService
 
-    @State private var showLicenseSheet = false
-    @State private var licenseKeyInput = ""
-    @State private var localMessage: String?
-    @FocusState private var isLicenseFieldFocused: Bool
+    @State private var showSignIn = false
+    @State private var showSubscribePrompt = false
 
     var body: some View {
-        if showLicenseSheet {
-            inlineLicenseForm
+        if showSignIn {
+            SignInView(licenseService: licenseService) {
+                showSignIn = false
+            }
+        } else if showSubscribePrompt {
+            subscribePrompt
         } else {
             section
         }
@@ -36,7 +38,7 @@ struct StatusSection: View {
     private func activeCard(planName: String?, validatedAt: Date, isOfflineGrace: Bool) -> some View {
         let displayName = {
             let trimmed = planName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return trimmed.isEmpty ? "License Active" : trimmed
+            return trimmed.isEmpty ? "Pro" : trimmed
         }()
 
         return MenuCard {
@@ -54,13 +56,22 @@ struct StatusSection: View {
                 statusPill(text: isOfflineGrace ? "Offline Grace" : "Active", tint: isOfflineGrace ? .orange : .green)
 
                 Button("Manage") {
-                    licenseService.openManageSubscription()
+                    Task { @MainActor in
+                        await licenseService.openManageSubscription()
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .disabled(licenseService.isLoading)
             }
 
             NativeMenuDivider()
+
+            if let email = licenseService.storedEmail {
+                Text("Signed in as \(email)")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(MenuTheme.subtleText)
+            }
 
             Text("Last validation: \(validationText(for: validatedAt))")
                 .font(.footnote.weight(.medium))
@@ -80,7 +91,7 @@ struct StatusSection: View {
                 statusPill(text: "\(days)d left", tint: .orange)
 
                 Button("Upgrade") {
-                    prepareLicenseSheet()
+                    handleUpgradeClick()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -111,7 +122,7 @@ struct StatusSection: View {
                 Spacer()
 
                 Button("Upgrade") {
-                    prepareLicenseSheet()
+                    handleUpgradeClick()
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -124,13 +135,13 @@ struct StatusSection: View {
     private func invalidCard(reason: String) -> some View {
         MenuCard {
             HStack {
-                Text("License Invalid")
+                Text("Subscription Issue")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.red)
 
                 Spacer()
 
-                statusPill(text: "Invalid", tint: .red)
+                statusPill(text: "Action needed", tint: .red)
             }
 
             Text(reason)
@@ -140,8 +151,10 @@ struct StatusSection: View {
             HStack {
                 Spacer()
 
-                Button("Upgrade") {
-                    prepareLicenseSheet()
+                Button("Manage") {
+                    Task { @MainActor in
+                        await licenseService.openManageSubscription()
+                    }
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
@@ -156,23 +169,23 @@ struct StatusSection: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .scaleEffect(0.8)
-                Text("Checking license")
+                Text("Checking subscription")
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(MenuTheme.subtleText)
             }
         }
     }
 
-    private var inlineLicenseForm: some View {
+    private var subscribePrompt: some View {
         MenuCard {
             HStack {
-                Text("Enter License Key")
+                Text("Subscribe — $8.99/month")
                     .font(.headline.weight(.semibold))
 
                 Spacer()
 
                 Button {
-                    showLicenseSheet = false
+                    showSubscribePrompt = false
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16, weight: .semibold))
@@ -181,22 +194,16 @@ struct StatusSection: View {
                 .buttonStyle(.plain)
             }
 
-            Text("Paste your Lemon Squeezy license key to activate this device.")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(MenuTheme.subtleText)
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("License Key")
-                    .font(.footnote.weight(.semibold))
+            if let email = licenseService.storedEmail {
+                Text("Signed in as \(email). Click below to subscribe via Stripe.")
+                    .font(.footnote.weight(.medium))
                     .foregroundStyle(MenuTheme.subtleText)
-                TextField("XXXX-XXXX-XXXX-XXXX", text: $licenseKeyInput)
-                    .textFieldStyle(.roundedBorder)
-                    .focused($isLicenseFieldFocused)
             }
 
             HStack {
-                Button("Get your license key") {
-                    licenseService.openUpgrade()
+                Button("Sign out") {
+                    licenseService.signOut()
+                    showSubscribePrompt = false
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.secondary)
@@ -204,44 +211,34 @@ struct StatusSection: View {
 
                 Spacer()
 
-                Button("Activate") {
+                Button("Subscribe") {
                     Task { @MainActor in
-                        localMessage = nil
-                        let ok = await licenseService.submitLicenseKey(licenseKeyInput)
-                        if ok {
-                            showLicenseSheet = false
-                        } else if licenseService.state.canTranslate {
-                            localMessage = "License key not active yet. Trial is still available."
-                        }
+                        await licenseService.openUpgrade()
                     }
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(licenseService.isLoading)
             }
 
-            if let message = localMessage {
-                Text(message)
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(MenuTheme.subtleText)
-            } else if let error = licenseService.lastError {
+            if let error = licenseService.lastError {
                 Text(error)
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.red)
             }
         }
-        .onAppear {
-            isLicenseFieldFocused = true
-        }
-        .onDisappear {
-            showLicenseSheet = false
+    }
+
+    // MARK: - Actions
+
+    private func handleUpgradeClick() {
+        if licenseService.isSignedIn {
+            showSubscribePrompt = true
+        } else {
+            showSignIn = true
         }
     }
 
-    private func prepareLicenseSheet() {
-        licenseKeyInput = licenseService.storedLicenseKey ?? ""
-        localMessage = nil
-        showLicenseSheet = true
-    }
+    // MARK: - Helpers
 
     private func validationText(for date: Date) -> String {
         let formatter = RelativeDateTimeFormatter()

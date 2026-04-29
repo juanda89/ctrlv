@@ -1,6 +1,6 @@
 const ALLOWED_ORIGINS = [
   "https://control-v.info",
-  "https://controlv.lemonsqueezy.com",
+  "https://www.control-v.info",
 ];
 
 function buildCorsHeaders(req?: Request): Record<string, string> {
