@@ -1,5 +1,4 @@
 import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
-import { validateLemonLicense } from "../_shared/lemon.ts";
 import { OpenRouterRateLimitError, translateWithOpenRouter } from "../_shared/openrouter.ts";
 import { sha256Hex } from "../_shared/security.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
@@ -16,14 +15,13 @@ type TranslateRequest = {
   text: string;
   systemPrompt: string;
   installID: string;
-  licenseKey?: string | null;
-  licenseInstanceID?: string | null;
+  sessionToken?: string | null;
   warmupOnly?: boolean;
 };
 
 type AccessPlan = {
   plan: "trial" | "active";
-  licenseHash: string | null;
+  accountHash: string | null;
   planName: string | null;
   trialDaysRemaining: number;
 };
@@ -48,7 +46,7 @@ Deno.serve(async (req) => {
     const client = createServiceClient();
     const identityHash = await sha256Hex(parsed.value.installID);
     const identity = await upsertIdentity(client, identityHash);
-    const plan = await resolveAccessPlan(parsed.value, identity.firstSeenAt);
+    const plan = await resolveAccessPlan(client, parsed.value, identity.firstSeenAt);
 
     if (plan.plan === "trial" && plan.trialDaysRemaining <= 0) {
       return json({ error: "Trial expired" }, 403, req);
@@ -100,8 +98,7 @@ function parseRequest(body: unknown): { ok: true; value: TranslateRequest } | { 
       text,
       systemPrompt,
       installID,
-      licenseKey: readOptionalString(body, "licenseKey"),
-      licenseInstanceID: readOptionalString(body, "licenseInstanceID"),
+      sessionToken: readOptionalString(body, "sessionToken"),
       warmupOnly: readOptionalBoolean(body, "warmupOnly") ?? false,
     },
   };
@@ -128,24 +125,68 @@ async function upsertIdentity(client: ReturnType<typeof createServiceClient>, id
   return { firstSeenAt: data.first_seen_at as string };
 }
 
-async function resolveAccessPlan(request: TranslateRequest, firstSeenAt: string): Promise<AccessPlan> {
+async function resolveAccessPlan(
+  client: ReturnType<typeof createServiceClient>,
+  request: TranslateRequest,
+  firstSeenAt: string,
+): Promise<AccessPlan> {
   const trialDaysRemaining = calculateTrialDaysRemaining(firstSeenAt);
-  const licenseKey = request.licenseKey?.trim();
-  if (!licenseKey) {
-    return { plan: "trial", licenseHash: null, planName: null, trialDaysRemaining };
+  const sessionToken = request.sessionToken?.trim();
+  if (!sessionToken) {
+    return { plan: "trial", accountHash: null, planName: null, trialDaysRemaining };
   }
 
-  const validation = await validateLemonLicense(licenseKey, request.licenseInstanceID);
-  if (!validation.isActive) {
-    return { plan: "trial", licenseHash: null, planName: null, trialDaysRemaining };
+  const subscription = await lookupActiveSubscription(client, sessionToken);
+  if (!subscription) {
+    return { plan: "trial", accountHash: null, planName: null, trialDaysRemaining };
   }
 
-  const licenseHash = await sha256Hex(licenseKey);
+  const accountHash = await sha256Hex(subscription.accountID);
   return {
     plan: "active",
-    licenseHash,
-    planName: validation.planName,
+    accountHash,
+    planName: subscription.planName,
     trialDaysRemaining,
+  };
+}
+
+type ActiveSubscription = {
+  accountID: string;
+  planName: string | null;
+};
+
+async function lookupActiveSubscription(
+  client: ReturnType<typeof createServiceClient>,
+  sessionToken: string,
+): Promise<ActiveSubscription | null> {
+  const pepper = Deno.env.get("MAGIC_CODE_PEPPER");
+  if (!pepper) return null;
+
+  const tokenHash = await sha256Hex(`${sessionToken}:${pepper}`);
+  const nowISO = new Date().toISOString();
+
+  const { data: session } = await client
+    .from("app_sessions")
+    .select("account_id")
+    .eq("token_hash", tokenHash)
+    .gt("expires_at", nowISO)
+    .maybeSingle();
+
+  if (!session?.account_id) return null;
+
+  const { data: subscription } = await client
+    .from("account_subscriptions")
+    .select("status, plan_name")
+    .eq("account_id", session.account_id)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!subscription || subscription.status !== "active") return null;
+
+  return {
+    accountID: session.account_id as string,
+    planName: (subscription.plan_name as string | null) ?? null,
   };
 }
 
@@ -165,7 +206,7 @@ async function syncIdentity(
     .update({
       last_seen_at: new Date().toISOString(),
       last_plan: plan.plan,
-      last_license_hash: plan.licenseHash,
+      last_license_hash: plan.accountHash,
     })
     .eq("identity_hash", identityHash);
 
@@ -184,7 +225,7 @@ async function enforceLimits(
     return await enforceTrialLimits(client, identityHash, textLength);
   }
 
-  const scopeHash = plan.licenseHash ?? identityHash;
+  const scopeHash = plan.accountHash ?? identityHash;
   return await enforcePaidLimits(client, scopeHash, textLength);
 }
 
@@ -211,7 +252,7 @@ async function enforceTrialLimits(
 
 async function enforcePaidLimits(
   client: ReturnType<typeof createServiceClient>,
-  licenseHash: string,
+  accountHash: string,
   textLength: number,
 ) {
   if (textLength > paidMaxCharacters) {
@@ -220,14 +261,14 @@ async function enforcePaidLimits(
     };
   }
 
-  const burstUsage = await loadUsageWindow(client, "license_hash", licenseHash, minutesAgo(10));
+  const burstUsage = await loadUsageWindow(client, "license_hash", accountHash, minutesAgo(10));
   if (burstUsage.count >= paidBurstLimit) {
     return {
       body: { error: "Too many requests in a short period.", retry_after_seconds: 600 },
     };
   }
 
-  const dailyUsage = await loadUsageWindow(client, "license_hash", licenseHash, minutesAgo(24 * 60));
+  const dailyUsage = await loadUsageWindow(client, "license_hash", accountHash, minutesAgo(24 * 60));
   if (dailyUsage.count >= paidDailyLimit || dailyUsage.characters >= paidDailyCharacterLimit) {
     return {
       body: { error: "Daily fair-use limit reached.", retry_after_seconds: secondsUntilTomorrowUTC() },
@@ -273,7 +314,7 @@ async function recordUsage(
 ) {
   const { error } = await client.from("translation_usage_events").insert({
     identity_hash: identityHash,
-    license_hash: plan.licenseHash,
+    license_hash: plan.accountHash,
     plan: plan.plan,
     char_count: charCount,
     model,
