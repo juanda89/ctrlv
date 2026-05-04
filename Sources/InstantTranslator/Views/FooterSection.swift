@@ -7,8 +7,7 @@ struct FooterSection: View {
     let onOpenFeedback: () -> Void
     let onCheckForUpdates: () -> Void
     let onShowAbout: () -> Void
-
-    @State private var showDebugSheet = false
+    let onShowDebug: () -> Void
 
     var body: some View {
         HStack {
@@ -26,7 +25,7 @@ struct FooterSection: View {
                 }
                 Divider()
                 Button("Debug") {
-                    showDebugSheet = true
+                    onShowDebug()
                 }
                 Divider()
                 Text(appVersionLabel)
@@ -50,9 +49,6 @@ struct FooterSection: View {
             }
             .menuIndicator(.hidden)
             .menuStyle(.borderlessButton)
-        }
-        .sheet(isPresented: $showDebugSheet) {
-            DebugSheet(translatorVM: translatorVM, updateService: updateService)
         }
     }
 

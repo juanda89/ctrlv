@@ -4,7 +4,7 @@ import SwiftUI
 struct DebugSheet: View {
     @Bindable var translatorVM: TranslatorViewModel
     @Bindable var updateService: UpdateService
-    @Environment(\.dismiss) private var dismiss
+    let onClose: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -15,7 +15,7 @@ struct DebugSheet: View {
                 Spacer()
 
                 Button {
-                    dismiss()
+                    onClose()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16, weight: .semibold))
@@ -129,7 +129,10 @@ struct DebugSheet: View {
             }
         }
         .padding(16)
-        .frame(width: 400)
+        .frame(maxWidth: .infinity)
+        .onDisappear {
+            onClose()
+        }
     }
 
     private func debugRow(_ label: String, value: String, tint: Color? = nil) -> some View {
