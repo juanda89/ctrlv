@@ -11,6 +11,15 @@ struct StatusSection: View {
         if showSignIn {
             SignInView(licenseService: licenseService) {
                 showSignIn = false
+                // Auto-advance to subscribe step if user just signed in
+                // and doesn't yet have an active subscription
+                if licenseService.isSignedIn {
+                    if case .active = licenseService.state {
+                        // Already subscribed; show normal active card
+                    } else {
+                        showSubscribePrompt = true
+                    }
+                }
             }
         } else if showSubscribePrompt {
             subscribePrompt
@@ -217,6 +226,7 @@ struct StatusSection: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
+                .tint(MenuTheme.cyan)
                 .disabled(licenseService.isLoading)
             }
 

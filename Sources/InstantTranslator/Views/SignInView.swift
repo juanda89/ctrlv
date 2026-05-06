@@ -8,8 +8,6 @@ struct SignInView: View {
     @State private var emailInput: String = ""
     @State private var codeInput: String = ""
     @State private var localMessage: String?
-    @FocusState private var emailFocused: Bool
-    @FocusState private var codeFocused: Bool
 
     var body: some View {
         MenuCard {
@@ -45,13 +43,6 @@ struct SignInView: View {
                     .foregroundStyle(.red)
             }
         }
-        .onAppear {
-            if licenseService.pendingMagicCodeEmail == nil {
-                emailFocused = true
-            } else {
-                codeFocused = true
-            }
-        }
     }
 
     // MARK: - Steps
@@ -66,10 +57,13 @@ struct SignInView: View {
             Text("Email")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(MenuTheme.subtleText)
-            TextField("you@example.com", text: $emailInput)
-                .textFieldStyle(.roundedBorder)
-                .focused($emailFocused)
-                .onSubmit { submitEmail() }
+            NativeTextField(
+                text: $emailInput,
+                placeholder: "you@example.com",
+                autoFocus: true,
+                onSubmit: { submitEmail() }
+            )
+            .frame(height: 24)
         }
 
         HStack {
@@ -78,6 +72,7 @@ struct SignInView: View {
                 submitEmail()
             }
             .buttonStyle(.borderedProminent)
+            .tint(MenuTheme.cyan)
             .disabled(licenseService.isLoading || emailInput.trimmingCharacters(in: .whitespaces).isEmpty)
         }
     }
@@ -92,19 +87,15 @@ struct SignInView: View {
             Text("6-digit code")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(MenuTheme.subtleText)
-            TextField("123456", text: $codeInput)
-                .textFieldStyle(.roundedBorder)
-                .focused($codeFocused)
-                .onChange(of: codeInput) { _, newValue in
-                    let filtered = newValue.filter { $0.isNumber }
-                    if filtered != newValue {
-                        codeInput = filtered
-                    }
-                    if filtered.count > 6 {
-                        codeInput = String(filtered.prefix(6))
-                    }
-                }
-                .onSubmit { submitCode() }
+            NativeTextField(
+                text: $codeInput,
+                placeholder: "123456",
+                keyboardType: .numeric,
+                maxLength: 6,
+                autoFocus: true,
+                onSubmit: { submitCode() }
+            )
+            .frame(height: 24)
         }
 
         HStack {
@@ -122,6 +113,7 @@ struct SignInView: View {
                 submitCode()
             }
             .buttonStyle(.borderedProminent)
+            .tint(MenuTheme.cyan)
             .disabled(licenseService.isLoading || codeInput.count != 6)
         }
     }
@@ -140,7 +132,6 @@ struct SignInView: View {
             let ok = await licenseService.requestMagicCode(email: trimmed)
             if ok {
                 emailInput = ""
-                codeFocused = true
             }
         }
     }

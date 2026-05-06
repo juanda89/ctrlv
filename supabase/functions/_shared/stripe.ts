@@ -71,7 +71,6 @@ export async function createCheckoutSession(
     body["customer"] = params.existingCustomerID;
   } else {
     body["customer_email"] = params.customerEmail;
-    body["customer_creation"] = "always";
   }
 
   const result = await stripeFetch("/checkout/sessions", body);
