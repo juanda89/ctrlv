@@ -1,13 +1,13 @@
 import Foundation
 
-enum LicenseState: Equatable {
+public enum LicenseState: Equatable, Sendable {
     case checking
     case trial(daysRemaining: Int)
     case expired
     case active(planName: String?, validatedAt: Date, isOfflineGrace: Bool)
     case invalid(reason: String)
 
-    var canTranslate: Bool {
+    public var canTranslate: Bool {
         switch self {
         case .trial, .active:
             true
@@ -16,7 +16,7 @@ enum LicenseState: Equatable {
         }
     }
 
-    var statusText: String {
+    public var statusText: String {
         switch self {
         case .checking:
             return "Checking license"

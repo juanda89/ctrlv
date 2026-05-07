@@ -1,3 +1,4 @@
+import ControlVCore
 import Foundation
 
 struct CtrlVCloudProvider: TranslationProvider {

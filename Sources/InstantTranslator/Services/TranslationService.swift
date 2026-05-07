@@ -1,3 +1,4 @@
+import ControlVCore
 import Foundation
 
 /// Protocol for LLM translation providers.

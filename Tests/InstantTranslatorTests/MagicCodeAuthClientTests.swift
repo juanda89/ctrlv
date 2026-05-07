@@ -1,3 +1,4 @@
+import ControlVCore
 import Foundation
 import XCTest
 @testable import InstantTranslator

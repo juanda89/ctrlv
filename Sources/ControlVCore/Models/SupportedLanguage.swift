@@ -1,6 +1,6 @@
 import Foundation
 
-enum SupportedLanguage: String, CaseIterable, Codable, Identifiable {
+public enum SupportedLanguage: String, CaseIterable, Codable, Identifiable, Sendable {
     case english = "English"
     case spanish = "Spanish"
     case french = "French"
@@ -14,9 +14,9 @@ enum SupportedLanguage: String, CaseIterable, Codable, Identifiable {
     case korean = "Korean"
     case arabic = "Arabic"
 
-    var id: String { rawValue }
+    public var id: String { rawValue }
 
-    var bcp47: String {
+    public var bcp47: String {
         switch self {
         case .english: "en"
         case .spanish: "es"
