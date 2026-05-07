@@ -93,17 +93,30 @@ async function handleCheckoutCompleted(
 ) {
   const customerID = asString(data.customer);
   const subscriptionID = asString(data.subscription);
+  const clientReferenceID = asString(data.client_reference_id);
   const customerEmail = asString(data.customer_details && (data.customer_details as Record<string, unknown>).email)
     ?? asString(data.customer_email);
 
-  if (!customerID || !subscriptionID || !customerEmail) {
+  if (!customerID || !subscriptionID) {
     return;
   }
 
-  const accountID = await ensureAccount(client, {
-    email: customerEmail.toLowerCase(),
-    stripeCustomerID: customerID,
-  });
+  // CRITICAL: Use client_reference_id (which is the account UUID we passed when
+  // creating the Checkout session). This links the subscription to the account
+  // the user is actually signed into, not the email Stripe collected (which
+  // could be different — Apple Pay, etc.).
+  let accountID: string;
+  if (clientReferenceID) {
+    accountID = await linkAccountToCustomer(client, clientReferenceID, customerID);
+  } else if (customerEmail) {
+    // Fallback for legacy / direct subscriptions without our client_reference_id
+    accountID = await ensureAccount(client, {
+      email: customerEmail.toLowerCase(),
+      stripeCustomerID: customerID,
+    });
+  } else {
+    return;
+  }
 
   // The subscription object is nested in expanded checkout sessions, but typically
   // we'll receive a `customer.subscription.created` event right after, which has full data.
@@ -118,6 +131,22 @@ async function handleCheckoutCompleted(
     },
     { onConflict: "stripe_subscription_id" },
   );
+}
+
+async function linkAccountToCustomer(
+  client: ReturnType<typeof createServiceClient>,
+  accountID: string,
+  stripeCustomerID: string,
+): Promise<string> {
+  const { error } = await client
+    .from("subscription_accounts")
+    .update({ stripe_customer_id: stripeCustomerID })
+    .eq("id", accountID);
+
+  if (error) {
+    throw new Error(error.message);
+  }
+  return accountID;
 }
 
 async function handleSubscriptionUpdate(

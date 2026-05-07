@@ -237,6 +237,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
             popover.contentViewController?.view.window?.makeKey()
             installGlobalClickMonitor()
+
+            // Refresh subscription status whenever popover opens — catches state
+            // changes from Stripe checkout, customer portal cancellations, etc.
+            Task { [weak self] in
+                await self?.licenseService.refreshSubscriptionStatus(forceNetwork: true)
+            }
         }
     }
 
