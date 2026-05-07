@@ -19,7 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var lastClickDate = Date.distantPast
     private let translationIslandOverlay = TranslationIslandOverlayController()
 
-    let licenseService = LicenseService()
+    let licenseService = LicenseService(
+        openURLHandler: { NSWorkspace.shared.open($0) },
+        onStateChange: { TelemetryService.trackLicenseState($0) }
+    )
     lazy var translatorViewModel: TranslatorViewModel = {
         let vm = TranslatorViewModel(licenseService: licenseService)
         vm.appDelegate = self
@@ -83,7 +86,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         )
         fflush(stdout)
 
-        let debugLicenseService = LicenseService(startBackgroundTasks: false)
+        let debugLicenseService = LicenseService(
+            openURLHandler: { NSWorkspace.shared.open($0) },
+            startBackgroundTasks: false,
+            onStateChange: { TelemetryService.trackLicenseState($0) }
+        )
         let debugSettingsViewModel = SettingsViewModel(persistToDisk: false)
         let debugTranslatorViewModel = TranslatorViewModel(
             licenseService: debugLicenseService,

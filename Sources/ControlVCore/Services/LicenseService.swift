@@ -1,32 +1,30 @@
-import AppKit
-import ControlVCore
 import Foundation
 
 @MainActor
 @Observable
-final class LicenseService {
-    private(set) var state: LicenseState = .checking {
+public final class LicenseService {
+    public private(set) var state: LicenseState = .checking {
         didSet {
             if state != oldValue {
-                TelemetryService.trackLicenseState(state)
+                onStateChange?(state)
             }
         }
     }
-    private(set) var isLoading = false
-    private(set) var lastError: String?
+    public private(set) var isLoading = false
+    public private(set) var lastError: String?
 
     /// Authentication progress flag for the sign-in flow.
-    private(set) var pendingMagicCodeEmail: String?
+    public private(set) var pendingMagicCodeEmail: String?
 
-    var storedSessionToken: String? {
+    public var storedSessionToken: String? {
         store.read()?.sessionToken
     }
 
-    var storedEmail: String? {
+    public var storedEmail: String? {
         store.read()?.email
     }
 
-    var isSignedIn: Bool {
+    public var isSignedIn: Bool {
         guard let record = store.read() else { return false }
         return !record.sessionToken.isEmpty
     }
@@ -47,15 +45,19 @@ final class LicenseService {
     private let openURLHandler: (URL) -> Void
     private let startBackgroundTasks: Bool
 
+    /// Optional state-change observer (used by Mac for telemetry; iOS can use too).
+    private let onStateChange: ((LicenseState) -> Void)?
+
     private var revalidationTask: Task<Void, Never>?
 
-    init(
+    public init(
         client: MagicCodeAuthClientProtocol = MagicCodeAuthClient(),
         store: AccountStoring = AccountStore(),
         userDefaults: UserDefaults = .standard,
         now: @escaping () -> Date = Date.init,
-        openURLHandler: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
-        startBackgroundTasks: Bool = true
+        openURLHandler: @escaping (URL) -> Void,
+        startBackgroundTasks: Bool = true,
+        onStateChange: ((LicenseState) -> Void)? = nil
     ) {
         self.client = client
         self.store = store
@@ -63,6 +65,7 @@ final class LicenseService {
         self.now = now
         self.openURLHandler = openURLHandler
         self.startBackgroundTasks = startBackgroundTasks
+        self.onStateChange = onStateChange
 
         clearLegacyLemonStoreIfPresent()
         clearLegacySessionKeys()
@@ -78,7 +81,7 @@ final class LicenseService {
         }
     }
 
-    func loadState() {
+    public func loadState() {
         lastError = nil
 
         guard let record = store.read(), !record.sessionToken.isEmpty else {
@@ -98,7 +101,7 @@ final class LicenseService {
     }
 
     /// Step 1 of sign-in: request a magic code be emailed.
-    func requestMagicCode(email: String) async -> Bool {
+    public func requestMagicCode(email: String) async -> Bool {
         let normalized = email.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty, normalized.contains("@") else {
             lastError = "Enter a valid email"
@@ -120,7 +123,7 @@ final class LicenseService {
     }
 
     /// Step 2 of sign-in: verify the magic code and store the session token.
-    func verifyMagicCode(_ code: String) async -> Bool {
+    public func verifyMagicCode(_ code: String) async -> Bool {
         let normalized = code.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let email = pendingMagicCodeEmail, !normalized.isEmpty else {
             lastError = "Enter the 6-digit code"
@@ -157,13 +160,13 @@ final class LicenseService {
     }
 
     /// Cancel the current pending sign-in (user clicked "back" or "cancel").
-    func cancelPendingSignIn() {
+    public func cancelPendingSignIn() {
         pendingMagicCodeEmail = nil
         lastError = nil
     }
 
     /// Refresh subscription status. Used both manually and periodically.
-    func refreshSubscriptionStatus(forceNetwork: Bool = false) async {
+    public func refreshSubscriptionStatus(forceNetwork: Bool = false) async {
         guard !isLoading else { return }
         guard var record = store.read(), !record.sessionToken.isEmpty else {
             state = localTrialOrExpiredState()
@@ -230,7 +233,7 @@ final class LicenseService {
     }
 
     /// Open Stripe Checkout in the browser. Requires being signed in.
-    func openUpgrade() async {
+    public func openUpgrade() async {
         guard let token = storedSessionToken else {
             lastError = "Sign in first to subscribe"
             return
@@ -248,7 +251,7 @@ final class LicenseService {
     }
 
     /// Open Stripe Customer Portal. Requires being signed in with a subscription.
-    func openManageSubscription() async {
+    public func openManageSubscription() async {
         guard let token = storedSessionToken else { return }
 
         isLoading = true
@@ -263,14 +266,14 @@ final class LicenseService {
     }
 
     /// Sign out: delete session and revert to trial/expired.
-    func signOut() {
+    public func signOut() {
         store.delete()
         pendingMagicCodeEmail = nil
         lastError = nil
         loadState()
     }
 
-    func applyDebugState(_ debugState: LicenseState) {
+    public func applyDebugState(_ debugState: LicenseState) {
         revalidationTask?.cancel()
         isLoading = false
         lastError = nil
