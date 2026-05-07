@@ -232,7 +232,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if popover.isShown {
             closePopover()
         } else {
+            // Activate app first so popover becomes key window (LSUIElement workaround)
+            NSApp.activate(ignoringOtherApps: true)
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+            popover.contentViewController?.view.window?.makeKey()
             installGlobalClickMonitor()
         }
     }

@@ -87,6 +87,8 @@ struct NativeTextField: NSViewRepresentable {
             context.coordinator.didApplyAutoFocus = true
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 guard let window = nsView.window else { return }
+                NSApp.activate(ignoringOtherApps: true)
+                window.makeKeyAndOrderFront(nil)
                 window.makeFirstResponder(nsView)
             }
         }
