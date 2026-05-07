@@ -1,24 +1,23 @@
-import ControlVCore
 import Foundation
 
 /// Protocol for LLM translation providers.
-protocol TranslationProvider {
+public protocol TranslationProvider {
     func translate(text: String, systemPrompt: String) async throws -> String
 }
 
-protocol StreamingTranslationProvider {
+public protocol StreamingTranslationProvider {
     func translateStream(text: String, systemPrompt: String) -> AsyncThrowingStream<String, Error>
 }
 
 /// Abstraction layer that delegates to the active provider.
-final class TranslationService {
+public final class TranslationService {
     private let provider: TranslationProvider
 
-    init(provider: TranslationProvider) {
+    public init(provider: TranslationProvider) {
         self.provider = provider
     }
 
-    func translate(_ request: TranslationRequest) async throws -> TranslationResponse {
+    public func translate(_ request: TranslationRequest) async throws -> TranslationResponse {
         let systemPrompt = PromptBuilder.buildSystemPrompt(
             targetLanguage: request.targetLanguage.rawValue,
             tone: request.tone,

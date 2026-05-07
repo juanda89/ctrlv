@@ -1,6 +1,6 @@
 import Foundation
 
-enum TranslationError: LocalizedError {
+public enum TranslationError: LocalizedError {
     case noTextSelected
     case accessibilityNotGranted
     case backendNotConfigured
@@ -12,7 +12,7 @@ enum TranslationError: LocalizedError {
     case trialTextTooLong(maxWords: Int)
     case replacementFailed
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .noTextSelected:
             "No text selected"

@@ -1,13 +1,12 @@
-import ControlVCore
 import Foundation
 
-struct CtrlVCloudProvider: TranslationProvider {
-    let endpoint: URL
-    let installID: String
-    let sessionToken: String?
-    let session: URLSession
+public struct CtrlVCloudProvider: TranslationProvider {
+    public let endpoint: URL
+    public let installID: String
+    public let sessionToken: String?
+    public let session: URLSession
 
-    init(
+    public init(
         endpoint: URL,
         installID: String,
         sessionToken: String?,
@@ -19,7 +18,7 @@ struct CtrlVCloudProvider: TranslationProvider {
         self.session = session
     }
 
-    func translate(text: String, systemPrompt: String) async throws -> String {
+    public func translate(text: String, systemPrompt: String) async throws -> String {
         let data = try await performRequest(
             payload: GatewayTranslationRequest(
                 text: text,
@@ -34,7 +33,7 @@ struct CtrlVCloudProvider: TranslationProvider {
         return decoded.translatedText
     }
 
-    func warmup(systemPrompt: String) async throws {
+    public func warmup(systemPrompt: String) async throws {
         _ = try await performRequest(
             payload: GatewayTranslationRequest(
                 text: "hola",

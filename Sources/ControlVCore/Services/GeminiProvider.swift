@@ -1,15 +1,15 @@
 import Foundation
 
-struct GeminiProvider: TranslationProvider {
-    let apiKey: String
-    let model: String
+public struct GeminiProvider: TranslationProvider {
+    public let apiKey: String
+    public let model: String
 
-    init(apiKey: String, model: String) {
+    public init(apiKey: String, model: String) {
         self.apiKey = apiKey
         self.model = model
     }
 
-    func translate(text: String, systemPrompt: String) async throws -> String {
+    public func translate(text: String, systemPrompt: String) async throws -> String {
         guard let encodedModel = model.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
               let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(encodedModel):generateContent") else {
             throw TranslationError.apiError(statusCode: 0, message: "Invalid URL")

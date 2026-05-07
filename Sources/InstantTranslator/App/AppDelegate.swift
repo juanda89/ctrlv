@@ -1,3 +1,5 @@
+import ControlVCore
+
 import AppKit
 import ServiceManagement
 import SwiftUI

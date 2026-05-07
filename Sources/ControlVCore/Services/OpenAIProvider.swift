@@ -1,15 +1,15 @@
 import Foundation
 
-struct OpenAIProvider: TranslationProvider, StreamingTranslationProvider {
-    let apiKey: String
-    let model: String
+public struct OpenAIProvider: TranslationProvider, StreamingTranslationProvider {
+    public let apiKey: String
+    public let model: String
 
-    init(apiKey: String, model: String) {
+    public init(apiKey: String, model: String) {
         self.apiKey = apiKey
         self.model = model
     }
 
-    func translate(text: String, systemPrompt: String) async throws -> String {
+    public func translate(text: String, systemPrompt: String) async throws -> String {
         let request = try buildRequest(text: text, systemPrompt: systemPrompt, stream: false)
 
         let (data, response) = try await URLSession.shared.data(for: request)
@@ -31,7 +31,7 @@ struct OpenAIProvider: TranslationProvider, StreamingTranslationProvider {
         return parsed.choices.first?.message.content?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     }
 
-    func translateStream(text: String, systemPrompt: String) -> AsyncThrowingStream<String, Error> {
+    public func translateStream(text: String, systemPrompt: String) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
             Task {
                 do {
@@ -103,8 +103,10 @@ struct OpenAIProvider: TranslationProvider, StreamingTranslationProvider {
     }
 }
 
-struct OpenAIStreamEventParser {
-    func parse(line: String) throws -> OpenAIStreamEvent {
+public struct OpenAIStreamEventParser {
+    public init() {}
+
+    public func parse(line: String) throws -> OpenAIStreamEvent {
         guard line.hasPrefix("data:") else { return .ignore }
 
         let payload = String(line.dropFirst(5)).trimmingCharacters(in: .whitespacesAndNewlines)
@@ -129,7 +131,7 @@ struct OpenAIStreamEventParser {
     }
 }
 
-enum OpenAIStreamEvent: Equatable {
+public enum OpenAIStreamEvent: Equatable, Sendable {
     case ignore
     case done
     case content(String)

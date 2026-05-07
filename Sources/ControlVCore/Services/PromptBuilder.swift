@@ -1,9 +1,8 @@
-import ControlVCore
 import Foundation
 
-struct PromptBuilder {
+public struct PromptBuilder {
 
-    static func buildSystemPrompt(targetLanguage: String, tone: Tone, customTonePrompt: String? = nil) -> String {
+    public static func buildSystemPrompt(targetLanguage: String, tone: Tone, customTonePrompt: String? = nil) -> String {
         """
         You are an expert bilingual writer -- not a literal translator. Your task is to take the user's text and re-express it in \(targetLanguage) as a native speaker would naturally write or say it.
 

@@ -1,30 +1,30 @@
 import Foundation
 
-enum TrialTranslationService {
-    static let dailyLimit = 50
-    static let maxCharacters = 3000
+public enum TrialTranslationService {
+    public static let dailyLimit = 50
+    public static let maxCharacters = 3000
 
     private static let userDefaults = UserDefaults.standard
 
-    static func remainingToday() -> Int {
+    public static func remainingToday() -> Int {
         max(0, dailyLimit - usedToday())
     }
 
-    static func canTranslate() -> Bool {
+    public static func canTranslate() -> Bool {
         usedToday() < dailyLimit
     }
 
-    static func isTextWithinLimit(_ text: String) -> Bool {
+    public static func isTextWithinLimit(_ text: String) -> Bool {
         text.count <= maxCharacters
     }
 
-    static func recordTranslation() {
+    public static func recordTranslation() {
         let key = todayKey()
         let current = userDefaults.integer(forKey: key)
         userDefaults.set(current + 1, forKey: key)
     }
 
-    static func usedToday() -> Int {
+    public static func usedToday() -> Int {
         userDefaults.integer(forKey: todayKey())
     }
 

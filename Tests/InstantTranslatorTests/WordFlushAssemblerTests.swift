@@ -1,3 +1,5 @@
+import ControlVCore
+
 import XCTest
 @testable import InstantTranslator
 

@@ -1,17 +1,18 @@
-import ControlVCore
 import CryptoKit
 import Foundation
 
-protocol AccountStoring {
+public protocol AccountStoring {
     func read() -> StoredAccountRecord?
     func save(_ record: StoredAccountRecord)
     func delete()
 }
 
-final class AccountStore: AccountStoring {
+public final class AccountStore: AccountStoring {
     private let fileName = "account.enc"
 
-    func read() -> StoredAccountRecord? {
+    public init() {}
+
+    public func read() -> StoredAccountRecord? {
         guard let encrypted = try? Data(contentsOf: fileURL),
               let sealed = try? AES.GCM.SealedBox(combined: encrypted),
               let decrypted = try? AES.GCM.open(sealed, using: symmetricKey),
@@ -21,7 +22,7 @@ final class AccountStore: AccountStoring {
         return record
     }
 
-    func save(_ record: StoredAccountRecord) {
+    public func save(_ record: StoredAccountRecord) {
         guard let payload = try? JSONEncoder().encode(record),
               let sealed = try? AES.GCM.seal(payload, using: symmetricKey),
               let combined = sealed.combined else {
@@ -33,7 +34,7 @@ final class AccountStore: AccountStoring {
         try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
     }
 
-    func delete() {
+    public func delete() {
         try? FileManager.default.removeItem(at: fileURL)
     }
 
@@ -47,7 +48,9 @@ final class AccountStore: AccountStoring {
 
     private var symmetricKey: SymmetricKey {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.instanttranslator.app"
-        let material = "\(bundleID)|\(NSUserName())|\(Host.current().name ?? "unknown")|instanttranslator-account-v1"
+        let username = ProcessInfo.processInfo.userName
+        let hostname = ProcessInfo.processInfo.hostName
+        let material = "\(bundleID)|\(username)|\(hostname)|instanttranslator-account-v1"
         let digest = SHA256.hash(data: Data(material.utf8))
         return SymmetricKey(data: Data(digest))
     }

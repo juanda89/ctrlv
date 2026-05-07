@@ -1,14 +1,14 @@
 import Foundation
 
-final class DeviceIdentityStore {
+public final class DeviceIdentityStore {
     private let userDefaults: UserDefaults
     private let installIDKey = "ctrlvInstallID"
 
-    init(userDefaults: UserDefaults = .standard) {
+    public init(userDefaults: UserDefaults = .standard) {
         self.userDefaults = userDefaults
     }
 
-    func currentInstallID() -> String {
+    public func currentInstallID() -> String {
         if let existing = userDefaults.string(forKey: installIDKey), !existing.isEmpty {
             return existing
         }

@@ -1,7 +1,6 @@
-import ControlVCore
 import Foundation
 
-protocol MagicCodeAuthClientProtocol {
+public protocol MagicCodeAuthClientProtocol {
     func requestMagicCode(email: String) async throws
     func verifyMagicCode(email: String, code: String) async throws -> String
     func refreshSubscriptionStatus(token: String) async throws -> SubscriptionStatus
@@ -9,13 +8,13 @@ protocol MagicCodeAuthClientProtocol {
     func createPortalSession(token: String) async throws -> URL
 }
 
-enum AuthError: LocalizedError {
+public enum AuthError: LocalizedError {
     case missingBaseURL
     case invalidResponse
     case rateLimited(retryAfterSeconds: Int?)
     case server(statusCode: Int, message: String)
 
-    var errorDescription: String? {
+    public var errorDescription: String? {
         switch self {
         case .missingBaseURL: return "Auth service not configured"
         case .invalidResponse: return "Invalid server response"
@@ -30,29 +29,29 @@ enum AuthError: LocalizedError {
     }
 }
 
-final class MagicCodeAuthClient: MagicCodeAuthClientProtocol {
+public final class MagicCodeAuthClient: MagicCodeAuthClientProtocol {
     private let baseURL: URL?
     private let session: URLSession
 
-    init(baseURL: URL? = Constants.authAPIBaseURL, session: URLSession = .shared) {
+    public init(baseURL: URL? = Constants.authAPIBaseURL, session: URLSession = .shared) {
         self.baseURL = baseURL
         self.session = session
     }
 
-    func requestMagicCode(email: String) async throws {
+    public func requestMagicCode(email: String) async throws {
         let url = try endpoint("/request-magic-code")
         let payload = ["email": email]
         let _: EmptyResponse = try await postJSON(url: url, payload: payload, bearerToken: nil)
     }
 
-    func verifyMagicCode(email: String, code: String) async throws -> String {
+    public func verifyMagicCode(email: String, code: String) async throws -> String {
         let url = try endpoint("/verify-magic-code")
         let payload = ["email": email, "code": code]
         let response: SessionTokenResponse = try await postJSON(url: url, payload: payload, bearerToken: nil)
         return response.sessionToken
     }
 
-    func refreshSubscriptionStatus(token: String) async throws -> SubscriptionStatus {
+    public func refreshSubscriptionStatus(token: String) async throws -> SubscriptionStatus {
         let url = try endpoint("/subscription-status")
         let response: SubscriptionStatusResponse = try await postJSON(url: url, payload: EmptyPayload(), bearerToken: token)
         return SubscriptionStatus(
@@ -62,7 +61,7 @@ final class MagicCodeAuthClient: MagicCodeAuthClientProtocol {
         )
     }
 
-    func createCheckoutSession(token: String) async throws -> URL {
+    public func createCheckoutSession(token: String) async throws -> URL {
         let url = try endpoint("/create-checkout-session")
         let response: URLResponse = try await postJSON(url: url, payload: EmptyPayload(), bearerToken: token)
         guard let result = URL(string: response.url) else {
@@ -71,7 +70,7 @@ final class MagicCodeAuthClient: MagicCodeAuthClientProtocol {
         return result
     }
 
-    func createPortalSession(token: String) async throws -> URL {
+    public func createPortalSession(token: String) async throws -> URL {
         let url = try endpoint("/create-portal-session")
         let response: URLResponse = try await postJSON(url: url, payload: EmptyPayload(), bearerToken: token)
         guard let result = URL(string: response.url) else {
