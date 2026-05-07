@@ -1,6 +1,12 @@
 import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { normalizeStripeStatus, verifyStripeSignature } from "../_shared/stripe.ts";
+import {
+  cancellationEmailHTML,
+  pastDueEmailHTML,
+  sendEmail,
+  welcomeEmailHTML,
+} from "../_shared/email.ts";
 
 type StripeEvent = {
   id: string;
@@ -66,8 +72,10 @@ Deno.serve(async (req) => {
         await handleCheckoutCompleted(client, eventObject);
         break;
       case "customer.subscription.created":
+        await handleSubscriptionUpdate(client, eventObject, { emailKind: "welcome" });
+        break;
       case "customer.subscription.updated":
-        await handleSubscriptionUpdate(client, eventObject);
+        await handleSubscriptionUpdate(client, eventObject, { emailKind: "past_due_if_applicable" });
         break;
       case "customer.subscription.deleted":
         await handleSubscriptionDeleted(client, eventObject);
@@ -149,9 +157,14 @@ async function linkAccountToCustomer(
   return accountID;
 }
 
+type SubscriptionUpdateOpts = {
+  emailKind: "none" | "welcome" | "past_due_if_applicable";
+};
+
 async function handleSubscriptionUpdate(
   client: ReturnType<typeof createServiceClient>,
   data: Record<string, unknown>,
+  opts: SubscriptionUpdateOpts = { emailKind: "none" },
 ) {
   const subscriptionID = asString(data.id);
   const customerID = asString(data.customer);
@@ -167,6 +180,15 @@ async function handleSubscriptionUpdate(
 
   const accountID = await resolveAccountByCustomerID(client, customerID);
   if (!accountID) return;
+
+  // Detect first-time creation vs status change for email triggering
+  const { data: existing } = await client
+    .from("account_subscriptions")
+    .select("status")
+    .eq("stripe_subscription_id", subscriptionID)
+    .maybeSingle();
+
+  const previousStatus = (existing?.status as string | null) ?? null;
 
   const { error } = await client.from("account_subscriptions").upsert(
     {
@@ -184,6 +206,56 @@ async function handleSubscriptionUpdate(
   if (error) {
     throw new Error(error.message);
   }
+
+  // Trigger email after the row is saved
+  if (opts.emailKind !== "none") {
+    await maybeSendStatusEmail(client, accountID, status, previousStatus, opts.emailKind);
+  }
+}
+
+async function maybeSendStatusEmail(
+  client: ReturnType<typeof createServiceClient>,
+  accountID: string,
+  status: string,
+  previousStatus: string | null,
+  emailKind: SubscriptionUpdateOpts["emailKind"],
+) {
+  // Welcome: only on first activation (no previous row, transitioning to active)
+  // Past due: only when status changes TO past_due from anything else
+  if (emailKind === "welcome" && status === "active" && previousStatus === null) {
+    const email = await fetchAccountEmail(client, accountID);
+    if (email) {
+      await sendEmail({
+        to: email,
+        subject: "Welcome to Control-V Pro",
+        html: welcomeEmailHTML(),
+      });
+    }
+    return;
+  }
+
+  if (emailKind === "past_due_if_applicable" && status === "past_due" && previousStatus !== "past_due") {
+    const email = await fetchAccountEmail(client, accountID);
+    if (email) {
+      await sendEmail({
+        to: email,
+        subject: "Action needed: payment issue with Control-V",
+        html: pastDueEmailHTML(),
+      });
+    }
+  }
+}
+
+async function fetchAccountEmail(
+  client: ReturnType<typeof createServiceClient>,
+  accountID: string,
+): Promise<string | null> {
+  const { data } = await client
+    .from("subscription_accounts")
+    .select("email")
+    .eq("id", accountID)
+    .maybeSingle();
+  return (data?.email as string | null) ?? null;
 }
 
 async function handleSubscriptionDeleted(
@@ -192,6 +264,13 @@ async function handleSubscriptionDeleted(
 ) {
   const subscriptionID = asString(data.id);
   if (!subscriptionID) return;
+
+  // Look up account before updating so we can email them
+  const { data: existing } = await client
+    .from("account_subscriptions")
+    .select("account_id, status")
+    .eq("stripe_subscription_id", subscriptionID)
+    .maybeSingle();
 
   const { error } = await client
     .from("account_subscriptions")
@@ -203,6 +282,17 @@ async function handleSubscriptionDeleted(
 
   if (error) {
     throw new Error(error.message);
+  }
+
+  if (existing?.account_id && existing.status !== "canceled") {
+    const email = await fetchAccountEmail(client, existing.account_id as string);
+    if (email) {
+      await sendEmail({
+        to: email,
+        subject: "Your Control-V subscription was canceled",
+        html: cancellationEmailHTML(),
+      });
+    }
   }
 }
 

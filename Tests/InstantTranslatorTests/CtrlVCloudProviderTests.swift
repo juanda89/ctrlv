@@ -26,8 +26,7 @@ final class CtrlVCloudProviderTests: XCTestCase {
             let body = try XCTUnwrap(request.httpBody ?? requestBody(from: request.httpBodyStream))
             let payload = try JSONDecoder().decode(TestGatewayPayload.self, from: body)
             XCTAssertEqual(payload.installID, "install-1")
-            XCTAssertEqual(payload.licenseKey, "license-1")
-            XCTAssertEqual(payload.licenseInstanceID, "instance-1")
+            XCTAssertEqual(payload.sessionToken, "session-token-abc")
             return makeCloudResponse(
                 statusCode: 200,
                 json: #"{"translatedText":"Hola","model":"moonshotai/kimi-k2.5","plan":"trial"}"#
@@ -37,14 +36,34 @@ final class CtrlVCloudProviderTests: XCTestCase {
         let provider = CtrlVCloudProvider(
             endpoint: URL(string: "https://example.com/translate")!,
             installID: "install-1",
-            licenseKey: "license-1",
-            licenseInstanceID: "instance-1",
+            sessionToken: "session-token-abc",
             session: session
         )
 
         let translated = try await provider.translate(text: "Hello", systemPrompt: "Translate to Spanish")
 
         XCTAssertEqual(translated, "Hola")
+    }
+
+    func test_translate_omitsSessionToken_whenNotProvided() async throws {
+        CloudProviderURLProtocolStub.requestHandler = { request in
+            let body = try XCTUnwrap(request.httpBody ?? requestBody(from: request.httpBodyStream))
+            let payload = try JSONDecoder().decode(TestGatewayPayload.self, from: body)
+            XCTAssertNil(payload.sessionToken)
+            return makeCloudResponse(
+                statusCode: 200,
+                json: #"{"translatedText":"Hola","model":"x","plan":"trial"}"#
+            )
+        }
+
+        let provider = CtrlVCloudProvider(
+            endpoint: URL(string: "https://example.com/translate")!,
+            installID: "install-1",
+            sessionToken: nil,
+            session: session
+        )
+
+        _ = try await provider.translate(text: "Hello", systemPrompt: "Translate")
     }
 
     func test_translate_throwsRateLimited_whenGatewayReturns429() async {
@@ -58,8 +77,7 @@ final class CtrlVCloudProviderTests: XCTestCase {
         let provider = CtrlVCloudProvider(
             endpoint: URL(string: "https://example.com/translate")!,
             installID: "install-1",
-            licenseKey: nil,
-            licenseInstanceID: nil,
+            sessionToken: nil,
             session: session
         )
 
@@ -86,15 +104,14 @@ final class CtrlVCloudProviderTests: XCTestCase {
             XCTAssertTrue(payload.warmupOnly)
             return makeCloudResponse(
                 statusCode: 200,
-                json: #"{"warmed":true,"model":"moonshotai/kimi-k2.5"}"#
+                json: #"{"warmed":true,"model":"x"}"#
             )
         }
 
         let provider = CtrlVCloudProvider(
             endpoint: URL(string: "https://example.com/translate")!,
             installID: "install-1",
-            licenseKey: "license-1",
-            licenseInstanceID: "instance-1",
+            sessionToken: "session-token-abc",
             session: session
         )
 
@@ -104,8 +121,7 @@ final class CtrlVCloudProviderTests: XCTestCase {
 
 private struct TestGatewayPayload: Decodable {
     let installID: String
-    let licenseKey: String?
-    let licenseInstanceID: String?
+    let sessionToken: String?
 }
 
 private struct TestGatewayWarmupPayload: Decodable {
@@ -117,13 +133,8 @@ private struct TestGatewayWarmupPayload: Decodable {
 private final class CloudProviderURLProtocolStub: URLProtocol {
     static var requestHandler: ((URLRequest) throws -> (HTTPURLResponse, Data))?
 
-    override class func canInit(with request: URLRequest) -> Bool {
-        true
-    }
-
-    override class func canonicalRequest(for request: URLRequest) -> URLRequest {
-        request
-    }
+    override class func canInit(with request: URLRequest) -> Bool { true }
+    override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
 
     override func startLoading() {
         guard let handler = Self.requestHandler else {

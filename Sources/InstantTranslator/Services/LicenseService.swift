@@ -142,6 +142,10 @@ final class LicenseService {
             pendingMagicCodeEmail = nil
             lastError = nil
 
+            // Release the loading lock so refreshSubscriptionStatus can proceed.
+            // (refreshSubscriptionStatus has its own re-entry guard.)
+            isLoading = false
+
             // Check subscription status immediately after sign-in.
             await refreshSubscriptionStatus(forceNetwork: true)
             return true
