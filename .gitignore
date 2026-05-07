@@ -1,8 +1,6 @@
 .DS_Store
 .build/
 .swiftpm/
-*.xcodeproj/
-*.xcworkspace/
 DerivedData/
 .env
 build/
@@ -13,3 +11,17 @@ updates/stable/*
 artifacts/menu-previews/
 artifacts/menu-diffs/
 supabase/.temp/
+
+# Xcode project structure IS committed (so other machines can open it).
+# Per-user state inside xcodeproj/xcworkspace is NOT committed.
+**/xcuserdata/
+**/*.xcuserstate
+**/*.xcuserdatad/
+**/UserInterfaceState.xcuserstate
+
+# Build artifacts and caches
+**/Build/
+**/.build/
+**/Pods/
+*.ipa
+*.xcarchive
