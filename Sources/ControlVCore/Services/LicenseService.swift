@@ -233,9 +233,23 @@ public final class LicenseService {
     }
 
     /// Open Stripe Checkout in the browser. Requires being signed in.
+    /// Always re-validates subscription status first — protects against stale
+    /// cache, network errors during last refresh, or multi-device payments.
     public func openUpgrade() async {
         guard let token = storedSessionToken else {
             lastError = "Sign in first to subscribe"
+            return
+        }
+
+        // Force-refresh status before creating a checkout session. If user
+        // already has an active subscription (e.g. paid on another device,
+        // or just returned from Stripe and cache was stale), state will
+        // update and the SwiftUI view will re-render — no checkout opened.
+        await refreshSubscriptionStatus(forceNetwork: true)
+
+        if case .active = state {
+            // Already subscribed; UI will react to state change.
+            lastError = nil
             return
         }
 

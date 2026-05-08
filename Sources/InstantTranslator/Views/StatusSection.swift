@@ -225,6 +225,13 @@ struct StatusSection: View {
                 Button("Subscribe") {
                     Task { @MainActor in
                         await licenseService.openUpgrade()
+                        // openUpgrade now refreshes status first — if it
+                        // detects an existing active subscription, it skips
+                        // the checkout. Dismiss the prompt so the user sees
+                        // the Active card.
+                        if case .active = licenseService.state {
+                            showSubscribePrompt = false
+                        }
                     }
                 }
                 .buttonStyle(.borderedProminent)
