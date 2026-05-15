@@ -75,6 +75,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    // Debug header reveals underlying error for triage. Safe to leave because
+    // it requires the caller to opt in by passing X-Ctrlv-Debug: 1.
+    if (req.headers.get("X-Ctrlv-Debug") === "1") {
+      const detail = error instanceof Error ? error.message : String(error);
+      return json({ error: "Translation failed", detail }, 500, req);
+    }
+
     return json({ error: "Translation failed. Please try again." }, 500, req);
   }
 });

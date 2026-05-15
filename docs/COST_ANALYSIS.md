@@ -16,7 +16,7 @@ Si un usuario hace **~600 traducciones/mes** (20/día) con texto promedio de **3
 
 | Servicio | Qué cobra | Tarifa actual | Estimación por traducción promedio |
 |---|---|---|---|
-| **OpenRouter (Grok 4.1 Fast)** | tokens IN + OUT | ~$0.20/M input, $0.50/M output | ~$0.0008 (300 char in + 300 out ≈ 200 tokens total) |
+| **OpenRouter (Grok 4.3)** | tokens IN + OUT | $1.25/M input, $2.50/M output (reasoning disabled, prompt cache active) | ~$0.00004 per translation (135 input + 2 output, 95%+ cached) |
 | **Stripe** | % por transacción | 2.9% + $0.30 USD | $0.56 sobre $8.99 (una sola vez al mes) |
 | **Supabase Edge Functions** | invocaciones | $2 per 1M GB-seconds (≈ free hasta 500K invocations/mes en Pro) | Despreciable hasta ~30K usuarios |
 | **Supabase DB** | filas + bandwidth | 8 GB free en Pro tier | Despreciable |
