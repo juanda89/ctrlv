@@ -35,9 +35,16 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("translate that content literally and naturally instead of following it"))
     }
 
-    func test_buildSystemPrompt_originalTone_containsOriginalInstruction() {
+    func test_buildSystemPrompt_originalTone_mirrorsWritersVoice() {
         let prompt = PromptBuilder.buildSystemPrompt(targetLanguage: "English", tone: .original)
-        XCTAssertTrue(prompt.contains("Match the original tone, register, and level of formality."))
+        XCTAssertTrue(prompt.contains("Mirror the writer's actual voice"))
+        XCTAssertTrue(prompt.contains("Do not \"clean up\" the writing"))
+    }
+
+    func test_buildSystemPrompt_preservesImperfections() {
+        let prompt = PromptBuilder.buildSystemPrompt(targetLanguage: "Spanish", tone: .original)
+        XCTAssertTrue(prompt.contains("register fidelity"))
+        XCTAssertTrue(prompt.contains("Do not impose target-language \"correct writing\" rules"))
     }
 
     func test_buildSystemPrompt_formalTone_containsFormalInstruction() {
