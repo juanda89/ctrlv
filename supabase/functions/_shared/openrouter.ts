@@ -1,11 +1,20 @@
 const defaultBaseURL = "https://openrouter.ai/api/v1";
-const defaultModel = "x-ai/grok-4.1-fast";
+
+// Default model chain: tried in order, fallback on transient errors and
+// "model deprecated/unavailable" (4xx other than 429, plus 5xx and network).
+const defaultModels = [
+  "x-ai/grok-4.3", // Primary: cheap with prompt cache + reasoning disabled
+  "moonshotai/kimi-k2.5", // Fallback 1: proven multilingual mid-tier
+  "qwen/qwen3-235b-a22b-2507", // Fallback 2: ultra-cheap flagship multilingual
+];
+
 const minCompletionTokens = 96;
 const maxCompletionTokens = 4096;
 
 export type OpenRouterResult = {
   translatedText: string;
   model: string;
+  fallbackUsed: boolean;
 };
 
 export async function translateWithOpenRouter(text: string, systemPrompt: string): Promise<OpenRouterResult> {
@@ -14,29 +23,69 @@ export async function translateWithOpenRouter(text: string, systemPrompt: string
     throw new Error("Missing OPENROUTER_API_KEY");
   }
 
-  const model = Deno.env.get("OPENROUTER_MODEL") ?? defaultModel;
   const referer = Deno.env.get("OPENROUTER_REFERER") ?? "https://control-v.info";
   const title = Deno.env.get("OPENROUTER_APP_NAME") ?? "ctrl+v";
+  const models = resolveModelChain();
 
+  const errors: string[] = [];
+  for (let i = 0; i < models.length; i += 1) {
+    const model = models[i];
+    try {
+      const translated = await callOpenRouter({
+        apiKey,
+        referer,
+        title,
+        model,
+        text,
+        systemPrompt,
+      });
+      return {
+        translatedText: translated,
+        model,
+        fallbackUsed: i > 0,
+      };
+    } catch (error) {
+      if (error instanceof OpenRouterRateLimitError) {
+        // Rate limits should propagate, not silently mask as a model
+        // problem and burn budget on a different model.
+        throw error;
+      }
+      const message = error instanceof Error ? error.message : String(error);
+      errors.push(`${model}: ${message}`);
+      // Try the next model in the chain
+    }
+  }
+
+  throw new Error(`All OpenRouter models failed: ${errors.join(" | ")}`);
+}
+
+async function callOpenRouter(params: {
+  apiKey: string;
+  referer: string;
+  title: string;
+  model: string;
+  text: string;
+  systemPrompt: string;
+}): Promise<string> {
   const response = await fetch(`${defaultBaseURL}/chat/completions`, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${apiKey}`,
+      "Authorization": `Bearer ${params.apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": referer,
-      "X-Title": title,
+      "HTTP-Referer": params.referer,
+      "X-Title": params.title,
     },
     body: JSON.stringify({
-      model,
+      model: params.model,
       temperature: 0.1,
-      max_tokens: estimateMaxTokens(text),
+      max_tokens: estimateMaxTokens(params.text),
       reasoning: {
         effort: "none",
         exclude: true,
       },
       messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: text },
+        { role: "system", content: params.systemPrompt },
+        { role: "user", content: params.text },
       ],
     }),
   });
@@ -56,8 +105,30 @@ export async function translateWithOpenRouter(text: string, systemPrompt: string
   if (!translatedText) {
     throw new Error("OpenRouter returned an empty translation");
   }
+  return translatedText;
+}
 
-  return { translatedText, model };
+/**
+ * Resolution order:
+ *   1. OPENROUTER_MODELS env var (comma-separated chain)
+ *   2. OPENROUTER_MODEL env var (single primary, no fallback) — back-compat
+ *   3. Hardcoded defaultModels chain
+ */
+function resolveModelChain(): string[] {
+  const chain = Deno.env.get("OPENROUTER_MODELS");
+  if (chain && chain.trim()) {
+    const list = chain.split(",")
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0);
+    if (list.length > 0) return list;
+  }
+
+  const single = Deno.env.get("OPENROUTER_MODEL");
+  if (single && single.trim()) {
+    return [single.trim()];
+  }
+
+  return [...defaultModels];
 }
 
 export class OpenRouterRateLimitError extends Error {
@@ -77,10 +148,10 @@ function estimateMaxTokens(text: string): number {
 
 function extractContent(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
-  const choices = payload["choices"];
+  const choices = (payload as Record<string, unknown>)["choices"];
   if (!Array.isArray(choices) || choices.length === 0) return null;
-  const message = choices[0]?.message;
-  const content = message?.content;
+  const message = (choices[0] as Record<string, unknown> | undefined)?.["message"] as Record<string, unknown> | undefined;
+  const content = message?.["content"];
 
   if (typeof content === "string" && content.trim().length > 0) {
     return content.trim();
@@ -88,7 +159,7 @@ function extractContent(payload: unknown): string | null {
 
   if (Array.isArray(content)) {
     const text = content
-      .map((part) => typeof part?.text === "string" ? part.text : "")
+      .map((part) => typeof (part as Record<string, unknown>)?.["text"] === "string" ? (part as Record<string, unknown>)["text"] as string : "")
       .join("")
       .trim();
     return text.length > 0 ? text : null;
@@ -99,9 +170,11 @@ function extractContent(payload: unknown): string | null {
 
 function errorMessage(payload: unknown): string | null {
   if (!payload || typeof payload !== "object") return null;
-  const error = payload["error"];
-  if (typeof error === "object" && error && typeof error["message"] === "string") {
-    return error["message"];
+  const error = (payload as Record<string, unknown>)["error"];
+  if (typeof error === "object" && error && typeof (error as Record<string, unknown>)["message"] === "string") {
+    return (error as Record<string, unknown>)["message"] as string;
   }
-  return typeof payload["message"] === "string" ? payload["message"] : null;
+  return typeof (payload as Record<string, unknown>)["message"] === "string"
+    ? (payload as Record<string, unknown>)["message"] as string
+    : null;
 }
