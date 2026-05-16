@@ -171,7 +171,8 @@ final class TranslatorViewModel {
                 autoPaste: settings.autoPaste,
                 isTrusted: capture.isTrusted,
                 usedClipboardCapture: capture.usedClipboardCapture,
-                isWholeFieldValue: capture.isWholeFieldValue
+                isWholeFieldValue: capture.isWholeFieldValue,
+                isEditable: capture.isEditable
             )
             debugLastOutputLatencyMs = elapsedMs(since: outputStartedAt)
             debugLastTotalLatencyMs = elapsedMs(since: totalStartedAt)
@@ -262,19 +263,23 @@ final class TranslatorViewModel {
         }
     }
 
-    private func captureSelectedText() async -> (text: String?, isTrusted: Bool, usedClipboardCapture: Bool, isWholeFieldValue: Bool) {
+    private func captureSelectedText() async -> (text: String?, isTrusted: Bool, usedClipboardCapture: Bool, isWholeFieldValue: Bool, isEditable: Bool) {
         let isTrusted = AccessibilityService.isTrusted
         debugLastStage = "Accessibility trusted: \(isTrusted)"
 
         var sourceText: String?
         var usedClipboardCapture = false
         var isWholeFieldValue = false
+        // Default to true so non-AX paths still attempt the editable flow
+        // (this only matters when AX returns nil, e.g. permission revoked).
+        var isEditable = true
 
         if isTrusted {
             if let captured = accessibilityService.capture() {
                 sourceText = captured.text
                 isWholeFieldValue = captured.isWholeFieldValue
-                debugLastStage = "AX read result: \(selectionState(sourceText))\(isWholeFieldValue ? " (whole field)" : "")"
+                isEditable = captured.isEditable
+                debugLastStage = "AX read: \(selectionState(sourceText)) editable=\(isEditable)\(isWholeFieldValue ? " (whole field)" : "")"
             } else {
                 debugLastStage = "AX read returned nothing"
             }
@@ -290,7 +295,7 @@ final class TranslatorViewModel {
             debugLastStage = "Clipboard read result: \(selectionState(sourceText))"
         }
 
-        return (sourceText, isTrusted, usedClipboardCapture, isWholeFieldValue)
+        return (sourceText, isTrusted, usedClipboardCapture, isWholeFieldValue, isEditable)
     }
 
     private func makeTranslationRequest(from text: String, settings: AppSettings) -> TranslationRequest {
@@ -322,11 +327,18 @@ final class TranslatorViewModel {
         autoPaste: Bool,
         isTrusted: Bool,
         usedClipboardCapture: Bool,
-        isWholeFieldValue: Bool = false
+        isWholeFieldValue: Bool = false,
+        isEditable: Bool = true
     ) async throws {
-        if !autoPaste {
+        // Copy-only path: explicit by user (autoPaste OFF) or implicit because
+        // the focused element isn't editable (e.g. selected text on a static
+        // webpage). In both cases we leave the translation in the clipboard
+        // for the user to paste manually.
+        if !autoPaste || !isEditable {
             clipboardService.writeText(translatedText)
-            debugLastStage = "Output: copied to clipboard"
+            debugLastStage = autoPaste
+                ? "Output: copied (non-editable focus)"
+                : "Output: copied to clipboard"
             notifyAppDelegate { $0.flashMenuBarIcon() }
             return
         }

@@ -57,6 +57,11 @@ final class AccessibilityService {
         /// True if `text` came from kAXValueAttribute (whole field content
         /// because no selection existed). False if from kAXSelectedTextAttribute.
         let isWholeFieldValue: Bool
+        /// True if the focused element is an editable text-input-like role.
+        /// False for static page content (Wikipedia article body, etc.) where
+        /// AX writes and Cmd+V will not land anywhere — in that case the
+        /// translation should go to clipboard and stay there for manual paste.
+        let isEditable: Bool
     }
 
     /// Reads the text the user wants translated.
@@ -87,6 +92,7 @@ final class AccessibilityService {
         }
 
         let axElement = element as! AXUIElement
+        let isEditable = Self.isTextInputElement(axElement)
 
         // 1. Try selection first (preferred — preserves user intent)
         var selectedText: AnyObject?
@@ -97,15 +103,15 @@ final class AccessibilityService {
         )
 
         if textResult == .success, let text = selectedText as? String, !text.isEmpty {
-            log.info("Got selected text: \(text.prefix(50))")
-            return CaptureResult(text: text, isWholeFieldValue: false)
+            log.info("Got selected text: \(text.prefix(50)) editable=\(isEditable)")
+            return CaptureResult(text: text, isWholeFieldValue: false, isEditable: isEditable)
         }
 
         // 2. Fallback: if the focused element is an input field and contains
         // typed content, read the whole value. This covers Chrome's URL bar,
         // single-line text inputs, and search fields when the user typed
         // something and pressed the shortcut without selecting.
-        if Self.isTextInputElement(axElement) {
+        if isEditable {
             var value: AnyObject?
             let valueResult = AXUIElementCopyAttributeValue(
                 axElement,
@@ -114,7 +120,7 @@ final class AccessibilityService {
             )
             if valueResult == .success, let text = value as? String, !text.isEmpty {
                 log.info("No selection; using whole field value: \(text.prefix(50))")
-                return CaptureResult(text: text, isWholeFieldValue: true)
+                return CaptureResult(text: text, isWholeFieldValue: true, isEditable: true)
             }
             log.info("Selection empty and value read returned nothing (AXError: \(valueResult.rawValue))")
         } else {
