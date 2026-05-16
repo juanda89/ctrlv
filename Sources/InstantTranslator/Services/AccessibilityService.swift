@@ -51,7 +51,26 @@ final class AccessibilityService {
         return "Bundle: \(bundleID)\nPath: \(bundlePath)\nPID: \(pid)\nTrusted: \(trusted)"
     }
 
-    func getSelectedText() -> String? {
+    /// Result of reading text from the focused UI element.
+    struct CaptureResult {
+        let text: String
+        /// True if `text` came from kAXValueAttribute (whole field content
+        /// because no selection existed). False if from kAXSelectedTextAttribute.
+        let isWholeFieldValue: Bool
+    }
+
+    /// Reads the text the user wants translated.
+    ///
+    /// Priority:
+    ///   1. kAXSelectedTextAttribute — the actual user selection (preferred)
+    ///   2. kAXValueAttribute        — the entire field content, used when the
+    ///      focused element is a text input and the user typed something but
+    ///      hasn't selected it (e.g. Chrome URL bar with cursor at end).
+    ///
+    /// The second fallback is gated on "is this a text-input-like element?" so
+    /// we don't accidentally translate giant body paragraphs of a webpage when
+    /// the user really did mean to translate a (no-op) selection.
+    func capture() -> CaptureResult? {
         guard let app = NSWorkspace.shared.frontmostApplication else {
             log.error("No frontmost application found")
             return nil
@@ -67,24 +86,75 @@ final class AccessibilityService {
             return nil
         }
 
+        let axElement = element as! AXUIElement
+
+        // 1. Try selection first (preferred — preserves user intent)
         var selectedText: AnyObject?
         let textResult = AXUIElementCopyAttributeValue(
-            element as! AXUIElement,
+            axElement,
             kAXSelectedTextAttribute as CFString,
             &selectedText
         )
 
-        guard textResult == .success else {
-            log.error("Could not get selected text. AXError: \(textResult.rawValue)")
-            return nil
+        if textResult == .success, let text = selectedText as? String, !text.isEmpty {
+            log.info("Got selected text: \(text.prefix(50))")
+            return CaptureResult(text: text, isWholeFieldValue: false)
         }
 
-        let text = selectedText as? String
-        log.info("Got selected text: \(text?.prefix(50) ?? "<nil>")")
-        return text
+        // 2. Fallback: if the focused element is an input field and contains
+        // typed content, read the whole value. This covers Chrome's URL bar,
+        // single-line text inputs, and search fields when the user typed
+        // something and pressed the shortcut without selecting.
+        if Self.isTextInputElement(axElement) {
+            var value: AnyObject?
+            let valueResult = AXUIElementCopyAttributeValue(
+                axElement,
+                kAXValueAttribute as CFString,
+                &value
+            )
+            if valueResult == .success, let text = value as? String, !text.isEmpty {
+                log.info("No selection; using whole field value: \(text.prefix(50))")
+                return CaptureResult(text: text, isWholeFieldValue: true)
+            }
+            log.info("Selection empty and value read returned nothing (AXError: \(valueResult.rawValue))")
+        } else {
+            log.info("Selection empty and focused element is not a text input")
+        }
+
+        log.error("Could not get any text from focused element")
+        return nil
     }
 
-    func replaceSelectedText(with newText: String) -> Bool {
+    /// Back-compat wrapper that returns just the text. Loses the
+    /// "isWholeFieldValue" signal — callers that need it should use capture().
+    func getSelectedText() -> String? {
+        capture()?.text
+    }
+
+    /// Returns true if the element is a text-input-like role where reading its
+    /// full value as a translation source is desirable. Avoids reading whole
+    /// document bodies on the web (those are typically AXWebArea / AXStaticText).
+    private static func isTextInputElement(_ element: AXUIElement) -> Bool {
+        var roleValue: AnyObject?
+        let result = AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &roleValue)
+        guard result == .success, let role = roleValue as? String else {
+            return false
+        }
+        switch role {
+        case "AXTextField",          // Chrome omnibox, generic single-line input
+             "AXSearchField",        // Safari/system search fields
+             "AXComboBox",           // editable dropdowns
+             "AXTextArea":           // multi-line input fields
+            return true
+        default:
+            return false
+        }
+    }
+
+    /// Replaces the user's selection with `newText`. If `replaceWholeValue` is
+    /// true (used when the source was read via kAXValueAttribute because no
+    /// selection existed), the entire field content is replaced instead.
+    func replaceSelectedText(with newText: String, replaceWholeValue: Bool = false) -> Bool {
         guard let app = NSWorkspace.shared.frontmostApplication else { return false }
         let axApp = AXUIElementCreateApplication(app.processIdentifier)
 
@@ -100,29 +170,32 @@ final class AccessibilityService {
             return false
         }
 
+        let axElement = element as! AXUIElement
+        let attribute = replaceWholeValue ? kAXValueAttribute : kAXSelectedTextAttribute
+
         var isSettable = DarwinBoolean(false)
         let settableResult = AXUIElementIsAttributeSettable(
-            element as! AXUIElement,
-            kAXSelectedTextAttribute as CFString,
+            axElement,
+            attribute as CFString,
             &isSettable
         )
         if settableResult != .success {
-            log.error("replaceSelectedText: failed settable check. AXError: \(settableResult.rawValue)")
+            log.error("replaceSelectedText: failed settable check on \(attribute). AXError: \(settableResult.rawValue)")
             return false
         }
         if !isSettable.boolValue {
-            log.warning("replaceSelectedText: kAXSelectedTextAttribute is not settable")
+            log.warning("replaceSelectedText: \(attribute) is not settable")
             return false
         }
 
         let result = AXUIElementSetAttributeValue(
-            element as! AXUIElement,
-            kAXSelectedTextAttribute as CFString,
+            axElement,
+            attribute as CFString,
             newText as CFTypeRef
         )
 
         let success = result == .success
-        log.info("replaceSelectedText: \(success ? "OK" : "FAILED (AXError: \(result.rawValue))")")
+        log.info("replaceSelectedText[\(attribute)]: \(success ? "OK" : "FAILED (AXError: \(result.rawValue))")")
         return success
     }
 

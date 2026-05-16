@@ -170,7 +170,8 @@ final class TranslatorViewModel {
                 originalText: text,
                 autoPaste: settings.autoPaste,
                 isTrusted: capture.isTrusted,
-                usedClipboardCapture: capture.usedClipboardCapture
+                usedClipboardCapture: capture.usedClipboardCapture,
+                isWholeFieldValue: capture.isWholeFieldValue
             )
             debugLastOutputLatencyMs = elapsedMs(since: outputStartedAt)
             debugLastTotalLatencyMs = elapsedMs(since: totalStartedAt)
@@ -261,16 +262,22 @@ final class TranslatorViewModel {
         }
     }
 
-    private func captureSelectedText() async -> (text: String?, isTrusted: Bool, usedClipboardCapture: Bool) {
+    private func captureSelectedText() async -> (text: String?, isTrusted: Bool, usedClipboardCapture: Bool, isWholeFieldValue: Bool) {
         let isTrusted = AccessibilityService.isTrusted
         debugLastStage = "Accessibility trusted: \(isTrusted)"
 
         var sourceText: String?
         var usedClipboardCapture = false
+        var isWholeFieldValue = false
 
         if isTrusted {
-            sourceText = accessibilityService.getSelectedText()
-            debugLastStage = "AX read result: \(selectionState(sourceText))"
+            if let captured = accessibilityService.capture() {
+                sourceText = captured.text
+                isWholeFieldValue = captured.isWholeFieldValue
+                debugLastStage = "AX read result: \(selectionState(sourceText))\(isWholeFieldValue ? " (whole field)" : "")"
+            } else {
+                debugLastStage = "AX read returned nothing"
+            }
         }
 
         if sourceText == nil || sourceText?.isEmpty == true {
@@ -283,7 +290,7 @@ final class TranslatorViewModel {
             debugLastStage = "Clipboard read result: \(selectionState(sourceText))"
         }
 
-        return (sourceText, isTrusted, usedClipboardCapture)
+        return (sourceText, isTrusted, usedClipboardCapture, isWholeFieldValue)
     }
 
     private func makeTranslationRequest(from text: String, settings: AppSettings) -> TranslationRequest {
@@ -314,7 +321,8 @@ final class TranslatorViewModel {
         originalText: String,
         autoPaste: Bool,
         isTrusted: Bool,
-        usedClipboardCapture: Bool
+        usedClipboardCapture: Bool,
+        isWholeFieldValue: Bool = false
     ) async throws {
         if !autoPaste {
             clipboardService.writeText(translatedText)
@@ -323,8 +331,19 @@ final class TranslatorViewModel {
             return
         }
 
-        if isTrusted, accessibilityService.replaceSelectedText(with: translatedText) {
+        if isTrusted, accessibilityService.replaceSelectedText(with: translatedText, replaceWholeValue: isWholeFieldValue) {
             try? await Task.sleep(nanoseconds: Constants.axVerificationDelay)
+
+            // Whole-field writes change kAXValueAttribute directly; the selection
+            // verification used for selection-mode writes doesn't apply. The AX
+            // setter already returned success, trust it.
+            if isWholeFieldValue {
+                debugLastStage = "Output: replaced whole field via AX"
+                restoreClipboardAfterAXIfNeeded(usedClipboardCapture: usedClipboardCapture)
+                notifyAppDelegate { $0.flashMenuBarIcon() }
+                return
+            }
+
             let current = accessibilityService.getSelectedText()?.trimmingCharacters(in: .whitespacesAndNewlines)
             let original = originalText.trimmingCharacters(in: .whitespacesAndNewlines)
 
