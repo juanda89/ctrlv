@@ -330,12 +330,15 @@ final class TranslatorViewModel {
         isWholeFieldValue: Bool = false,
         isEditable: Bool = true
     ) async throws {
-        // Copy-only path: explicit by user (autoPaste OFF) or implicit because
-        // the focused element isn't editable (e.g. selected text on a static
-        // webpage). In both cases we leave the translation in the clipboard
-        // for the user to paste manually.
+        // Invariant: the translation ALWAYS lands in the clipboard, regardless
+        // of whether auto-paste replaced it inline. This gives users a reliable
+        // backup ("paste again somewhere else") and means auto-paste being off
+        // never causes a translation to be lost.
+        clipboardService.writeText(translatedText)
+
+        // Copy-only outcomes: explicit (auto-paste off) or implicit (non-editable
+        // focus — selected text on a webpage, etc).
         if !autoPaste || !isEditable {
-            clipboardService.writeText(translatedText)
             debugLastStage = autoPaste
                 ? "Output: copied (non-editable focus)"
                 : "Output: copied to clipboard"
@@ -343,15 +346,14 @@ final class TranslatorViewModel {
             return
         }
 
+        // Try to also replace inline via Accessibility API.
         if isTrusted, accessibilityService.replaceSelectedText(with: translatedText, replaceWholeValue: isWholeFieldValue) {
             try? await Task.sleep(nanoseconds: Constants.axVerificationDelay)
 
             // Whole-field writes change kAXValueAttribute directly; the selection
-            // verification used for selection-mode writes doesn't apply. The AX
-            // setter already returned success, trust it.
+            // verification used for selection-mode writes doesn't apply.
             if isWholeFieldValue {
-                debugLastStage = "Output: replaced whole field via AX"
-                restoreClipboardAfterAXIfNeeded(usedClipboardCapture: usedClipboardCapture)
+                debugLastStage = "Output: replaced whole field via AX + clipboard"
                 notifyAppDelegate { $0.flashMenuBarIcon() }
                 return
             }
@@ -360,22 +362,17 @@ final class TranslatorViewModel {
             let original = originalText.trimmingCharacters(in: .whitespacesAndNewlines)
 
             if current != original {
-                debugLastStage = "Output: replaced via AX"
-                restoreClipboardAfterAXIfNeeded(usedClipboardCapture: usedClipboardCapture)
+                debugLastStage = "Output: replaced via AX + clipboard"
                 notifyAppDelegate { $0.flashMenuBarIcon() }
                 return
             }
         }
 
-        clipboardService.writeText(translatedText)
+        // AX write didn't take. Fall back to Cmd+V paste. Translation is
+        // already in the clipboard from the top of this function.
         clipboardService.simulatePaste()
         debugLastStage = "Output: pasted via clipboard"
         notifyAppDelegate { $0.flashMenuBarIcon() }
-
-        Task {
-            try? await Task.sleep(nanoseconds: Constants.clipboardRestoreDelay)
-            clipboardService.restoreSaved()
-        }
     }
 
     private func outputMethod(autoPaste: Bool, isTrusted: Bool) -> String {
@@ -397,14 +394,6 @@ final class TranslatorViewModel {
             debugLastStage = "Error: \(error.localizedDescription)"
             lastError = error.localizedDescription
             TelemetryService.trackTranslationFailed(provider: .ctrlVCloud, errorType: String(describing: error))
-        }
-    }
-
-    private func restoreClipboardAfterAXIfNeeded(usedClipboardCapture: Bool) {
-        guard usedClipboardCapture else { return }
-        Task {
-            try? await Task.sleep(nanoseconds: 50_000_000)
-            clipboardService.restoreSaved()
         }
     }
 
