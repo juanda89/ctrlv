@@ -47,6 +47,13 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Do not impose target-language \"correct writing\" rules"))
     }
 
+    func test_buildSystemPrompt_forbidsEmDashAndOpeningPunctuation() {
+        let prompt = PromptBuilder.buildSystemPrompt(targetLanguage: "Spanish", tone: .original)
+        XCTAssertTrue(prompt.contains("do NOT use the em-dash"))
+        XCTAssertTrue(prompt.contains("Do NOT use Spanish opening punctuation"))
+        XCTAssertTrue(prompt.contains("EXCEPTION"))
+    }
+
     func test_buildSystemPrompt_formalTone_containsFormalInstruction() {
         let prompt = PromptBuilder.buildSystemPrompt(targetLanguage: "English", tone: .formal)
         XCTAssertTrue(prompt.contains("Use a polished, professional register appropriate for business emails"))

@@ -31,7 +31,7 @@ export async function translateWithOpenRouter(text: string, systemPrompt: string
   for (let i = 0; i < models.length; i += 1) {
     const model = models[i];
     try {
-      const translated = await callOpenRouter({
+      const raw = await callOpenRouter({
         apiKey,
         referer,
         title,
@@ -40,7 +40,7 @@ export async function translateWithOpenRouter(text: string, systemPrompt: string
         systemPrompt,
       });
       return {
-        translatedText: translated,
+        translatedText: sanitizeTranslation(raw, text),
         model,
         fallbackUsed: i > 0,
       };
@@ -139,6 +139,42 @@ export class OpenRouterRateLimitError extends Error {
     this.name = "OpenRouterRateLimitError";
     this.retryAfterSeconds = retryAfterSeconds;
   }
+}
+
+/**
+ * Hard validation: certain "AI tell" characters are stripped from the output
+ * UNLESS the user explicitly typed them in the source. This is the safety net
+ * behind the prompt-level instruction — models drift, this guarantees the rule.
+ *
+ * Characters covered:
+ *   ¿ — opening Spanish question mark (closing ? is kept)
+ *   ¡ — opening Spanish exclamation mark (closing ! is kept)
+ *   — — em-dash (replaced with comma if surrounded by spaces, else dropped)
+ *   – — en-dash (same handling as em-dash)
+ *
+ * Normal hyphen `-` is NEVER touched (used for compounds, ranges, etc.).
+ */
+export function sanitizeTranslation(translation: string, source: string): string {
+  let result = translation;
+
+  if (!source.includes("¿")) {
+    result = result.split("¿").join("");
+  }
+  if (!source.includes("¡")) {
+    result = result.split("¡").join("");
+  }
+  if (!source.includes("—")) {
+    // " — " (with spaces) usually marks a parenthetical/break; replace with comma.
+    // Bare "—" (no spaces) is rare; just drop it.
+    result = result.split(" — ").join(", ").split("—").join("");
+  }
+  if (!source.includes("–")) {
+    result = result.split(" – ").join(", ").split("–").join("");
+  }
+
+  // Collapse runs of spaces produced by the substitutions, but keep newlines.
+  result = result.replace(/[ \t]{2,}/g, " ").trim();
+  return result;
 }
 
 function estimateMaxTokens(text: string): number {
