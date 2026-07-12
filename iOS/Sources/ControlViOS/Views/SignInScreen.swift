@@ -80,6 +80,9 @@ struct SignInScreen: View {
 
     private func verifyCode() async {
         let ok = await license.verifyMagicCode(code)
-        if ok { dismiss() }
+        if ok {
+            AppGroupBridge.syncSessionToken(from: license)
+            dismiss()
+        }
     }
 }

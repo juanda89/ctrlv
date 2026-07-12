@@ -16,6 +16,9 @@ struct ControlViOSApp: App {
                     // Refresh subscription status on app launch and when becoming active
                     await coordinator.licenseService.refreshSubscriptionStatus(forceNetwork: true)
                     await coordinator.subscriptionManager.refreshOnLaunch()
+                    // Mirror session token to App Group so Share + Keyboard
+                    // extensions authenticate as this account.
+                    AppGroupBridge.syncSessionToken(from: coordinator.licenseService)
                 }
         }
     }

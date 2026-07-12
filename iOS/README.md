@@ -24,9 +24,29 @@ iOS/
 │   │   └── HistoryStore.swift            (App Group history list)
 │   └── Subscription/
 │       └── StoreKitSubscriptionManager.swift  (StoreKit 2 with trial intro offer)
-└── ShareExtension/
-    └── ShareViewController.swift          (Share Extension entry point + result UI)
+├── ShareExtension/
+│   └── ShareViewController.swift          (Share Extension entry point + result UI)
+└── KeyboardExtension/
+    ├── KeyboardViewController.swift       (UIInputViewController — reads selection via
+    │                                       textDocumentProxy, replaces in-place)
+    └── KeyboardPanelView.swift            (SwiftUI panel: Translate & Replace button)
 ```
+
+### The Keyboard Extension is the "Google Translate" experience
+
+iOS does NOT let third-party apps add buttons to the system text-selection
+menu (only Apple's own Translate appears there). The closest thing iOS allows
+— and what Grammarly/SwiftKey do — is a **custom keyboard**:
+
+1. User selects text in ANY app (or just finishes typing)
+2. Taps the globe key → switches to the Control-V keyboard
+3. Taps **Translate & Replace** → the selected text (or everything typed)
+   is replaced in-place with the translation
+4. Taps globe again → back to their normal keyboard
+
+The keyboard reads `textDocumentProxy.selectedText` when there's a selection,
+falling back to `documentContextBeforeInput` (everything typed in the current
+paragraph). Requires "Allow Full Access" for network calls.
 
 All source consumes `ControlVCore` (the Swift Package library at `../Sources/ControlVCore`) for license, auth, providers, models, prompts.
 
@@ -114,6 +134,60 @@ Edit `Info.plist` of the Share Extension target. Set under `NSExtension`:
 ```
 
 Or, since we use a UIViewController directly, replace `NSExtensionMainStoryboard` with `NSExtensionPrincipalClass = ShareViewController` in Info.plist.
+
+### 6b. Add the Keyboard Extension target
+
+```
+File → New → Target → iOS → Custom Keyboard Extension
+  Product name: Control-V Keyboard
+  Bundle ID: info.controlv.ios.keyboard
+  Embed in: Control-V (main app)
+```
+
+Xcode generates a `Control-V Keyboard/` directory with a template
+`KeyboardViewController.swift` — delete it and drag in BOTH files from
+`iOS/KeyboardExtension/` (KeyboardViewController.swift + KeyboardPanelView.swift).
+In the add dialog: "Copy items if needed" UNCHECKED, target = Control-V Keyboard only.
+
+Then configure the Keyboard target:
+
+1. **Signing & Capabilities**:
+   - Team: Viko Holdings LLC
+   - + Capability → App Groups → check `group.info.controlv.shared`
+2. **Frameworks and Libraries**: add `ControlVCore`
+3. **Info.plist** of the keyboard target — under `NSExtension`:
+
+```xml
+<key>NSExtension</key>
+<dict>
+    <key>NSExtensionAttributes</key>
+    <dict>
+        <key>IsASCIICapable</key>
+        <false/>
+        <key>PrefersRightToLeft</key>
+        <false/>
+        <key>PrimaryLanguage</key>
+        <string>mul</string>
+        <key>RequestsOpenAccess</key>
+        <true/>
+    </dict>
+    <key>NSExtensionPointIdentifier</key>
+    <string>com.apple.keyboard-service</string>
+    <key>NSExtensionPrincipalClass</key>
+    <string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
+</dict>
+```
+
+`RequestsOpenAccess = YES` is what makes iOS show the "Allow Full Access"
+toggle — required for network calls from the keyboard.
+
+**To test in simulator:**
+1. Run the Control-V Keyboard scheme (or just the main app once — the keyboard installs with it)
+2. Simulator → Settings → General → Keyboard → Keyboards → Add New Keyboard → Control-V Keyboard
+3. Tap Control-V Keyboard again → enable **Allow Full Access**
+4. Open Notes → type something → tap-hold the globe key → choose Control-V
+5. Tap "Translate & Replace" → text is replaced with the translation
+6. Also test with an explicit selection: select a sentence → switch to Control-V keyboard → translate
 
 ### 7. Configure the main app Info.plist
 

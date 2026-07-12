@@ -38,6 +38,7 @@ struct AccountTabView: View {
 
                         Button("Sign Out", role: .destructive) {
                             license.signOut()
+                            AppGroupBridge.syncSessionToken(from: license)
                         }
                     } else {
                         NavigationLink {
