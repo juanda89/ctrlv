@@ -72,6 +72,9 @@ class ShareViewController: UIViewController {
             }
         ))
         host.modalPresentationStyle = .formSheet
+        // Block swipe-to-dismiss: the extension MUST end via completeRequest,
+        // otherwise the host app is left waiting on a stranded extension.
+        host.isModalInPresentation = true
         present(host, animated: true)
     }
 
@@ -166,11 +169,10 @@ private struct ShareResultView: View {
     private func runTranslation() async {
         defer { isLoading = false }
 
-        // Read user's preferred language + tone from App Group
+        // Read user's preferred language + tone from App Group.
+        // Usage limits (trial quota, character caps) are enforced server-side
+        // by the translate Edge Function based on installID / session token.
         let settings = ShareExtensionSettings.load()
-
-        // Trial check from main app: same UserDefaults via App Group.
-        // The Edge Function will also enforce limits server-side.
 
         guard let endpoint = Constants.translationAPIURL else {
             errorMessage = "Translation service not configured."

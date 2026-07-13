@@ -6,7 +6,11 @@ import Observation
 @Observable
 final class iOSTranslationManager {
     private let licenseService: LicenseService
-    private let deviceIdentity = DeviceIdentityStore()
+    // App Group defaults so the main app and both extensions share ONE installID —
+    // trial limits are tracked per installID on the backend.
+    private let deviceIdentity = DeviceIdentityStore(
+        userDefaults: UserDefaults(suiteName: iOSSettingsStore.appGroup) ?? .standard
+    )
 
     init(licenseService: LicenseService) {
         self.licenseService = licenseService

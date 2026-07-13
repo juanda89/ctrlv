@@ -8,12 +8,15 @@ public enum Constants {
     public static let defaultFeedbackURL = "mailto:info@control-v.info?subject=ctrl%2Bv%20Feedback"
     public static let defaultManualUpdateURL = "https://control-v.info/download.html?autostart=1"
     public static let defaultAuthAPIBaseURL = "https://hdfhonbgkkiffhkwoivd.functions.supabase.co"
+    // Compiled-in default so app extensions (Share, Keyboard) work even though
+    // Bundle.main resolves to the extension's own Info.plist, not the app's.
+    public static let defaultTranslationAPIURL = "https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate"
     public static let hostedModelName = "x-ai/grok-4.1-fast"
     public static let hostedEngineName = "OpenRouter"
     public static let updatesFeedURL = configuredURL(for: "SUFeedURL")
     public static let manualUpdateURL = configuredURL(for: "CtrlVManualUpdateURL") ?? URL(string: defaultManualUpdateURL)
     public static let feedbackURL = configuredURL(for: "CtrlVFeedbackURL") ?? URL(string: defaultFeedbackURL)
-    public static let translationAPIURL = configuredURL(for: "CtrlVTranslationAPIURL")
+    public static let translationAPIURL = configuredURL(for: "CtrlVTranslationAPIURL") ?? URL(string: defaultTranslationAPIURL)
     public static let authAPIBaseURL = configuredURL(for: "CtrlVAuthAPIBaseURL") ?? URL(string: defaultAuthAPIBaseURL)
 
     private static func configuredURL(for key: String) -> URL? {

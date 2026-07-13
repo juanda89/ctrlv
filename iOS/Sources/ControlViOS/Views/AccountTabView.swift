@@ -56,6 +56,9 @@ struct AccountTabView: View {
                     Link(destination: URL(string: "https://control-v.info")!) {
                         Label("Website", systemImage: "globe")
                     }
+                    Link(destination: URL(string: "https://control-v.info/privacy")!) {
+                        Label("Privacy Policy", systemImage: "hand.raised")
+                    }
                     Link(destination: URL(string: "mailto:info@control-v.info")!) {
                         Label("Contact Support", systemImage: "envelope")
                     }

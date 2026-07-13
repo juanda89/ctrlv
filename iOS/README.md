@@ -233,6 +233,54 @@ Add to the main app's `Info.plist`:
    - Save the .p8 file securely
 ```
 
+### 8b. Privacy manifests (required — upload is flagged without them)
+
+All three targets use UserDefaults (a "required reason API"), so each needs a
+`PrivacyInfo.xcprivacy` in its bundle or App Store Connect rejects the upload
+with ITMS-91053. Pre-written manifests live in `iOS/PrivacyManifests/`:
+
+- `App-PrivacyInfo.xcprivacy` → drag into the **Control-V** (main app) target,
+  rename to `PrivacyInfo.xcprivacy` when adding
+- `Extension-PrivacyInfo.xcprivacy` → drag one copy into **Control-V Share**
+  and one into **Control-V Keyboard**, renamed to `PrivacyInfo.xcprivacy`
+
+In the add dialog: "Copy items if needed" CHECKED (each target needs its own
+copy in its bundle), target membership = the respective target only.
+
+### 8c. App Review preparation (do this before submitting)
+
+**Privacy compliance (Guidelines 5.1.1, 5.1.2):**
+1. Privacy policy is live at https://control-v.info/privacy (docs/privacy.html) —
+   enter this URL in App Store Connect → App Privacy → Privacy Policy URL
+2. Complete the App Privacy "nutrition label": declare **User Content**
+   (translation text) and **Identifiers** (install ID) + **Email** (if signed in)
+   as collected, linked to user, NOT used for tracking
+3. The app already links the policy from AccountTabView and PaywallView
+
+**Full Access justification (Guideline 4.4.1) — put this in Review Notes:**
+
+> The Control-V keyboard requests Full Access solely to send text the user
+> explicitly chooses to translate (by tapping "Translate & Replace") to our
+> translation API. The keyboard never logs keystrokes, transmits nothing
+> until the user taps the button, and our server does not store the text
+> (only character counts for rate limiting). Data collected by the keyboard
+> is used exclusively to provide the translation feature.
+>
+> To test: Settings → General → Keyboard → Keyboards → Add New Keyboard →
+> Control-V → enable Allow Full Access. Then open Notes, type a sentence,
+> long-press the globe key, select Control-V, tap "Translate & Replace".
+
+**⚠️ Known 4.4.1 risk — decide before submission:**
+Guideline 4.4.1 says keyboards must "remain functional with no network
+access". Our keyboard's only feature is translation, which inherently needs
+network. Two options:
+- **Option A (ship as-is):** many single-purpose utility keyboards pass review
+  with a clear Review Notes explanation; rejection risk exists but is appealable
+- **Option B (safest):** add a minimal typing layout (QWERTY row) so the
+  keyboard "functions" offline — significant extra work, defer unless rejected
+
+Recommendation: try Option A first. If rejected under 4.4.1, build Option B.
+
 ### 9. Test in StoreKit sandbox
 
 - Run the app on a real device (or Mac Catalyst) signed in with a Sandbox tester account (App Store Connect → Users and Access → Sandbox Testers).

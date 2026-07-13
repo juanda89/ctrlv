@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy Policy — Control-V</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="icon" type="image/svg+xml" href="assets/control-v-logo.svg" />
+    <script src="https://cdn.tailwindcss.com?plugins=typography"></script>
+    <style>body { font-family: "Inter", sans-serif; }</style>
+  </head>
+  <body class="bg-slate-50 text-slate-800">
+    <main class="mx-auto max-w-3xl px-6 py-16">
+      <h1 class="text-3xl font-bold mb-2">Privacy Policy</h1>
+      <p class="text-sm text-slate-500 mb-10">Last updated: July 12, 2026 · Applies to Control-V for macOS and iOS (including the Share Extension and Keyboard Extension)</p>
+
+      <div class="prose prose-slate max-w-none">
+        <h2>The short version</h2>
+        <ul>
+          <li>We only process text you explicitly choose to translate.</li>
+          <li>We never log keystrokes. The iOS keyboard sends nothing until you tap "Translate".</li>
+          <li>Translated text is <strong>not stored</strong> on our servers — it is processed and discarded.</li>
+          <li>We don't sell data or use it for advertising. No tracking.</li>
+        </ul>
+
+        <h2>What we collect and why</h2>
+        <table>
+          <thead>
+            <tr><th>Data</th><th>Purpose</th><th>Retention</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Text you submit for translation</td>
+              <td>Producing the translation</td>
+              <td>Not stored. Processed in memory and discarded. Our servers keep only the <em>character count</em> and model name for rate limiting.</td>
+            </tr>
+            <tr>
+              <td>Install ID (random identifier)</td>
+              <td>Trial limits and abuse prevention</td>
+              <td>Stored hashed on our servers</td>
+            </tr>
+            <tr>
+              <td>Email address (only if you sign in)</td>
+              <td>Account, subscription sync across devices, magic-code login</td>
+              <td>While your account exists</td>
+            </tr>
+            <tr>
+              <td>Subscription status</td>
+              <td>Unlocking paid features</td>
+              <td>While your subscription record exists (managed by Stripe on macOS, Apple on iOS)</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h2>Who processes your data</h2>
+        <p>To produce translations, the text you submit passes through:</p>
+        <ul>
+          <li><strong>Supabase</strong> (our backend infrastructure, hosted in the US) — receives your request and forwards it to the language model. Does not persist your text.</li>
+          <li><strong>OpenRouter / xAI</strong> (the AI language model provider) — generates the translation. Subject to their data processing terms; requests are not used for model training per their API policies.</li>
+        </ul>
+        <p>Payments are processed by <strong>Stripe</strong> (macOS) or <strong>Apple</strong> (iOS). We never see your card number.</p>
+        <p>Transactional emails (login codes, subscription notices) are sent via <strong>Resend</strong>.</p>
+
+        <h2>The iOS Keyboard Extension</h2>
+        <p>The Control-V keyboard requires "Allow Full Access" to reach our translation service. This permission is used <strong>exclusively</strong> to send the text you explicitly choose to translate (by tapping the Translate button) to our servers. The keyboard:</p>
+        <ul>
+          <li>Does not log or transmit keystrokes</li>
+          <li>Does not read the screen or other apps</li>
+          <li>Sends nothing over the network until you tap "Translate & Replace"</li>
+          <li>Uses collected data solely to provide the translation feature, per App Store Guideline 4.4.1</li>
+        </ul>
+
+        <h2>Analytics</h2>
+        <p>The macOS app uses <strong>TelemetryDeck</strong>, a privacy-first analytics service that receives only anonymized feature-usage signals (e.g. "translation completed"). It never receives your text. The iOS app currently ships without analytics.</p>
+
+        <h2>Your rights</h2>
+        <p>You can request deletion of your account and associated data at any time by emailing <a href="mailto:info@control-v.info">info@control-v.info</a>. Deleting the app removes all locally stored data (settings, history, session).</p>
+
+        <h2>Changes</h2>
+        <p>We'll update this page when our practices change and adjust the date above. Material changes will be announced in the app's release notes.</p>
+
+        <h2>Contact</h2>
+        <p>Viko Holdings LLC · <a href="mailto:info@control-v.info">info@control-v.info</a></p>
+      </div>
+
+      <p class="mt-12 text-sm"><a href="/" class="text-blue-600 hover:underline">← Back to control-v.info</a></p>
+    </main>
+  </body>
+</html>

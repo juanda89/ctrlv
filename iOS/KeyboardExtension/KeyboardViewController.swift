@@ -35,8 +35,25 @@ final class KeyboardViewController: UIInputViewController {
                 },
                 replaceTypedText: { [weak self] original, translation in
                     guard let proxy = self?.textDocumentProxy else { return }
-                    // Delete one grapheme cluster per backspace press.
-                    for _ in 0..<original.count {
+                    guard !original.isEmpty else {
+                        proxy.insertText(translation)
+                        return
+                    }
+
+                    // First backspace, then VERIFY: if the host had a selection it
+                    // didn't expose via selectedText, that first deleteBackward
+                    // consumed the whole selection instead of one grapheme. In that
+                    // case, stop deleting and just insert — never chew through
+                    // text we didn't capture.
+                    proxy.deleteBackward()
+                    let expectedAfterFirst = String(original.dropLast())
+                    let contextNow = proxy.documentContextBeforeInput ?? ""
+                    guard contextNow.hasSuffix(expectedAfterFirst) || expectedAfterFirst.isEmpty else {
+                        proxy.insertText(translation)
+                        return
+                    }
+
+                    for _ in 0..<expectedAfterFirst.count {
                         proxy.deleteBackward()
                     }
                     proxy.insertText(translation)

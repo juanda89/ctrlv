@@ -73,6 +73,14 @@ struct PaywallView: View {
                 .foregroundStyle(.secondary)
                 .disabled(isWorking)
 
+                // Required by App Store Guideline 3.1.2 for auto-renewable subscriptions
+                HStack(spacing: 16) {
+                    Link("Privacy Policy", destination: URL(string: "https://control-v.info/privacy")!)
+                    Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
+                }
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+
                 if let errorMessage {
                     Text(errorMessage)
                         .font(.caption)
