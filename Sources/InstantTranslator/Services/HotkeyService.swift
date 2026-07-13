@@ -5,23 +5,45 @@ import os
 
 private let log = Logger(subsystem: "com.instanttranslator.app", category: "hotkey")
 
+/// A profile-aware hotkey registration.
+struct HotkeyBinding {
+    let profileID: UUID
+    let carbonKeyCode: UInt32
+    let displayLabel: String
+}
+
 final class HotkeyService {
-    private var hotKey: HotKey?
-    var onTrigger: (() -> Void)?
+    private var hotKeys: [UUID: HotKey] = [:]
 
-    func register(carbonKeyCode: UInt32, carbonModifiers: UInt32, shortcutDisplay: String) {
-        unregister()
+    /// Fired when any registered hotkey is pressed. The profile UUID identifies
+    /// which one triggered so the view model can route to the correct
+    /// language/tone.
+    var onTrigger: ((UUID) -> Void)?
 
-        hotKey = HotKey(carbonKeyCode: carbonKeyCode, carbonModifiers: carbonModifiers)
-        log.info("Registering global hotkey: \(shortcutDisplay, privacy: .public)")
-        hotKey?.keyDownHandler = { [weak self] in
-            log.info("Global hotkey event received")
-            self?.onTrigger?()
+    /// Register (or replace) the full set of hotkeys. Any previously
+    /// registered hotkeys are removed first — this keeps the collection in
+    /// sync with the current profile list.
+    func registerAll(_ bindings: [HotkeyBinding]) {
+        unregisterAll()
+
+        let modifiers = ShortcutConfiguration.fixedModifiers
+
+        for binding in bindings {
+            let hotkey = HotKey(carbonKeyCode: binding.carbonKeyCode, carbonModifiers: modifiers)
+            let profileID = binding.profileID
+            log.info("Registering global hotkey: \(binding.displayLabel, privacy: .public) → \(profileID.uuidString, privacy: .public)")
+            hotkey.keyDownHandler = { [weak self] in
+                log.info("Global hotkey event received for profile \(profileID.uuidString, privacy: .public)")
+                self?.onTrigger?(profileID)
+            }
+            hotKeys[profileID] = hotkey
         }
     }
 
-    func unregister() {
-        log.info("Unregistering global hotkey")
-        hotKey = nil
+    func unregisterAll() {
+        if !hotKeys.isEmpty {
+            log.info("Unregistering \(self.hotKeys.count) hotkey(s)")
+        }
+        hotKeys.removeAll()
     }
 }

@@ -4,11 +4,24 @@ import SwiftUI
 struct ShortcutSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var settingsVM: SettingsViewModel
+
+    /// If nil, edit the PRIMARY (profile[0]) shortcut — legacy behavior.
+    /// If set, edit that specific profile's shortcut with collision checks
+    /// against the other profiles in the collection.
+    let profileID: UUID?
+
     let onShortcutChanged: () -> Void
+
+    init(settingsVM: SettingsViewModel, profileID: UUID? = nil, onShortcutChanged: @escaping () -> Void) {
+        self._settingsVM = Bindable(settingsVM)
+        self.profileID = profileID
+        self.onShortcutChanged = onShortcutChanged
+    }
 
     private let quickPickLetters = ["V", "J", "K", "L", "X", "C"]
     @State private var keyMonitor: Any?
     @State private var pendingOption: ShortcutKeyOption = ShortcutConfiguration.defaultOption
+    @State private var collisionMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -69,9 +82,15 @@ struct ShortcutSettingsView: View {
                 }
             }
 
-            Text("Tip: press a single letter. Invalid keys play the system warning sound.")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundStyle(.tertiary)
+            if let collisionMessage {
+                Text(collisionMessage)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(.red)
+            } else {
+                Text("Tip: press a single letter. Invalid keys play the system warning sound.")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(.tertiary)
+            }
 
             HStack {
                 Spacer()
@@ -81,17 +100,30 @@ struct ShortcutSettingsView: View {
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
                 .tint(MenuTheme.blue)
+                .disabled(collisionMessage != nil)
             }
         }
         .padding(14)
         .frame(width: 320)
         .onAppear {
-            pendingOption = settingsVM.selectedShortcutOption
+            pendingOption = currentOption
             startKeyCapture()
         }
         .onDisappear {
             stopKeyCapture()
         }
+    }
+
+    private var editingProfileID: UUID {
+        profileID ?? settingsVM.settings.profiles.first?.id ?? UUID()
+    }
+
+    private var currentOption: ShortcutKeyOption {
+        if let profileID,
+           let profile = settingsVM.settings.profiles.first(where: { $0.id == profileID }) {
+            return ShortcutConfiguration.option(for: profile.shortcutKeyCode)
+        }
+        return settingsVM.selectedShortcutOption
     }
 
     private func quickPickButton(letter: String) -> some View {
@@ -165,11 +197,20 @@ struct ShortcutSettingsView: View {
 
     private func select(_ option: ShortcutKeyOption) {
         pendingOption = option
+        updateCollisionMessage()
+    }
+
+    private func updateCollisionMessage() {
+        if settingsVM.isShortcutLetterAvailable(pendingOption.carbonKeyCode, excludingProfile: editingProfileID) {
+            collisionMessage = nil
+        } else {
+            collisionMessage = "Another profile already uses ⌘⇧\(pendingOption.letter). Pick a different letter."
+        }
     }
 
     private func saveAndClose() {
-        if pendingOption.carbonKeyCode != settingsVM.selectedShortcutOption.carbonKeyCode {
-            settingsVM.setShortcut(pendingOption)
+        if pendingOption.carbonKeyCode != currentOption.carbonKeyCode {
+            settingsVM.setShortcut(pendingOption, forProfile: editingProfileID)
             onShortcutChanged()
         }
         dismiss()

@@ -57,23 +57,23 @@ final class TranslatorViewModel {
     }
 
     func debugTriggerTranslationFromUI() {
-        triggerTranslation(source: "manual-debug-button")
+        triggerTranslation(source: "manual-debug-button", profileID: settingsVM.settings.profiles.first?.id)
     }
 
     func refreshHotkeyRegistration() {
-        let keyCode = settingsVM.settings.shortcutKeyCode
-        let modifiers = ShortcutConfiguration.fixedModifiers
-        if settingsVM.settings.shortcutModifiers != UInt(modifiers) {
-            settingsVM.settings.shortcutModifiers = UInt(modifiers)
+        let bindings = settingsVM.settings.profiles.map { profile -> HotkeyBinding in
+            let letter = ShortcutConfiguration.option(for: profile.shortcutKeyCode).letter
+            let label = "⌘⇧\(letter) · \(profile.targetLanguage.rawValue) · \(profile.tone.rawValue)"
+            return HotkeyBinding(
+                profileID: profile.id,
+                carbonKeyCode: profile.shortcutKeyCode,
+                displayLabel: label
+            )
         }
-
-        hotkeyService.register(
-            carbonKeyCode: keyCode,
-            carbonModifiers: modifiers,
-            shortcutDisplay: settingsVM.shortcutDisplay
-        )
-        debugLastStage = "Hotkey registered (\(settingsVM.shortcutDisplay))"
-        log.info("Hotkey registered: \(self.settingsVM.shortcutDisplay, privacy: .public)")
+        hotkeyService.registerAll(bindings)
+        let summary = bindings.map { $0.displayLabel }.joined(separator: ", ")
+        debugLastStage = "Hotkeys registered: \(summary)"
+        log.info("Hotkeys registered: \(summary, privacy: .public)")
     }
 
     func debugPreviewTranslationIsland() {
@@ -81,13 +81,23 @@ final class TranslatorViewModel {
         notifyAppDelegate { $0.debugShowTranslationIslandPreview() }
     }
 
-    func performTranslation() async {
+    func performTranslation(profileID: UUID? = nil) async {
         guard !isTranslating else {
             debugLastStage = "Skipped: already translating"
             return
         }
 
-        debugLastStage = "Flow started"
+        // Route the request through the profile the user triggered. If none is
+        // passed (e.g. manual debug button, tests), fall back to profile 0.
+        let profile: TranslationProfile = {
+            if let profileID,
+               let match = settingsVM.settings.profiles.first(where: { $0.id == profileID }) {
+                return match
+            }
+            return settingsVM.settings.profiles.first ?? TranslationProfile()
+        }()
+
+        debugLastStage = "Flow started (\(profile.shortcutLetter))"
         let totalStartedAt = Date()
         resetDebugTimings()
 
@@ -136,7 +146,7 @@ final class TranslatorViewModel {
         }
 
         let settings = settingsVM.settings
-        let request = makeTranslationRequest(from: text, settings: settings)
+        let request = makeTranslationRequest(from: text, profile: profile)
         let prompt = PromptBuilder.buildSystemPrompt(
             targetLanguage: request.targetLanguage.rawValue,
             tone: request.tone,
@@ -183,8 +193,8 @@ final class TranslatorViewModel {
             let latencyMs = Int(Date().timeIntervalSince(startedAt) * 1000)
             TelemetryService.trackTranslationCompleted(
                 provider: .ctrlVCloud,
-                targetLanguage: settings.targetLanguage,
-                tone: settings.tone,
+                targetLanguage: profile.targetLanguage,
+                tone: profile.tone,
                 method: outputMethod(autoPaste: settings.autoPaste, isTrusted: capture.isTrusted),
                 textLength: text.count,
                 model: routing.model,
@@ -202,8 +212,8 @@ final class TranslatorViewModel {
     }
 
     private func setupHotkey() {
-        hotkeyService.onTrigger = { [weak self] in
-            self?.triggerTranslation(source: "hotkey")
+        hotkeyService.onTrigger = { [weak self] profileID in
+            self?.triggerTranslation(source: "hotkey", profileID: profileID)
         }
         refreshHotkeyRegistration()
     }
@@ -298,12 +308,12 @@ final class TranslatorViewModel {
         return (sourceText, isTrusted, usedClipboardCapture, isWholeFieldValue, isEditable)
     }
 
-    private func makeTranslationRequest(from text: String, settings: AppSettings) -> TranslationRequest {
+    private func makeTranslationRequest(from text: String, profile: TranslationProfile) -> TranslationRequest {
         return TranslationRequest(
             text: text,
-            targetLanguage: settings.targetLanguage,
-            tone: settings.tone,
-            customTonePrompt: normalizedCustomPrompt(settings.customTonePrompt)
+            targetLanguage: profile.targetLanguage,
+            tone: profile.tone,
+            customTonePrompt: normalizedCustomPrompt(profile.customTonePrompt)
         )
     }
 
@@ -402,14 +412,14 @@ final class TranslatorViewModel {
         action(appDelegate)
     }
 
-    private func triggerTranslation(source: String) {
+    private func triggerTranslation(source: String, profileID: UUID? = nil) {
         debugHotkeyTriggerCount += 1
         debugLastTriggerSource = source
         debugLastTriggerAt = Date()
         debugLastStage = "Triggered from \(source)"
         log.info("Trigger received from \(source, privacy: .public)")
         Task { @MainActor in
-            await self.performTranslation()
+            await self.performTranslation(profileID: profileID)
         }
     }
 
