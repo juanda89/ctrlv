@@ -5,17 +5,28 @@ struct ShortcutSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Bindable var settingsVM: SettingsViewModel
 
-    /// If nil, edit the PRIMARY (profile[0]) shortcut — legacy behavior.
-    /// If set, edit that specific profile's shortcut with collision checks
-    /// against the other profiles in the collection.
-    let profileID: UUID?
+    /// The profile whose shortcut is being edited. Always explicit — a nil
+    /// fallback here once caused edits aimed at profile 2 to silently land on
+    /// profile 1 (stale sheet state), so the ambiguity is banned by design.
+    let profileID: UUID
 
     let onShortcutChanged: () -> Void
 
-    init(settingsVM: SettingsViewModel, profileID: UUID? = nil, onShortcutChanged: @escaping () -> Void) {
+    /// When presented inline (inside the popover, no sheet), the host passes
+    /// a closure to exit the editor. When presented as a real sheet, leave nil
+    /// and the environment dismiss is used.
+    let onFinish: (() -> Void)?
+
+    init(
+        settingsVM: SettingsViewModel,
+        profileID: UUID,
+        onShortcutChanged: @escaping () -> Void,
+        onFinish: (() -> Void)? = nil
+    ) {
         self._settingsVM = Bindable(settingsVM)
         self.profileID = profileID
         self.onShortcutChanged = onShortcutChanged
+        self.onFinish = onFinish
     }
 
     private let quickPickLetters = ["V", "J", "K", "L", "X", "C"]
@@ -32,7 +43,7 @@ struct ShortcutSettingsView: View {
                 Spacer()
 
                 Button {
-                    dismiss()
+                    finish()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 16, weight: .semibold))
@@ -107,6 +118,7 @@ struct ShortcutSettingsView: View {
         .frame(width: 320)
         .onAppear {
             pendingOption = currentOption
+            updateCollisionMessage()
             startKeyCapture()
         }
         .onDisappear {
@@ -114,16 +126,19 @@ struct ShortcutSettingsView: View {
         }
     }
 
-    private var editingProfileID: UUID {
-        profileID ?? settingsVM.settings.profiles.first?.id ?? UUID()
-    }
-
     private var currentOption: ShortcutKeyOption {
-        if let profileID,
-           let profile = settingsVM.settings.profiles.first(where: { $0.id == profileID }) {
+        if let profile = settingsVM.settings.profiles.first(where: { $0.id == profileID }) {
             return ShortcutConfiguration.option(for: profile.shortcutKeyCode)
         }
         return settingsVM.selectedShortcutOption
+    }
+
+    private func finish() {
+        if let onFinish {
+            onFinish()
+        } else {
+            dismiss()
+        }
     }
 
     private func quickPickButton(letter: String) -> some View {
@@ -166,7 +181,7 @@ struct ShortcutSettingsView: View {
 
     private func handleKeyPress(_ event: NSEvent) {
         if event.keyCode == 53 {
-            dismiss()
+            finish()
             return
         }
 
@@ -201,7 +216,7 @@ struct ShortcutSettingsView: View {
     }
 
     private func updateCollisionMessage() {
-        if settingsVM.isShortcutLetterAvailable(pendingOption.carbonKeyCode, excludingProfile: editingProfileID) {
+        if settingsVM.isShortcutLetterAvailable(pendingOption.carbonKeyCode, excludingProfile: profileID) {
             collisionMessage = nil
         } else {
             collisionMessage = "Another profile already uses ⌘⇧\(pendingOption.letter). Pick a different letter."
@@ -210,9 +225,9 @@ struct ShortcutSettingsView: View {
 
     private func saveAndClose() {
         if pendingOption.carbonKeyCode != currentOption.carbonKeyCode {
-            settingsVM.setShortcut(pendingOption, forProfile: editingProfileID)
+            settingsVM.setShortcut(pendingOption, forProfile: profileID)
             onShortcutChanged()
         }
-        dismiss()
+        finish()
     }
 }

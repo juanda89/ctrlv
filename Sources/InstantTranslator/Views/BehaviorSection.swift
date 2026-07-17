@@ -57,7 +57,10 @@ struct BehaviorSection: View {
             }
         }
         .sheet(isPresented: $isShortcutSettingsPresented) {
-            ShortcutSettingsView(settingsVM: settingsVM) {
+            ShortcutSettingsView(
+                settingsVM: settingsVM,
+                profileID: settingsVM.primaryProfileID
+            ) {
                 translatorVM.refreshHotkeyRegistration()
             }
         }

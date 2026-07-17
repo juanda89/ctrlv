@@ -51,6 +51,12 @@ final class SettingsViewModel {
 
         var loaded = persistToDisk ? AppSettings.load() : AppSettings()
 
+        // Self-heal corrupted persisted state: two profiles must never share
+        // a UUID (it makes every by-id lookup resolve to the first one, so
+        // edits to "profile 2" would land on profile 1).
+        var seenIDs = Set<UUID>()
+        loaded.profiles = loaded.profiles.filter { seenIDs.insert($0.id).inserted }
+
         // Sanitize each profile's shortcut in case a bad value was persisted
         // (e.g. deprecated keycode). Fall back to the default letter, but
         // avoid producing duplicates within the collection.
@@ -67,6 +73,12 @@ final class SettingsViewModel {
         }
 
         self.settings = loaded
+    }
+
+    /// Stable ID of the primary profile. The init above guarantees profiles
+    /// is non-empty, so the fallback UUID is unreachable in practice.
+    var primaryProfileID: UUID {
+        settings.profiles.first?.id ?? UUID()
     }
 
     // MARK: - Primary profile shortcut (kept for compatibility)

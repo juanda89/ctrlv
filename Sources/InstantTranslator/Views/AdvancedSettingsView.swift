@@ -16,9 +16,30 @@ struct AdvancedSettingsView: View {
     @Bindable var translatorVM: TranslatorViewModel
     let onClose: () -> Void
 
-    @State private var shortcutSheetProfileID: UUID?
+    /// Non-nil while the inline shortcut editor is open for a profile.
+    /// Rendered as an in-place swap — NEVER as a .sheet. Sheets inside this
+    /// NSPopover have repeatedly caused stale-state and focus bugs (the last
+    /// one silently routed profile-2 edits to profile 1).
+    @State private var editingShortcutProfileID: UUID?
 
     var body: some View {
+        if let editingID = editingShortcutProfileID {
+            ShortcutSettingsView(
+                settingsVM: settingsVM,
+                profileID: editingID,
+                onShortcutChanged: {
+                    translatorVM.refreshHotkeyRegistration()
+                },
+                onFinish: {
+                    editingShortcutProfileID = nil
+                }
+            )
+        } else {
+            profileList
+        }
+    }
+
+    private var profileList: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
 
@@ -26,8 +47,8 @@ struct AdvancedSettingsView: View {
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(MenuTheme.subtleText)
 
-            ForEach(settingsVM.settings.profiles) { profile in
-                profileCard(profile)
+            ForEach(Array(settingsVM.settings.profiles.enumerated()), id: \.element.id) { index, profile in
+                profileCard(profile, index: index)
             }
 
             if settingsVM.canAddProfile {
@@ -60,14 +81,6 @@ struct AdvancedSettingsView: View {
                     .frame(maxWidth: .infinity, alignment: .center)
             }
         }
-        .sheet(isPresented: shortcutSheetBinding) {
-            ShortcutSettingsView(
-                settingsVM: settingsVM,
-                profileID: shortcutSheetProfileID
-            ) {
-                translatorVM.refreshHotkeyRegistration()
-            }
-        }
     }
 
     private var header: some View {
@@ -88,20 +101,10 @@ struct AdvancedSettingsView: View {
         }
     }
 
-    private var shortcutSheetBinding: Binding<Bool> {
-        Binding(
-            get: { shortcutSheetProfileID != nil },
-            set: { presented in
-                if !presented { shortcutSheetProfileID = nil }
-            }
-        )
-    }
-
     // MARK: - Per-profile card
 
-    private func profileCard(_ profile: TranslationProfile) -> some View {
-        let index = settingsVM.settings.profiles.firstIndex(where: { $0.id == profile.id }) ?? 0
-        return MenuCard {
+    private func profileCard(_ profile: TranslationProfile, index: Int) -> some View {
+        MenuCard {
             HStack {
                 Text("Profile \(index + 1)")
                     .font(.subheadline.weight(.semibold))
@@ -125,7 +128,7 @@ struct AdvancedSettingsView: View {
                 NativeSectionLabel(systemName: "keyboard", tint: MenuTheme.cyan, title: "Shortcut")
                 Spacer()
                 Button {
-                    shortcutSheetProfileID = profile.id
+                    editingShortcutProfileID = profile.id
                 } label: {
                     HStack(spacing: 6) {
                         ShortcutBadge(keys: ["⌘", "⇧", profile.shortcutLetter])
