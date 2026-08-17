@@ -25,3 +25,4 @@ supabase/.temp/
 **/Pods/
 *.ipa
 *.xcarchive
+scripts/docs-css/node_modules/
