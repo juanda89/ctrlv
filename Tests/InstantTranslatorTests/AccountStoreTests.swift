@@ -1,21 +1,27 @@
-import ControlVCore
+import CryptoKit
+@testable import ControlVCore
 import Foundation
 import XCTest
 @testable import InstantTranslator
 
+/// All tests run against a throwaway temp directory. The previous version of
+/// this suite used the real store path and called delete() in setUp/tearDown,
+/// which signed the developer out on every `swift test` run.
 final class AccountStoreTests: XCTestCase {
+    private var directory: URL!
     private var store: AccountStore!
-    private let testFileName = "account.enc"
 
     override func setUp() {
         super.setUp()
-        store = AccountStore()
-        store.delete() // Ensure clean state
+        directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("account-store-tests-\(UUID().uuidString)", isDirectory: true)
+        store = AccountStore(directoryURL: directory)
     }
 
     override func tearDown() {
-        store.delete()
+        try? FileManager.default.removeItem(at: directory)
         store = nil
+        directory = nil
         super.tearDown()
     }
 
@@ -43,14 +49,7 @@ final class AccountStoreTests: XCTestCase {
     }
 
     func test_delete_clearsRecord() {
-        let record = StoredAccountRecord(
-            email: "u@x.com",
-            sessionToken: "tok",
-            subscriptionStatus: nil,
-            planName: nil,
-            lastValidatedAt: nil
-        )
-        store.save(record)
+        store.save(makeRecord(token: "tok"))
         XCTAssertNotNil(store.read())
 
         store.delete()
@@ -65,7 +64,6 @@ final class AccountStoreTests: XCTestCase {
             planName: nil,
             lastValidatedAt: nil
         ))
-
         store.save(StoredAccountRecord(
             email: "second@example.com",
             sessionToken: "second-token",
@@ -80,25 +78,61 @@ final class AccountStoreTests: XCTestCase {
     }
 
     func test_storedFile_isReadOnlyByOwner() throws {
-        let record = StoredAccountRecord(
+        store.save(makeRecord(token: "tok"))
+
+        let attrs = try FileManager.default.attributesOfItem(atPath: store.fileURL.path)
+        let permissions = attrs[.posixPermissions] as? NSNumber
+        XCTAssertEqual(permissions?.int16Value, 0o600)
+    }
+
+    // MARK: - Key stability (regression: session "expired" after network change / update)
+
+    func test_read_worksFromFreshInstance_usingPersistedSalt() {
+        store.save(makeRecord(token: "persisted-token"))
+
+        // A new instance (app relaunch, e.g. after a Sparkle update) must
+        // derive the exact same key from the salt file on disk.
+        let relaunched = AccountStore(directoryURL: directory)
+        XCTAssertEqual(relaunched.read()?.sessionToken, "persisted-token")
+    }
+
+    func test_read_migratesRecordSealedWithLegacyHostnameKey() throws {
+        // Simulate a record written by a pre-v2 build: sealed with the key
+        // derived from the network host name.
+        let record = makeRecord(token: "legacy-token")
+        let payload = try JSONEncoder().encode(record)
+        let sealed = try AES.GCM.seal(payload, using: store.legacySymmetricKey)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try XCTUnwrap(sealed.combined).write(to: store.fileURL, options: .atomic)
+
+        // First read decrypts via the legacy key and re-seals with the stable key.
+        XCTAssertEqual(store.read()?.sessionToken, "legacy-token")
+
+        // After migration the file must no longer depend on the legacy key:
+        // it must open with the stable key alone.
+        let migrated = try Data(contentsOf: store.fileURL)
+        let box = try AES.GCM.SealedBox(combined: migrated)
+        XCTAssertNil(try? AES.GCM.open(box, using: store.legacySymmetricKey),
+                     "Record should have been re-sealed with the stable key")
+        XCTAssertEqual(AccountStore(directoryURL: directory).read()?.sessionToken, "legacy-token")
+    }
+
+    func test_read_returnsNil_whenFileIsCorrupt() throws {
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try Data("not-a-sealed-box".utf8).write(to: store.fileURL)
+
+        XCTAssertNil(store.read())
+    }
+
+    // MARK: - Helpers
+
+    private func makeRecord(token: String) -> StoredAccountRecord {
+        StoredAccountRecord(
             email: "u@x.com",
-            sessionToken: "tok",
+            sessionToken: token,
             subscriptionStatus: nil,
             planName: nil,
             lastValidatedAt: nil
         )
-        store.save(record)
-
-        let appSupport = FileManager.default.urls(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask
-        ).first!
-        let fileURL = appSupport
-            .appendingPathComponent(Constants.appName, isDirectory: true)
-            .appendingPathComponent(testFileName, isDirectory: false)
-
-        let attrs = try FileManager.default.attributesOfItem(atPath: fileURL.path)
-        let permissions = attrs[.posixPermissions] as? NSNumber
-        XCTAssertEqual(permissions?.int16Value, 0o600)
     }
 }

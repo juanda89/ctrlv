@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import Security
 
 public protocol AccountStoring {
     func read() -> StoredAccountRecord?
@@ -9,17 +10,36 @@ public protocol AccountStoring {
 
 public final class AccountStore: AccountStoring {
     private let fileName = "account.enc"
+    private let saltFileName = "account.salt"
+    private let directoryURL: URL
 
-    public init() {}
+    /// `directoryURL` is injectable so tests run against a temporary folder
+    /// instead of the real store. (The old tests hit the real path and called
+    /// delete() in setUp/tearDown, which signed the developer out on every
+    /// `swift test` run.)
+    public init(directoryURL: URL? = nil) {
+        self.directoryURL = directoryURL ?? Self.defaultDirectoryURL
+    }
 
     public func read() -> StoredAccountRecord? {
         guard let encrypted = try? Data(contentsOf: fileURL),
-              let sealed = try? AES.GCM.SealedBox(combined: encrypted),
-              let decrypted = try? AES.GCM.open(sealed, using: symmetricKey),
-              let record = try? JSONDecoder().decode(StoredAccountRecord.self, from: decrypted) else {
+              let sealed = try? AES.GCM.SealedBox(combined: encrypted) else {
             return nil
         }
-        return record
+
+        if let record = decode(sealed, using: symmetricKey) {
+            return record
+        }
+
+        // Migration: records written before the key material was made stable
+        // were sealed with a key derived from the network host name. If that
+        // still matches, decrypt with it and immediately re-seal with the
+        // stable key so the next network change can't sign the user out.
+        if let record = decode(sealed, using: legacySymmetricKey) {
+            save(record)
+            return record
+        }
+        return nil
     }
 
     public func save(_ record: StoredAccountRecord) {
@@ -38,15 +58,26 @@ public final class AccountStore: AccountStoring {
         try? FileManager.default.removeItem(at: fileURL)
     }
 
-    private var fileURL: URL {
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
-        let base = appSupport ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
-        return base
-            .appendingPathComponent(Constants.appName, isDirectory: true)
-            .appendingPathComponent(fileName, isDirectory: false)
+    // MARK: - Keys
+
+    /// Stable key: bundle ID + user name + a random per-install salt persisted
+    /// next to the record. Nothing here changes across app updates, reboots,
+    /// or network changes.
+    private var symmetricKey: SymmetricKey {
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.instanttranslator.app"
+        let username = ProcessInfo.processInfo.userName
+        let salt = installSalt()
+        var material = Data("\(bundleID)|\(username)|instanttranslator-account-v2|".utf8)
+        material.append(salt)
+        let digest = SHA256.hash(data: material)
+        return SymmetricKey(data: Data(digest))
     }
 
-    private var symmetricKey: SymmetricKey {
+    /// Pre-v2 derivation. `ProcessInfo.hostName` is the *network* host name,
+    /// which changes with Wi-Fi/DNS — so the key silently changed and the
+    /// stored session became undecryptable, surfacing as "expired". Kept only
+    /// to migrate existing records in `read()`.
+    var legacySymmetricKey: SymmetricKey {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.instanttranslator.app"
         let username = ProcessInfo.processInfo.userName
         let hostname = ProcessInfo.processInfo.hostName
@@ -55,8 +86,45 @@ public final class AccountStore: AccountStoring {
         return SymmetricKey(data: Data(digest))
     }
 
+    /// Random 32-byte salt created once per install and reused forever.
+    private func installSalt() -> Data {
+        if let existing = try? Data(contentsOf: saltFileURL), existing.count == 32 {
+            return existing
+        }
+        var bytes = [UInt8](repeating: 0, count: 32)
+        _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
+        let salt = Data(bytes)
+        ensureDirectoryExists()
+        try? salt.write(to: saltFileURL, options: .atomic)
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: saltFileURL.path)
+        return salt
+    }
+
+    // MARK: - Paths
+
+    private static var defaultDirectoryURL: URL {
+        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
+        let base = appSupport ?? URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+        return base.appendingPathComponent(Constants.appName, isDirectory: true)
+    }
+
+    var fileURL: URL {
+        directoryURL.appendingPathComponent(fileName, isDirectory: false)
+    }
+
+    private var saltFileURL: URL {
+        directoryURL.appendingPathComponent(saltFileName, isDirectory: false)
+    }
+
     private func ensureDirectoryExists() {
-        let directory = fileURL.deletingLastPathComponent()
-        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+    }
+
+    private func decode(_ sealed: AES.GCM.SealedBox, using key: SymmetricKey) -> StoredAccountRecord? {
+        guard let decrypted = try? AES.GCM.open(sealed, using: key),
+              let record = try? JSONDecoder().decode(StoredAccountRecord.self, from: decrypted) else {
+            return nil
+        }
+        return record
     }
 }
