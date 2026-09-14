@@ -102,7 +102,11 @@ final class AccessibilityService {
             &selectedText
         )
 
-        if textResult == .success, let text = selectedText as? String, !text.isEmpty {
+        // Whitespace-only is treated as no selection: Google Docs' hidden
+        // contenteditable reports "\n" here, which must not shadow the
+        // whole-field / clipboard fallbacks.
+        if textResult == .success, let text = selectedText as? String,
+           !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             log.info("Got selected text: \(text.prefix(50)) editable=\(isEditable)")
             return CaptureResult(text: text, isWholeFieldValue: false, isEditable: isEditable)
         }
@@ -118,7 +122,8 @@ final class AccessibilityService {
                 kAXValueAttribute as CFString,
                 &value
             )
-            if valueResult == .success, let text = value as? String, !text.isEmpty {
+            if valueResult == .success, let text = value as? String,
+               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 log.info("No selection; using whole field value: \(text.prefix(50))")
                 return CaptureResult(text: text, isWholeFieldValue: true, isEditable: true)
             }

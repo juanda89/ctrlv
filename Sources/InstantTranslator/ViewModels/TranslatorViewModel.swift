@@ -304,8 +304,12 @@ final class TranslatorViewModel {
             }
         }
 
-        if sourceText == nil || sourceText?.isEmpty == true {
-            debugLastStage = "Trying clipboard fallback"
+        // Whitespace-only counts as "nothing captured". Google Docs' hidden
+        // contenteditable makes Chrome report a bare "\n" as the AX selection,
+        // which used to satisfy a plain isEmpty check, skip this fallback, and
+        // then get blocked as "no selected text" without ever trying Cmd+C.
+        if Self.needsClipboardFallback(sourceText) {
+            debugLastStage = "Trying clipboard fallback (AX gave \(sourceText == nil ? "nil" : "whitespace"))"
             usedClipboardCapture = true
             clipboardService.saveAndClear()
             // Baseline AFTER saveAndClear: clearContents() bumps changeCount.
@@ -319,6 +323,13 @@ final class TranslatorViewModel {
         }
 
         return (sourceText, isTrusted, usedClipboardCapture, isWholeFieldValue, isEditable)
+    }
+
+    /// True when the AX capture yielded nothing usable (nil, empty, or only
+    /// whitespace/newlines) and the flow must fall back to a simulated Cmd+C.
+    nonisolated static func needsClipboardFallback(_ axText: String?) -> Bool {
+        guard let axText else { return true }
+        return axText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
     private func makeTranslationRequest(from text: String, profile: TranslationProfile) -> TranslationRequest {
