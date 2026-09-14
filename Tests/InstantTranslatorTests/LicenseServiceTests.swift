@@ -31,6 +31,55 @@ final class LicenseServiceTests: XCTestCase {
         XCTAssertEqual(client.requestedEmails, ["user@example.com"])
     }
 
+    func test_requestMagicCode_persistsLastSignInEmail_andSurvivesNewInstance() async {
+        let store = InMemoryAccountStore()
+        let client = MockAuthClient()
+        let (defaults, suiteName) = makeUserDefaults()
+        defer { cleanup(defaults, suiteName: suiteName) }
+
+        let service = LicenseService(
+            client: client,
+            store: store,
+            userDefaults: defaults,
+            openURLHandler: { _ in },
+            startBackgroundTasks: false
+        )
+
+        _ = await service.requestMagicCode(email: " User@Example.com ")
+        XCTAssertEqual(service.lastSignInEmail, "user@example.com")
+
+        // A fresh instance (app relaunch) reads the persisted email so the
+        // sign-in form can prefill it even after sign-out.
+        let reloaded = LicenseService(
+            client: MockAuthClient(),
+            store: InMemoryAccountStore(),
+            userDefaults: defaults,
+            openURLHandler: { _ in },
+            startBackgroundTasks: false
+        )
+        XCTAssertEqual(reloaded.lastSignInEmail, "user@example.com")
+    }
+
+    func test_lastSignInEmail_survivesSignOut() async {
+        let store = InMemoryAccountStore()
+        let client = MockAuthClient()
+        let (defaults, suiteName) = makeUserDefaults()
+        defer { cleanup(defaults, suiteName: suiteName) }
+
+        let service = LicenseService(
+            client: client,
+            store: store,
+            userDefaults: defaults,
+            openURLHandler: { _ in },
+            startBackgroundTasks: false
+        )
+
+        _ = await service.requestMagicCode(email: "user@example.com")
+        service.signOut()
+
+        XCTAssertEqual(service.lastSignInEmail, "user@example.com")
+    }
+
     func test_requestMagicCode_rejectsInvalidEmail() async {
         let store = InMemoryAccountStore()
         let client = MockAuthClient()

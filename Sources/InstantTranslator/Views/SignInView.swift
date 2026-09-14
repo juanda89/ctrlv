@@ -10,6 +10,7 @@ struct SignInView: View {
     @State private var emailInput: String = ""
     @State private var codeInput: String = ""
     @State private var localMessage: String?
+    @State private var didPrefillEmail = false
 
     var body: some View {
         MenuCard {
@@ -43,6 +44,15 @@ struct SignInView: View {
                 Text(error)
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.red)
+            }
+        }
+        .onAppear {
+            // Prefill the email used last time so a re-subscribing user doesn't
+            // have to remember which address their account is under.
+            guard !didPrefillEmail else { return }
+            didPrefillEmail = true
+            if emailInput.isEmpty, let last = licenseService.lastSignInEmail {
+                emailInput = last
             }
         }
     }

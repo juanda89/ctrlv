@@ -16,6 +16,11 @@ public final class LicenseService {
     /// Authentication progress flag for the sign-in flow.
     public private(set) var pendingMagicCodeEmail: String?
 
+    /// Last email a magic code was requested for. Persisted and kept across
+    /// sign-out so the sign-in form can prefill it — the user doesn't have to
+    /// remember which email their subscription is under.
+    public private(set) var lastSignInEmail: String?
+
     public var storedSessionToken: String? {
         store.read()?.sessionToken
     }
@@ -30,6 +35,7 @@ public final class LicenseService {
     }
 
     private let installDateKey = "installDate"
+    private let lastSignInEmailKey = "lastSignInEmail"
     private let legacyLemonStoreFile = "license_state.enc"
     private let legacyAuthEmailKey = "subscriptionAuthEmail"
     private let legacySessionTokenKey = "subscriptionSessionToken"
@@ -66,6 +72,7 @@ public final class LicenseService {
         self.openURLHandler = openURLHandler
         self.startBackgroundTasks = startBackgroundTasks
         self.onStateChange = onStateChange
+        self.lastSignInEmail = userDefaults.string(forKey: lastSignInEmailKey)
 
         clearLegacyLemonStoreIfPresent()
         clearLegacySessionKeys()
@@ -114,6 +121,8 @@ public final class LicenseService {
         do {
             try await client.requestMagicCode(email: normalized)
             pendingMagicCodeEmail = normalized
+            lastSignInEmail = normalized
+            userDefaults.set(normalized, forKey: lastSignInEmailKey)
             lastError = nil
             return true
         } catch {
