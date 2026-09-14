@@ -1,11 +1,22 @@
 import AppKit
 
 final class ClipboardService {
+    private let pasteboard: NSPasteboard
     private var savedContents: [NSPasteboard.PasteboardType: Data] = [:]
+
+    /// `pasteboard` is injectable so tests can use a private named pasteboard
+    /// instead of mutating the user's real clipboard.
+    init(pasteboard: NSPasteboard = .general) {
+        self.pasteboard = pasteboard
+    }
+
+    /// Monotonic counter the system bumps on every pasteboard write.
+    var changeCount: Int {
+        pasteboard.changeCount
+    }
 
     /// Save current pasteboard contents and clear it.
     func saveAndClear() {
-        let pasteboard = NSPasteboard.general
         savedContents = [:]
         for item in pasteboard.pasteboardItems ?? [] {
             for type in item.types {
@@ -29,18 +40,53 @@ final class ClipboardService {
 
     /// Write text to the pasteboard.
     func writeText(_ text: String) {
-        NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString(text, forType: .string)
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
     }
 
     /// Read text from the pasteboard.
     func readText() -> String? {
-        NSPasteboard.general.string(forType: .string)
+        pasteboard.string(forType: .string)
+    }
+
+    /// Polls the pasteboard after a simulated Cmd+C until real (non-whitespace)
+    /// text arrives, or the timeout expires.
+    ///
+    /// A fixed post-copy delay is not enough for apps that handle Cmd+C in
+    /// JavaScript (Google Docs renders in a canvas and serializes the selection
+    /// asynchronously): the real payload can land hundreds of milliseconds
+    /// later, sometimes preceded by an intermediate empty/whitespace write.
+    /// Polling `changeCount` returns as soon as usable text exists instead of
+    /// racing a timer against the target app.
+    ///
+    /// - Parameter baselineChangeCount: `changeCount` captured after
+    ///   `saveAndClear()` and before `simulateCopy()`.
+    /// - Returns: The first non-whitespace string written after the baseline.
+    ///   On timeout, returns whatever was last seen (possibly whitespace or
+    ///   nil) so callers can log/guard on the true final state.
+    func waitForCopiedText(
+        since baselineChangeCount: Int,
+        timeout: TimeInterval = 0.6,
+        pollInterval: TimeInterval = 0.025
+    ) async -> String? {
+        let deadline = Date().addingTimeInterval(timeout)
+        var lastSeen: String?
+
+        while Date() < deadline {
+            if pasteboard.changeCount != baselineChangeCount {
+                lastSeen = readText()
+                if let text = lastSeen,
+                   !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    return text
+                }
+            }
+            try? await Task.sleep(nanoseconds: UInt64(pollInterval * 1_000_000_000))
+        }
+        return lastSeen
     }
 
     /// Restore previously saved pasteboard contents.
     func restoreSaved() {
-        let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         let item = NSPasteboardItem()
         for (type, data) in savedContents {

@@ -125,7 +125,11 @@ final class TranslatorViewModel {
         let captureStartedAt = Date()
         let capture = await captureSelectedText()
         debugLastCaptureLatencyMs = elapsedMs(since: captureStartedAt)
-        guard let text = capture.text, !text.isEmpty else {
+        // Whitespace-only counts as empty: the server trims and rejects it
+        // with a 400 ("Missing text"), so block it locally with a clear error.
+        // Google Docs' async copy can leave a bare newline in the pasteboard.
+        guard let text = capture.text,
+              !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             debugLastStage = "Blocked: no selected text"
             lastError = TranslationError.noTextSelected.localizedDescription
             return
@@ -299,9 +303,13 @@ final class TranslatorViewModel {
             debugLastStage = "Trying clipboard fallback"
             usedClipboardCapture = true
             clipboardService.saveAndClear()
+            // Baseline AFTER saveAndClear: clearContents() bumps changeCount.
+            let baseline = clipboardService.changeCount
             clipboardService.simulateCopy()
-            try? await Task.sleep(nanoseconds: Constants.copyWaitDelay)
-            sourceText = clipboardService.readText()
+            // Poll instead of a fixed delay: canvas-based apps (Google Docs)
+            // fulfill Cmd+C asynchronously via JS, often slower than any fixed
+            // wait and sometimes with a whitespace-only intermediate write.
+            sourceText = await clipboardService.waitForCopiedText(since: baseline)
             debugLastStage = "Clipboard read result: \(selectionState(sourceText))"
         }
 
