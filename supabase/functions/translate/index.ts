@@ -1,5 +1,5 @@
 import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
-import { OpenRouterRateLimitError, translateWithOpenRouter } from "../_shared/openrouter.ts";
+import { OpenRouterRateLimitError, isUntranslatable, translateWithOpenRouter } from "../_shared/openrouter.ts";
 import { sha256Hex } from "../_shared/security.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { renewSessionExpiry } from "../_shared/session.ts";
@@ -54,6 +54,17 @@ Deno.serve(async (req) => {
     }
 
     await syncIdentity(client, identityHash, plan);
+
+    // Nothing to translate (bare URL, bare email, no letters): echo the input
+    // back unchanged. Skips the LLM entirely — free, unmetered, and immune to
+    // the model replying "I can't access that link" instead of translating.
+    if (isUntranslatable(parsed.value.text)) {
+      return json({
+        translatedText: parsed.value.text,
+        model: "passthrough",
+        plan: plan.plan,
+      }, 200, req);
+    }
 
     const rateLimit = await enforceLimits(client, identityHash, parsed.value.text.length, plan);
     if (rateLimit) {

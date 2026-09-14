@@ -101,6 +101,18 @@ final class TranslatorViewModel {
         let totalStartedAt = Date()
         resetDebugTimings()
 
+        // Show the island immediately so the shortcut gets instant feedback
+        // that covers capture too. Capture can now take up to ~600ms in
+        // canvas apps (Google Docs clipboard polling); showing it only once
+        // the network call started left that window with no feedback at all.
+        // The single defer below hides it on every exit path.
+        isTranslating = true
+        notifyAppDelegate { $0.showTranslatingIcon() }
+        defer {
+            isTranslating = false
+            notifyAppDelegate { $0.restoreDefaultIcon() }
+        }
+
         let licenseStartedAt = Date()
         await licenseService.refreshSubscriptionStatus(forceNetwork: false)
         debugLastLicenseLatencyMs = elapsedMs(since: licenseStartedAt)
@@ -160,15 +172,8 @@ final class TranslatorViewModel {
         let routing = resolveModelDecision(textLength: text.count, isTrialMode: isTrialMode)
         debugLastModel = routing.model
 
-        isTranslating = true
         lastError = nil
         debugLastStage = "Calling ctrl+v Cloud"
-        notifyAppDelegate { $0.showTranslatingIcon() }
-
-        defer {
-            isTranslating = false
-            notifyAppDelegate { $0.restoreDefaultIcon() }
-        }
 
         do {
             let backendStartedAt = Date()

@@ -154,6 +154,31 @@ export class OpenRouterRateLimitError extends Error {
  *
  * Normal hyphen `-` is NEVER touched (used for compounds, ranges, etc.).
  */
+/// True when the input holds nothing a translator can act on — a bare URL,
+/// a bare email address, or text with no letters at all (numbers, symbols,
+/// punctuation). Callers return the input verbatim instead of invoking the
+/// LLM: it costs nothing, and it removes a real failure mode where a model
+/// handed a lone URL "helpfully" replied that it can't access the link
+/// instead of translating.
+export function isUntranslatable(text: string): boolean {
+  const trimmed = text.trim();
+  if (trimmed.length === 0) return true;
+
+  // Bare URL (optionally several, whitespace-separated). No other words.
+  const urlToken = /^(?:https?:\/\/|www\.)\S+$/i;
+  const tokens = trimmed.split(/\s+/);
+  if (tokens.every((token) => urlToken.test(token))) return true;
+
+  // Bare email address(es).
+  const emailToken = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (tokens.every((token) => emailToken.test(token))) return true;
+
+  // No letters in any script → nothing to translate (numbers, symbols, IDs).
+  if (!/\p{L}/u.test(trimmed)) return true;
+
+  return false;
+}
+
 export function sanitizeTranslation(translation: string, source: string): string {
   let result = translation;
 
