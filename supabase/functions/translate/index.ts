@@ -2,6 +2,7 @@ import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
 import { OpenRouterRateLimitError, translateWithOpenRouter } from "../_shared/openrouter.ts";
 import { sha256Hex } from "../_shared/security.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
+import { renewSessionExpiry } from "../_shared/session.ts";
 
 const trialDays = Number(Deno.env.get("TRIAL_DAYS") ?? "14");
 const trialDailyLimit = Number(Deno.env.get("TRIAL_DAILY_TRANSLATION_LIMIT") ?? "50");
@@ -174,12 +175,16 @@ async function lookupActiveSubscription(
 
   const { data: session } = await client
     .from("app_sessions")
-    .select("account_id")
+    .select("account_id, expires_at")
     .eq("token_hash", tokenHash)
     .gt("expires_at", nowISO)
     .maybeSingle();
 
   if (!session?.account_id) return null;
+
+  // Sliding-window renewal so heavy users who translate but rarely open the
+  // popover also stay signed in past the fixed 30-day mark.
+  await renewSessionExpiry(client, tokenHash, session.expires_at as string | null);
 
   const { data: subscription } = await client
     .from("account_subscriptions")

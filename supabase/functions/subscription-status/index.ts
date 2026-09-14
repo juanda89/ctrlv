@@ -2,6 +2,7 @@ import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { normalizePaddleSubscriptionStatus } from "../_shared/subscription.ts";
 import { sha256Hex } from "../_shared/security.ts";
+import { renewSessionExpiry } from "../_shared/session.ts";
 
 const trialDays = Number(Deno.env.get("TRIAL_DAYS") ?? "14");
 
@@ -38,6 +39,10 @@ Deno.serve(async (req) => {
   if (!session?.account_id) {
     return json({ error: "Invalid session" }, 401, req);
   }
+
+  // Sliding-window renewal: keep active users signed in indefinitely instead
+  // of forcing a re-login at the fixed 30-day mark. Fire-and-forget.
+  await renewSessionExpiry(client, tokenHash, session.expires_at);
 
   const { data: account, error: accountError } = await client
     .from("subscription_accounts")
