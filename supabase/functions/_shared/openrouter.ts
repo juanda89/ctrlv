@@ -199,7 +199,19 @@ export function sanitizeTranslation(translation: string, source: string): string
 
   // Collapse runs of spaces produced by the substitutions, but keep newlines.
   result = result.replace(/[ \t]{2,}/g, " ").trim();
+
+  // ALL CAPS source → ALL CAPS output. The prompt asks the model to keep
+  // capitalization, but it routinely drops it on short inputs
+  // ("IR AL GRANO" → "Let's get straight to the point"). Deterministic here.
+  if (isAllCaps(source)) {
+    result = result.toUpperCase();
+  }
   return result;
+}
+
+/// True when the text has at least one letter and no lowercase letters.
+export function isAllCaps(text: string): boolean {
+  return /\p{L}/u.test(text) && !/\p{Ll}/u.test(text);
 }
 
 function estimateMaxTokens(text: string): number {
