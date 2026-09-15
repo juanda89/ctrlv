@@ -8,7 +8,6 @@ struct FooterSection: View {
     let onCheckForUpdates: () -> Void
     let onShowAbout: () -> Void
     let onShowDebug: () -> Void
-    let onShowAdvanced: () -> Void
 
     var body: some View {
         HStack {
@@ -25,9 +24,6 @@ struct FooterSection: View {
                     onCheckForUpdates()
                 }
                 Divider()
-                Button("Shortcut Profiles…") {
-                    onShowAdvanced()
-                }
                 Button("Debug") {
                     onShowDebug()
                 }

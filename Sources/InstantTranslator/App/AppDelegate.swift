@@ -162,6 +162,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             licenseService.applyDebugState(.expired)
         case .invalid:
             licenseService.applyDebugState(.invalid(reason: "Preview invalid license state"))
+        case .twoProfiles:
+            licenseService.applyDebugState(.active(planName: "Pro", validatedAt: Date(), isOfflineGrace: false))
+            let settingsVM = translatorViewModel.settingsVM
+            if settingsVM.settings.profiles.count < 2 {
+                settingsVM.addProfileAndSelect()
+            } else {
+                settingsVM.selectProfile(settingsVM.settings.profiles[1].id)
+            }
+            settingsVM.selectedTargetLanguage = .spanish
+            settingsVM.selectedTone = .casual
+            translatorViewModel.refreshHotkeyRegistration()
         }
     }
 

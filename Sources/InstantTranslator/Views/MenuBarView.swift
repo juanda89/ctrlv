@@ -12,7 +12,6 @@ struct MenuBarView: View {
     let onShowAbout: () -> Void
 
     @State private var showDebug = false
-    @State private var showAdvanced = false
 
     var body: some View {
         GeometryReader { geometry in
@@ -25,19 +24,6 @@ struct MenuBarView: View {
                             .frame(width: max(0, geometry.size.width - 24), alignment: .topLeading)
                             .padding(.horizontal, 12)
                             .padding(.bottom, 4)
-                    }
-                    .scrollIndicators(.hidden)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-                } else if showAdvanced {
-                    ScrollView {
-                        AdvancedSettingsView(
-                            settingsVM: viewModel.settingsVM,
-                            translatorVM: viewModel,
-                            onClose: { showAdvanced = false }
-                        )
-                        .frame(width: max(0, geometry.size.width - 24), alignment: .topLeading)
-                        .padding(.horizontal, 12)
-                        .padding(.bottom, 4)
                     }
                     .scrollIndicators(.hidden)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -58,6 +44,10 @@ struct MenuBarView: View {
                     ScrollView {
                         VStack(spacing: 12) {
                             StatusSection(licenseService: licenseService)
+                            ProfileTabsSection(
+                                settingsVM: viewModel.settingsVM,
+                                translatorVM: viewModel
+                            )
                             PreferencesSection(settingsVM: viewModel.settingsVM)
                             BehaviorSection(
                                 settingsVM: viewModel.settingsVM,
@@ -78,8 +68,7 @@ struct MenuBarView: View {
                     onOpenFeedback: onOpenFeedback,
                     onCheckForUpdates: onCheckForUpdates,
                     onShowAbout: onShowAbout,
-                    onShowDebug: { showDebug = true },
-                    onShowAdvanced: { showAdvanced = true }
+                    onShowDebug: { showDebug = true }
                 )
                 .padding(.horizontal, 12)
                 .padding(.bottom, 10)

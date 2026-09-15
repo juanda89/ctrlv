@@ -10,7 +10,8 @@ struct BehaviorSection: View {
 
     var body: some View {
         VStack(spacing: 8) {
-            shortcutAndPasteCard
+            shortcutCard
+            autoPasteCard
             accessibilityCard
         }
         .onAppear {
@@ -24,13 +25,21 @@ struct BehaviorSection: View {
         }
     }
 
-    private var shortcutAndPasteCard: some View {
+    /// Shortcut of the profile selected in the tabs. The sheet is handed the
+    /// selected id explicitly — no optional/fallback that could route an edit
+    /// to a different profile.
+    private var shortcutCard: some View {
         MenuCard {
             Button {
                 isShortcutSettingsPresented = true
             } label: {
                 HStack {
-                    NativeSectionLabel(systemName: "keyboard", tint: MenuTheme.cyan, title: "Shortcut")
+                    VStack(alignment: .leading, spacing: 2) {
+                        NativeSectionLabel(systemName: "keyboard", tint: MenuTheme.cyan, title: "Shortcut")
+                        Text("Profile \(settingsVM.selectedProfileIndex + 1)")
+                            .font(.caption2.weight(.medium))
+                            .foregroundStyle(MenuTheme.tertiaryText)
+                    }
 
                     Spacer()
 
@@ -45,23 +54,34 @@ struct BehaviorSection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+        }
+        .sheet(isPresented: $isShortcutSettingsPresented) {
+            ShortcutSettingsView(
+                settingsVM: settingsVM,
+                profileID: settingsVM.selectedProfileID
+            ) {
+                translatorVM.refreshHotkeyRegistration()
+            }
+        }
+    }
 
+    /// Auto-paste is a single global setting — deliberately outside the
+    /// per-profile area so it doesn't read as per-profile.
+    private var autoPasteCard: some View {
+        MenuCard {
             HStack {
-                NativeSectionLabel(systemName: "arrow.left.arrow.right.square", tint: MenuTheme.cyan, title: "Auto-paste")
+                VStack(alignment: .leading, spacing: 2) {
+                    NativeSectionLabel(systemName: "arrow.left.arrow.right.square", tint: MenuTheme.cyan, title: "Auto-paste")
+                    Text("Applies to all profiles")
+                        .font(.caption2.weight(.medium))
+                        .foregroundStyle(MenuTheme.tertiaryText)
+                }
 
                 Spacer()
 
                 Toggle("", isOn: $settingsVM.settings.autoPaste)
                     .labelsHidden()
                     .toggleStyle(.switch)
-            }
-        }
-        .sheet(isPresented: $isShortcutSettingsPresented) {
-            ShortcutSettingsView(
-                settingsVM: settingsVM,
-                profileID: settingsVM.primaryProfileID
-            ) {
-                translatorVM.refreshHotkeyRegistration()
             }
         }
     }

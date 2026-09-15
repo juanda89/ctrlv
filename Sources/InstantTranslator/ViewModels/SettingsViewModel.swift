@@ -20,10 +20,10 @@ final class SettingsViewModel {
         ShortcutConfiguration.letterOptions
     }
 
-    /// Selected shortcut of the primary profile (drives the header badge and
-    /// the primary Behavior card).
+    /// Shortcut of the profile currently selected in the popover tabs (drives
+    /// the header badge and the Shortcut card).
     var selectedShortcutOption: ShortcutKeyOption {
-        ShortcutConfiguration.option(for: settings.shortcutKeyCode)
+        ShortcutConfiguration.option(for: selectedProfile.shortcutKeyCode)
     }
 
     var shortcutDisplay: String {
@@ -81,6 +81,64 @@ final class SettingsViewModel {
         settings.profiles.first?.id ?? UUID()
     }
 
+    // MARK: - Profile selection (popover UI state, not persisted)
+
+    /// The profile the popover tabs are currently EDITING. This never affects
+    /// which profile translates — that is decided by the shortcut pressed.
+    /// Always resolves to an existing profile (falls back to the primary if
+    /// the remembered id was removed).
+    var selectedProfileID: UUID {
+        get {
+            if let id = storedSelectedProfileID,
+               settings.profiles.contains(where: { $0.id == id }) {
+                return id
+            }
+            return primaryProfileID
+        }
+        set { storedSelectedProfileID = newValue }
+    }
+    private var storedSelectedProfileID: UUID?
+
+    var selectedProfileIndex: Int {
+        settings.profiles.firstIndex(where: { $0.id == selectedProfileID }) ?? 0
+    }
+
+    var selectedProfile: TranslationProfile {
+        settings.profiles.first(where: { $0.id == selectedProfileID })
+            ?? settings.profiles.first
+            ?? TranslationProfile()
+    }
+
+    func selectProfile(_ id: UUID) {
+        guard settings.profiles.contains(where: { $0.id == id }) else { return }
+        selectedProfileID = id
+    }
+
+    /// Bindable fields of the selected profile. Every write is routed by the
+    /// selected profile's id, so editing one tab can never touch another.
+    var selectedTargetLanguage: SupportedLanguage {
+        get { selectedProfile.targetLanguage }
+        set { updateProfile(id: selectedProfileID, targetLanguage: newValue) }
+    }
+
+    var selectedTone: Tone {
+        get { selectedProfile.tone }
+        set { updateProfile(id: selectedProfileID, tone: newValue) }
+    }
+
+    var selectedCustomTonePrompt: String {
+        get { selectedProfile.customTonePrompt }
+        set { updateProfile(id: selectedProfileID, customTonePrompt: newValue) }
+    }
+
+    /// Add a profile (defaults + first free shortcut letter) and select it.
+    @discardableResult
+    func addProfileAndSelect() -> UUID? {
+        guard let id = addProfile() else { return nil }
+        selectedProfileID = id
+        return id
+    }
+
     // MARK: - Primary profile shortcut (kept for compatibility)
 
     func setShortcut(_ option: ShortcutKeyOption) {
@@ -113,6 +171,11 @@ final class SettingsViewModel {
         guard let index = settings.profiles.firstIndex(where: { $0.id == id }) else { return }
         if index == 0 { return }
         settings.profiles.remove(at: index)
+        // The getter already falls back to the primary when the remembered id
+        // is gone; clear it so the fallback is explicit and stable.
+        if storedSelectedProfileID == id {
+            storedSelectedProfileID = nil
+        }
     }
 
     /// Set the shortcut letter of a specific profile. If another profile

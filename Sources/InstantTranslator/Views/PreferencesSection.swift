@@ -1,6 +1,7 @@
 import ControlVCore
 import SwiftUI
 
+/// Language, tone and custom prompt of the profile selected in the tabs.
 struct PreferencesSection: View {
     @Bindable var settingsVM: SettingsViewModel
 
@@ -11,16 +12,16 @@ struct PreferencesSection: View {
 
                 Spacer()
 
-                LanguageDropdown(selection: $settingsVM.settings.targetLanguage)
+                LanguageDropdown(selection: $settingsVM.selectedTargetLanguage)
             }
 
             NativeMenuDivider()
 
             VStack(alignment: .leading, spacing: 8) {
                 NativeSectionLabel(systemName: "slider.horizontal.3", tint: MenuTheme.cyan, title: "Tone")
-                ToneSelector(selection: $settingsVM.settings.tone)
+                ToneSelector(selection: $settingsVM.selectedTone)
 
-                if settingsVM.settings.tone == .custom {
+                if settingsVM.selectedTone == .custom {
                     VStack(alignment: .leading, spacing: 6) {
                         Text("Custom prompt")
                             .font(.footnote.weight(.semibold))
@@ -29,7 +30,7 @@ struct PreferencesSection: View {
                         NativeControlSurface(cornerRadius: 12, horizontalPadding: 10, verticalPadding: 9) {
                             TextField(
                                 "Example: Translate in a clear, friendly startup tone with short sentences.",
-                                text: $settingsVM.settings.customTonePrompt,
+                                text: $settingsVM.selectedCustomTonePrompt,
                                 axis: .vertical
                             )
                             .lineLimit(3...4)

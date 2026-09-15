@@ -7,6 +7,8 @@ enum MenuPreviewScenario: String {
     case active
     case expired
     case invalid
+    /// Active subscription with two shortcut profiles, second one selected.
+    case twoProfiles = "twoprofiles"
 
     static func fromEnvironment() -> MenuPreviewScenario? {
         let env = ProcessInfo.processInfo.environment
