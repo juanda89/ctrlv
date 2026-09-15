@@ -15,9 +15,9 @@
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>2.2.1</string>
+	<string>2.3.0</string>
 	<key>CFBundleVersion</key>
-	<string>27</string>
+	<string>28</string>
 	<key>CtrlVFeedbackURL</key>
 	<string>mailto:info@control-v.info?subject=ctrl%2Bv%20Feedback</string>
 	<key>CtrlVManualUpdateURL</key>
