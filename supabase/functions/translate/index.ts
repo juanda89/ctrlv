@@ -103,7 +103,10 @@ function parseRequest(body: unknown): { ok: true; value: TranslateRequest } | { 
     return { ok: false, error: "Invalid request body" };
   }
 
-  const text = readString(body, "text");
+  // `text` is read raw: the sanitizer restores the source's exact leading /
+  // trailing whitespace, so trimming here would silently drop a selected
+  // trailing newline and make the pasted paragraph merge with the next one.
+  const text = readRawString(body, "text");
   const systemPrompt = readString(body, "systemPrompt");
   const installID = readString(body, "installID");
 
@@ -363,6 +366,14 @@ function readString(body: object, key: string): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
+}
+
+/// Like readString but returns the value verbatim (only the emptiness check
+/// uses trim). Use for user content whose whitespace is meaningful.
+function readRawString(body: object, key: string): string | null {
+  const value = body[key as keyof typeof body];
+  if (typeof value !== "string") return null;
+  return (value as string).trim().length > 0 ? (value as string) : null;
 }
 
 function readOptionalString(body: object, key: string): string | null {

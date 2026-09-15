@@ -197,8 +197,21 @@ export function sanitizeTranslation(translation: string, source: string): string
     result = result.split(" – ").join(", ").split("–").join("");
   }
 
-  // Collapse runs of spaces produced by the substitutions, but keep newlines.
-  result = result.replace(/[ \t]{2,}/g, " ").trim();
+  // Collapse runs of spaces/tabs produced by the substitutions — but only
+  // when the source itself has none. If the source uses runs of spaces
+  // (indented code, aligned columns, nested lists) they are formatting the
+  // user chose and must survive.
+  if (!/[ \t]{2,}/.test(source)) {
+    result = result.replace(/[ \t]{2,}/g, " ");
+  }
+
+  // Preserve the source's exact leading/trailing whitespace. Models (and the
+  // response extractor) trim their output, so a selection that ends with a
+  // newline — the common case when selecting whole lines in Google Docs —
+  // came back without it and pasting merged the paragraph with the next one.
+  const leading = source.match(/^\s*/)?.[0] ?? "";
+  const trailing = source.match(/\s*$/)?.[0] ?? "";
+  result = leading + result.trim() + trailing;
 
   // ALL CAPS source → ALL CAPS output. The prompt asks the model to keep
   // capitalization, but it routinely drops it on short inputs
