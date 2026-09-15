@@ -62,6 +62,16 @@ final class TranslatorViewModel {
         deviceIdentityStore.currentInstallID()
     }
 
+    /// When the subscription was last confirmed with the server, and whether
+    /// the app is currently running on the offline grace period. Shown in
+    /// the Debug panel only.
+    var licenseValidation: (validatedAt: Date, isOfflineGrace: Bool)? {
+        if case .active(_, let validatedAt, let isOfflineGrace) = licenseService.state {
+            return (validatedAt, isOfflineGrace)
+        }
+        return nil
+    }
+
     func debugTriggerTranslationFromUI() {
         triggerTranslation(source: "manual-debug-button", profileID: settingsVM.settings.profiles.first?.id)
     }

@@ -68,6 +68,7 @@ struct DebugSheet: View {
                     debugRow("Last error", value: translatorVM.lastError ?? "none")
                     debugRow("Model", value: translatorVM.debugLastModel)
                     debugRow("License", value: latencyText(translatorVM.debugLastLicenseLatencyMs))
+                    debugRow("License validated", value: licenseValidatedText)
                     debugRow("Capture", value: latencyText(translatorVM.debugLastCaptureLatencyMs))
                     debugRow("Backend", value: latencyText(translatorVM.debugLastBackendLatencyMs))
                     debugRow("Output", value: latencyText(translatorVM.debugLastOutputLatencyMs))
@@ -169,6 +170,14 @@ struct DebugSheet: View {
         formatter.timeStyle = .medium
         formatter.dateStyle = .none
         return formatter.string(from: date)
+    }
+
+    private var licenseValidatedText: String {
+        guard let validation = translatorVM.licenseValidation else { return "n/a (not active)" }
+        let formatter = RelativeDateTimeFormatter()
+        formatter.unitsStyle = .full
+        let when = formatter.localizedString(for: validation.validatedAt, relativeTo: Date())
+        return validation.isOfflineGrace ? "\(when) (offline grace)" : when
     }
 
     private func latencyText(_ value: Int?) -> String {

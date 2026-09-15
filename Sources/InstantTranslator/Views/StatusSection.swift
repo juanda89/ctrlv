@@ -83,10 +83,7 @@ struct StatusSection: View {
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(MenuTheme.subtleText)
             }
-
-            Text("Last validation: \(validationText(for: validatedAt))")
-                .font(.footnote.weight(.medium))
-                .foregroundStyle(MenuTheme.subtleText)
+            // "Last validation" moved to ⋯ → Debug: useful for diagnosis, noise here.
         }
         .background(cardTint(isOfflineGrace ? .orange : .green))
     }
@@ -258,12 +255,6 @@ struct StatusSection: View {
     }
 
     // MARK: - Helpers
-
-    private func validationText(for date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.unitsStyle = .full
-        return formatter.localizedString(for: date, relativeTo: Date())
-    }
 
     private func cardTint(_ color: Color) -> some View {
         RoundedRectangle(cornerRadius: 18, style: .continuous)
