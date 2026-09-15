@@ -86,3 +86,52 @@ export function pastDueEmailHTML(): string {
     </body></html>
   `.trim();
 }
+
+export type FeedbackEmailInput = {
+  rating: number | null;
+  category: string;
+  message: string;
+  contactEmail: string | null;
+  accountEmail: string | null;
+  appVersion: string | null;
+  platform: string;
+  installIDHash: string;
+};
+
+export function feedbackEmailSubject(input: FeedbackEmailInput): string {
+  const stars = input.rating ? "★".repeat(input.rating) + "☆".repeat(5 - input.rating) : "no rating";
+  return `ctrl+v feedback · ${stars} · ${input.category}`;
+}
+
+export function feedbackEmailHTML(input: FeedbackEmailInput): string {
+  const who = input.accountEmail
+    ? `${escapeHTML(input.accountEmail)} (signed in)`
+    : input.contactEmail
+      ? `${escapeHTML(input.contactEmail)} (trial, gave email)`
+      : `trial user · install ${input.installIDHash.slice(0, 10)}`;
+  const stars = input.rating ? "★".repeat(input.rating) + "☆".repeat(5 - input.rating) : "—";
+  const message = input.message.trim().length > 0
+    ? escapeHTML(input.message).replace(/\n/g, "<br/>")
+    : "<em>(no message)</em>";
+  return `
+    <!DOCTYPE html>
+    <html><body style="font-family: -apple-system, BlinkMacSystemFont, sans-serif; max-width: 600px; margin: 40px auto; padding: 24px; color: #1e293b;">
+      <h1 style="font-size: 20px; font-weight: 600; margin: 0 0 16px;">New feedback · ${escapeHTML(input.category)}</h1>
+      <p style="font-size: 26px; letter-spacing: 2px; margin: 0 0 16px; color: #d97706;">${stars}</p>
+      <p style="line-height: 1.6; font-size: 15px; margin: 0 0 16px; padding: 14px 16px; background: #f8fafc; border-radius: 8px;">${message}</p>
+      <table style="font-size: 13px; color: #64748b; border-collapse: collapse;">
+        <tr><td style="padding: 2px 12px 2px 0;">From</td><td>${who}</td></tr>
+        <tr><td style="padding: 2px 12px 2px 0;">App</td><td>${escapeHTML(input.appVersion ?? "unknown")} · ${escapeHTML(input.platform)}</td></tr>
+      </table>
+    </body></html>
+  `.trim();
+}
+
+function escapeHTML(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}

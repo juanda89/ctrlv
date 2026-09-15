@@ -7,11 +7,13 @@ struct MenuBarView: View {
     @Bindable var viewModel: TranslatorViewModel
     @Bindable var licenseService: LicenseService
     @Bindable var updateService: UpdateService
-    let onOpenFeedback: () -> Void
     let onCheckForUpdates: () -> Void
     let onShowAbout: () -> Void
 
     @State private var showDebug = false
+    // Debug hook for headless snapshots: `-debug.showFeedbackOnLaunch 1`.
+    @State private var showFeedback = UserDefaults.standard.bool(forKey: "debug.showFeedbackOnLaunch")
+    @State private var feedbackInitialRating: Int?
 
     var body: some View {
         GeometryReader { geometry in
@@ -24,6 +26,20 @@ struct MenuBarView: View {
                             .frame(width: max(0, geometry.size.width - 24), alignment: .topLeading)
                             .padding(.horizontal, 12)
                             .padding(.bottom, 4)
+                    }
+                    .scrollIndicators(.hidden)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                } else if showFeedback {
+                    ScrollView {
+                        FeedbackView(
+                            licenseService: licenseService,
+                            translatorVM: viewModel,
+                            initialRating: feedbackInitialRating,
+                            onClose: { showFeedback = false }
+                        )
+                        .frame(width: max(0, geometry.size.width - 24), alignment: .topLeading)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 4)
                     }
                     .scrollIndicators(.hidden)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
@@ -44,6 +60,12 @@ struct MenuBarView: View {
                     ScrollView {
                         VStack(spacing: 12) {
                             StatusSection(licenseService: licenseService)
+                            if viewModel.feedbackPromptTracker.shouldInvite {
+                                FeedbackInviteBanner(tracker: viewModel.feedbackPromptTracker) { rating in
+                                    feedbackInitialRating = rating
+                                    showFeedback = true
+                                }
+                            }
                             ProfileTabsSection(
                                 settingsVM: viewModel.settingsVM,
                                 translatorVM: viewModel
@@ -53,6 +75,10 @@ struct MenuBarView: View {
                                 settingsVM: viewModel.settingsVM,
                                 translatorVM: viewModel
                             )
+                            FeedbackSection(tracker: viewModel.feedbackPromptTracker) { rating in
+                                feedbackInitialRating = rating
+                                showFeedback = true
+                            }
                         }
                         .frame(width: max(0, geometry.size.width - 24), alignment: .topLeading)
                         .padding(.horizontal, 12)
@@ -65,7 +91,7 @@ struct MenuBarView: View {
                 FooterSection(
                     translatorVM: viewModel,
                     updateService: updateService,
-                    onOpenFeedback: onOpenFeedback,
+                    onOpenFeedback: { feedbackInitialRating = nil; showFeedback = true },
                     onCheckForUpdates: onCheckForUpdates,
                     onShowAbout: onShowAbout,
                     onShowDebug: { showDebug = true }

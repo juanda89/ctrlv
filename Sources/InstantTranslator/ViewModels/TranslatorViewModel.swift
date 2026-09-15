@@ -32,6 +32,8 @@ final class TranslatorViewModel {
     private let hotkeyService = HotkeyService()
     private let licenseService: LicenseService
     private let deviceIdentityStore: DeviceIdentityStore
+    /// Counts real use so the popover can invite feedback once, at the right time.
+    let feedbackPromptTracker = FeedbackPromptTracker()
     private let debugEventLimit = 40
     private let gatewayWarmupInterval: TimeInterval = 15 * 60
     private var lastGatewayWarmupAt: Date?
@@ -54,6 +56,10 @@ final class TranslatorViewModel {
         self.deviceIdentityStore = deviceIdentityStore
         setupHotkey()
         scheduleGatewayWarmupIfNeeded(reason: "startup")
+    }
+
+    var installID: String {
+        deviceIdentityStore.currentInstallID()
     }
 
     func debugTriggerTranslationFromUI() {
@@ -200,6 +206,7 @@ final class TranslatorViewModel {
             )
 
             let latencyMs = Int(Date().timeIntervalSince(startedAt) * 1000)
+            feedbackPromptTracker.recordTranslation()
             TelemetryService.trackTranslationCompleted(
                 provider: .ctrlVCloud,
                 targetLanguage: profile.targetLanguage,

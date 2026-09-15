@@ -73,8 +73,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 viewModel: translatorViewModel,
                 licenseService: licenseService,
                 updateService: updateService,
-                onOpenFeedback: { [weak self] in self?.openFeedback() },
-                onCheckForUpdates: { [weak self] in self?.updateService.checkForUpdates() },
+                    onCheckForUpdates: { [weak self] in self?.updateService.checkForUpdates() },
                 onShowAbout: { [weak self] in self?.showAbout() }
             )
         )
@@ -108,7 +107,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             viewModel: debugTranslatorViewModel,
             licenseService: debugLicenseService,
             updateService: updateService,
-            onOpenFeedback: { [weak self] in self?.openFeedback() },
             onCheckForUpdates: { [weak self] in self?.updateService.checkForUpdates() },
             onShowAbout: { [weak self] in self?.showAbout() }
         )
@@ -315,11 +313,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func defaultMenuBarIcon() -> NSImage? {
         NSImage(systemSymbolName: "v.square", accessibilityDescription: "ctrl+v")
-    }
-
-    private func openFeedback() {
-        guard let url = Constants.feedbackURL else { return }
-        NSWorkspace.shared.open(url)
     }
 
     private func showAbout() {
