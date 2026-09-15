@@ -25,6 +25,12 @@ struct ProfileTabsSection: View {
                         .help("Add a profile with its own shortcut, language and tone")
                     }
                 }
+                // The scroll view clips exactly at its content edge; the pills'
+                // 1pt stroke is centered on their edge, so without this inset
+                // half of it was cut off on the left/top/bottom — visible as
+                // flattened corners on the selected (blue) pill when it is the
+                // first tab.
+                .padding(1)
             }
             .scrollIndicators(.hidden)
         }
@@ -51,6 +57,7 @@ struct ProfileTabsSection: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .focusEffectDisabled()
 
             // Only the selected, non-primary tab exposes its remove control:
             // keeps the strip compact and makes accidental deletes unlikely.
