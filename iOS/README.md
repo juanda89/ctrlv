@@ -195,10 +195,10 @@ Recommendation: try Option A first. If rejected under 4.4.1, build Option B.
 
 - App Store Connect setup (section 8) and the team ID in `project.yml`.
 - Sandbox purchase test on a device, TestFlight, App Store submission.
-- Default-translation flow verified on a device (Settings → Apps → Default Apps →
-  Translation → Control-V, then select text → Translate → Replace). The simulator
-  can't be driven from the command line, so only the sheet's rendering is covered
-  by the snapshot test.
+- Default-translation flow on a real device. Verified by JD in the iOS 26.5
+  simulator on 2026-09-16 (Settings → Apps → Default Apps → Translation →
+  Control-V, then select text → Translate → Replace); the snapshot test covers
+  the sheet's rendering.
 
 ---
 
