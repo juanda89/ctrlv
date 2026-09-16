@@ -21,3 +21,18 @@ jobs:
         run: dotnet build windows/ControlV.sln --no-restore --configuration Release
       - name: Test
         run: dotnet test windows/ControlV.sln --no-build --configuration Release --logger "trx;LogFileName=results.trx"
+      # Portable build for testing without cutting a release: download it from
+      # the run's Artifacts (unsigned; unzip and run ctrlv.exe).
+      - name: Publish portable build
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          dotnet publish windows/ControlV.App/ControlV.App.csproj -c Release -r win-x64 --self-contained true -o windows/publish
+          echo "commit=${GITHUB_SHA::7}" > windows/publish/BUILD.txt
+      - name: Upload portable build
+        if: github.event_name == 'push'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctrlv-windows-portable-${{ github.sha }}
+          path: windows/publish
+          retention-days: 14
