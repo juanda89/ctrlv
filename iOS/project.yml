@@ -33,10 +33,13 @@ targets:
         product: ControlVCore
       - target: Control-V Share
       - target: Control-V Keyboard
+      - target: Control-V Translation
     info:
       path: Generated/App-Info.plist
       properties:
         CFBundleDisplayName: Control-V
+        # Default translation app (iOS 18.4+): the extension needs the network.
+        com.apple.developer.translation-ui-provider.network-access: true
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
@@ -49,6 +52,8 @@ targets:
       path: Generated/Control-V.entitlements
       properties:
         com.apple.security.application-groups: [group.info.controlv.shared]
+        # Lets people pick Control-V in Settings → Apps → Default Apps → Translation.
+        com.apple.developer.translation-app: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios
@@ -59,6 +64,7 @@ targets:
     sources:
       - path: ShareExtension
       - path: Resources/Share
+      - path: Shared
       - path: Sources/ControlViOS/Design
     dependencies:
       - package: ControlVCore
@@ -89,6 +95,7 @@ targets:
     sources:
       - path: KeyboardExtension
       - path: Resources/Keyboard
+      - path: Shared
       - path: Sources/ControlViOS/Design
     dependencies:
       - package: ControlVCore
@@ -114,16 +121,52 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.keyboard
-  # Renders the keyboard panel and share sheet (which can't be driven from the
-  # command line) to PNGs: TEST_RUNNER_SNAPSHOT_DIR=/abs/dir xcodebuild test …
+  # Default translation app (iOS 18.4+): ExtensionKit extension the system
+  # hosts when people tap Translate on selected text in any app.
+  Control-V Translation:
+    type: extensionkit-extension
+    platform: iOS
+    deploymentTarget: "18.4"
+    sources:
+      - path: TranslationExtension
+      - path: Shared
+      - path: Sources/ControlViOS/Design
+    dependencies:
+      - package: ControlVCore
+        product: ControlVCore
+    info:
+      path: Generated/Translation-Info.plist
+      properties:
+        CFBundleDisplayName: Control-V
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        EXAppExtensionAttributes:
+          EXExtensionPointIdentifier: com.apple.public.translation-ui-provider
+        com.apple.developer.translation-ui-provider.network-access: true
+    entitlements:
+      path: Generated/Control-V-Translation.entitlements
+      properties:
+        com.apple.security.application-groups: [group.info.controlv.shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.translation
+        LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
+  # Renders the keyboard panel, share sheet and translation sheet (which can't
+  # be driven from the command line) to PNGs:
+  #   TEST_RUNNER_SNAPSHOT_DIR=/abs/dir xcodebuild test … -only-testing:'Control-V Snapshots'
   Control-V Snapshots:
     type: bundle.unit-test
     platform: iOS
+    deploymentTarget: "18.4"
     sources:
       - path: Tests/Snapshots
       - path: Sources/ControlViOS/Design
+      - path: Shared
       - path: KeyboardExtension
       - path: ShareExtension
+      - path: TranslationExtension
+        excludes:
+          - "TranslationProviderExtension.swift"
     dependencies:
       - target: Control-V
       - package: ControlVCore

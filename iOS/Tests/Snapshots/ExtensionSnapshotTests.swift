@@ -1,7 +1,21 @@
 import ControlVCore
 import SwiftUI
+import TranslationUIProvider
 import UIKit
 import XCTest
+
+/// Stand-in for the system-provided context (iOS 18.4+ default translation app).
+@Observable
+final class MockTranslationContext: TranslationUIProviderContext {
+    var inputText: AttributedString?
+    var allowsReplacement: Bool
+    init(text: String, allowsReplacement: Bool) {
+        inputText = AttributedString(text)
+        self.allowsReplacement = allowsReplacement
+    }
+    func finish(translation: AttributedString?) {}
+    func expandSheet() {}
+}
 
 /// Renders the keyboard panel and the share sheet — UIs that can't be driven
 /// from the command line — to PNGs for visual review.
@@ -55,6 +69,20 @@ final class ExtensionSnapshotTests: XCTestCase {
         try snapshot(ShareResultView(sourceText: source, onDone: {}, onCopy: { _ in }, preview: .done(translated)), size: Self.sheetSize, name: "share-done-dark", dark: true, background: .systemBackground)
         try snapshot(ShareResultView(sourceText: source, onDone: {}, onCopy: { _ in }, preview: .failed("Daily limit reached. Upgrade to keep translating.")), size: Self.sheetSize, name: "share-error", background: .systemBackground)
         try snapshot(ShareResultView(sourceText: source, onDone: {}, onCopy: { _ in }, preview: .done(translated)), size: Self.sheetSize, name: "share-done-nosafearea", background: .systemBackground, ignoresSafeArea: true)
+    }
+
+    @MainActor
+    func test_renderTranslationSheet_states() throws {
+        let source = "Hola, ¿cómo estás? Quería confirmar la reunión de mañana a las 10 y saber si necesitas algo más de mi parte."
+        let translated = "Hi, how are you? I wanted to confirm our meeting tomorrow at 10 and see if you need anything else from me."
+        let size = CGSize(width: 402, height: 400)
+        let editable = MockTranslationContext(text: source, allowsReplacement: true)
+        let readOnly = MockTranslationContext(text: source, allowsReplacement: false)
+        try snapshot(TranslationProviderView(context: editable, preview: .translating), size: size, name: "tr-translating", background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: editable, preview: .done(translated)), size: size, name: "tr-done-replace", background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: readOnly, preview: .done(translated)), size: size, name: "tr-done-readonly", background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: editable, preview: .failed("Your free trial has ended. Open Control-V to subscribe.")), size: size, name: "tr-error", background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: editable, preview: .done(translated)), size: size, name: "tr-done-dark", dark: true, background: .systemBackground, ignoresSafeArea: true)
     }
 
     // MARK: - Rendering

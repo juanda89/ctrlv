@@ -30,23 +30,32 @@ iOS/
     ├── KeyboardViewController.swift       (UIInputViewController — reads selection via
     │                                       textDocumentProxy, replaces in-place)
     └── KeyboardPanelView.swift            (SwiftUI panel: Translate & Replace button)
+TranslationExtension/                      (iOS 18.4+ default translation app: the system
+    ├── TranslationProviderExtension.swift  Translate menu item opens this sheet; Replace
+    └── TranslationProviderView.swift       swaps the selection in place)
+Shared/ExtensionBridge.swift               (App Group settings/session/history for all extensions)
 ```
 
-### The Keyboard Extension is the "Google Translate" experience
+### Three ways to translate from any app
 
-iOS does NOT let third-party apps add buttons to the system text-selection
-menu (only Apple's own Translate appears there). The closest thing iOS allows
-— and what Grammarly/SwiftKey do — is a **custom keyboard**:
+1. **System Translate menu (iOS 18.4+, the primary path).** `TranslationExtension/`
+   is a `TranslationUIProvider` extension (ExtensionKit point
+   `com.apple.public.translation-ui-provider`). Once the user picks Control-V in
+   Settings → Apps → Default Apps → Translation, the **Translate** item in the
+   text-selection menu of any app opens our sheet with the selected text;
+   `context.finish(translation:)` replaces the selection in place when the host
+   allows it (`allowsReplacement`), otherwise the sheet offers Copy. Requires the
+   `com.apple.developer.translation-app` entitlement on the app (self-service
+   "Translation" capability, no Apple approval form) and the
+   `com.apple.developer.translation-ui-provider.network-access` Info.plist key.
+   This is how DeepL, Google Translate, Microsoft Translator and Mate integrate.
+2. **Custom keyboard (any iOS).** Also translates what the user just typed with
+   nothing selected. Reads `textDocumentProxy.selectedText`, falling back to
+   `documentContextBeforeInput`; requires "Allow Full Access".
+3. **Share extension.** Select → Share → Control-V → Copy.
 
-1. User selects text in ANY app (or just finishes typing)
-2. Taps the globe key → switches to the Control-V keyboard
-3. Taps **Translate & Replace** → the selected text (or everything typed)
-   is replaced in-place with the translation
-4. Taps globe again → back to their normal keyboard
-
-The keyboard reads `textDocumentProxy.selectedText` when there's a selection,
-falling back to `documentContextBeforeInput` (everything typed in the current
-paragraph). Requires "Allow Full Access" for network calls.
+`Shared/ExtensionBridge.swift` gives all three the App Group settings, install
+ID, session token and history.
 
 All source consumes `ControlVCore` (the Swift Package library at `../Sources/ControlVCore`) for license, auth, providers, models, prompts.
 
@@ -186,6 +195,10 @@ Recommendation: try Option A first. If rejected under 4.4.1, build Option B.
 
 - App Store Connect setup (section 8) and the team ID in `project.yml`.
 - Sandbox purchase test on a device, TestFlight, App Store submission.
+- Default-translation flow verified on a device (Settings → Apps → Default Apps →
+  Translation → Control-V, then select text → Translate → Replace). The simulator
+  can't be driven from the command line, so only the sheet's rendering is covered
+  by the snapshot test.
 
 ---
 

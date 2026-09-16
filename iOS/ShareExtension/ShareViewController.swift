@@ -111,7 +111,7 @@ struct ShareResultView: View {
     @State private var translated: String = ""
     @State private var isLoading = true
     @State private var errorMessage: String?
-    private let settings = ShareExtensionSettings.load()
+    private let settings = ExtensionBridge.loadSettings()
 
     init(sourceText: String, onDone: @escaping () -> Void, onCopy: @escaping (String) -> Void, preview: Preview? = nil) {
         self.sourceText = sourceText
@@ -213,17 +213,11 @@ struct ShareResultView: View {
 
         // Usage limits (trial quota, character caps) are enforced server-side
         // by the translate Edge Function based on installID / session token.
-        guard let endpoint = Constants.translationAPIURL else {
+        guard let service = ExtensionBridge.makeTranslationService() else {
             errorMessage = "Translation service not configured."
             return
         }
 
-        let provider = CtrlVCloudProvider(
-            endpoint: endpoint,
-            installID: ShareExtensionSettings.installID(),
-            sessionToken: ShareExtensionSettings.sessionToken()
-        )
-        let service = TranslationService(provider: provider)
         let request = TranslationRequest(
             text: sourceText,
             targetLanguage: settings.targetLanguage,
@@ -234,7 +228,7 @@ struct ShareResultView: View {
         do {
             let response = try await service.translate(request)
             translated = response.translatedText
-            ShareExtensionHistory.append(
+            ExtensionBridge.appendHistory(
                 source: sourceText,
                 translated: translated,
                 language: settings.targetLanguage,
@@ -242,86 +236,6 @@ struct ShareResultView: View {
             )
         } catch {
             errorMessage = error.localizedDescription
-        }
-    }
-}
-
-// MARK: - App Group helpers (mirror of main app's stores)
-
-struct ShareSettingsRecord: Codable {
-    var targetLanguage: SupportedLanguage = .english
-    var tone: Tone = .original
-    var customTonePrompt: String = ""
-}
-
-enum ShareExtensionSettings {
-    private static let appGroup = "group.info.controlv.shared"
-    private static let settingsKey = "iOSAppSettings"
-    private static let installIDKey = "ctrlvInstallID"
-
-    private static var defaults: UserDefaults {
-        UserDefaults(suiteName: appGroup) ?? .standard
-    }
-
-    static func load() -> ShareSettingsRecord {
-        guard let data = defaults.data(forKey: settingsKey),
-              let decoded = try? JSONDecoder().decode(ShareSettingsRecord.self, from: data) else {
-            return ShareSettingsRecord()
-        }
-        return decoded
-    }
-
-    static func installID() -> String {
-        if let existing = defaults.string(forKey: installIDKey), !existing.isEmpty {
-            return existing
-        }
-        let new = UUID().uuidString.lowercased()
-        defaults.set(new, forKey: installIDKey)
-        return new
-    }
-
-    static func sessionToken() -> String? {
-        // Read the encrypted account.enc from App Group container.
-        // For simplicity in v1 the session token is stored as a separate key
-        // in the App Group defaults by the main app on sign-in.
-        defaults.string(forKey: "iOSSessionToken")
-    }
-}
-
-private enum ShareExtensionHistory {
-    private static let appGroup = "group.info.controlv.shared"
-    private static let key = "iOSHistory"
-    private static let maxEntries = 50
-
-    private struct Entry: Codable {
-        let id: UUID
-        let source: String
-        let translated: String
-        let language: SupportedLanguage
-        let tone: Tone
-        let timestamp: Date
-    }
-
-    static func append(source: String, translated: String, language: SupportedLanguage, tone: Tone) {
-        let defaults = UserDefaults(suiteName: appGroup) ?? .standard
-        var entries = (defaults.data(forKey: key)
-            .flatMap { try? JSONDecoder().decode([Entry].self, from: $0) }) ?? []
-        entries.insert(
-            Entry(
-                id: UUID(),
-                source: source,
-                translated: translated,
-                language: language,
-                tone: tone,
-                timestamp: Date()
-            ),
-            at: 0
-        )
-        if entries.count > maxEntries {
-            entries = Array(entries.prefix(maxEntries))
-        }
-        if let data = try? JSONEncoder().encode(entries) {
-            defaults.set(data, forKey: key)
         }
     }
 }

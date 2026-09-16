@@ -22,7 +22,7 @@ struct KeyboardPanelView: View {
     @State private var translatedText: String
     @State private var usedSelection: Bool
     @State private var errorMessage: String?
-    @State private var settings = KeyboardSettings.load()
+    @State private var settings = ExtensionBridge.loadSettings()
 
     enum Phase {
         case idle              // waiting for user to tap Translate
@@ -87,7 +87,7 @@ struct KeyboardPanelView: View {
                 ForEach(SupportedLanguage.allCases) { language in
                     Button {
                         settings.targetLanguage = language
-                        KeyboardSettings.save(settings)
+                        ExtensionBridge.save(settings)
                     } label: {
                         if language == settings.targetLanguage { Label(language.rawValue, systemImage: "checkmark") } else { Text(language.rawValue) }
                     }
@@ -97,7 +97,7 @@ struct KeyboardPanelView: View {
                 ForEach(Tone.allCases) { tone in
                     Button {
                         settings.tone = tone
-                        KeyboardSettings.save(settings)
+                        ExtensionBridge.save(settings)
                     } label: {
                         if tone == settings.tone { Label(tone.rawValue, systemImage: "checkmark") } else { Text(tone.rawValue) }
                     }
@@ -262,7 +262,7 @@ struct KeyboardPanelView: View {
     /// Entry point from the idle button. Selection path proceeds directly;
     /// typed-text path requires explicit confirmation (see safety model above).
     private func startTranslateFlow() async {
-        settings = KeyboardSettings.load()
+        settings = ExtensionBridge.loadSettings()
         errorMessage = nil
 
         let selection = actions.readSelectedText()
@@ -327,18 +327,12 @@ struct KeyboardPanelView: View {
 
     /// Shared network call. Returns nil after setting the error phase.
     private func fetchTranslation(for text: String) async -> String? {
-        guard let endpoint = Constants.translationAPIURL else {
+        guard let service = ExtensionBridge.makeTranslationService() else {
             errorMessage = "Translation service not configured."
             phase = .error
             return nil
         }
 
-        let provider = CtrlVCloudProvider(
-            endpoint: endpoint,
-            installID: KeyboardSettings.installID(),
-            sessionToken: KeyboardSettings.sessionToken()
-        )
-        let service = TranslationService(provider: provider)
         let request = TranslationRequest(
             text: text,
             targetLanguage: settings.targetLanguage,
@@ -354,57 +348,5 @@ struct KeyboardPanelView: View {
             phase = .error
             return nil
         }
-    }
-}
-
-// MARK: - App Group bridge (same data the main app + Share Extension use)
-
-struct KeyboardSettings {
-    var targetLanguage: SupportedLanguage = .english
-    var tone: Tone = .original
-    var customTonePrompt: String = ""
-
-    private static let appGroup = "group.info.controlv.shared"
-    private static let settingsKey = "iOSAppSettings"
-    private static let installIDKey = "ctrlvInstallID"
-
-    private static var defaults: UserDefaults {
-        UserDefaults(suiteName: appGroup) ?? .standard
-    }
-
-    static func load() -> KeyboardSettings {
-        guard let data = defaults.data(forKey: settingsKey),
-              let decoded = try? JSONDecoder().decode(Stored.self, from: data) else {
-            return KeyboardSettings()
-        }
-        return KeyboardSettings(
-            targetLanguage: decoded.targetLanguage,
-            tone: decoded.tone,
-            customTonePrompt: decoded.customTonePrompt
-        )
-    }
-
-    static func save(_ settings: KeyboardSettings) {
-        let stored = Stored(targetLanguage: settings.targetLanguage, tone: settings.tone, customTonePrompt: settings.customTonePrompt)
-        if let data = try? JSONEncoder().encode(stored) { defaults.set(data, forKey: settingsKey) }
-    }
-
-    static func installID() -> String {
-        if let existing = defaults.string(forKey: installIDKey), !existing.isEmpty {
-            return existing
-        }
-        let new = UUID().uuidString.lowercased()
-        defaults.set(new, forKey: installIDKey)
-        return new
-    }
-
-    static func sessionToken() -> String? {
-        defaults.string(forKey: "iOSSessionToken")
-    }
-
-    private struct Stored: Codable {
-        var targetLanguage: SupportedLanguage
-        var tone: Tone
-        var customTonePrompt: String
     }
 }

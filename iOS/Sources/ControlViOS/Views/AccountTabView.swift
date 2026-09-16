@@ -68,12 +68,12 @@ struct AccountTabView: View {
                 Label("Translate in any app", systemImage: "keyboard").font(.headline)
                 Spacer()
             }
-            Text("Select text in Messages, WhatsApp or Mail, switch to the Control-V keyboard and tap Translate & Replace. The translation takes the place of your text.")
+            Text("Make Control-V your default translation app: select text in Messages, WhatsApp or Mail, tap Translate, tap Replace. The Control-V keyboard also translates what you just typed.")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                Button { showSetup = true } label: { Label("Set up keyboard", systemImage: "arrow.right") }
+                Button { showSetup = true } label: { Label("Set it up", systemImage: "arrow.right") }
                     .buttonStyle(PrimaryButtonStyle())
             }
         }

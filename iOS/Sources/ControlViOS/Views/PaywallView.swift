@@ -23,12 +23,12 @@ struct PaywallView: View {
                     VStack(spacing: 8) {
                         Text("Write in any language,\nlike a native.")
                             .font(.system(size: 32, weight: .bold)).multilineTextAlignment(.center)
-                        Text("Select text in any app, switch to the Control-V keyboard, and it's replaced with a natural translation.")
+                        Text("Select text in any app, tap Translate, and it's replaced with a natural translation.")
                             .font(.body).foregroundStyle(.secondary).multilineTextAlignment(.center).padding(.horizontal, 12)
                     }
 
                     VStack(alignment: .leading, spacing: 14) {
-                        benefit("keyboard", "Replace text in any app", "Messages, WhatsApp, Mail, Notes — no copy-paste.")
+                        benefit("text.cursor", "Replace text in any app", "Select → Translate → Replace in Messages, WhatsApp, Mail, Notes.")
                         benefit("person.wave.2", "Sounds like you", "Keeps your tone, slang and formatting. Five tones plus your own.")
                         benefit("laptopcomputer.and.iphone", "Mac and iPhone", "One subscription, all your devices.")
                         benefit("lock.shield", "Private by design", "Only the text you choose is sent. Never stored, never logged.")
