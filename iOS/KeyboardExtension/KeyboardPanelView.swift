@@ -17,10 +17,10 @@ struct KeyboardPanelView: View {
     let hasFullAccess: Bool
     let actions: KeyboardActions
 
-    @State private var phase: Phase = .idle
-    @State private var detectedText: String = ""
-    @State private var translatedText: String = ""
-    @State private var usedSelection = false
+    @State private var phase: Phase
+    @State private var detectedText: String
+    @State private var translatedText: String
+    @State private var usedSelection: Bool
     @State private var errorMessage: String?
     @State private var settings = KeyboardSettings.load()
 
@@ -31,6 +31,27 @@ struct KeyboardPanelView: View {
         case done              // translation inserted
         case copiedFallback    // document changed mid-flight; translation on clipboard
         case error
+    }
+
+    /// Fixed starting state for previews and snapshot tests. Production
+    /// always starts idle.
+    struct PreviewState {
+        var phase: Phase = .idle
+        var detectedText = ""
+        var translatedText = ""
+        var usedSelection = false
+        var errorMessage: String? = nil
+    }
+
+    init(hasFullAccess: Bool, actions: KeyboardActions, preview: PreviewState? = nil) {
+        self.hasFullAccess = hasFullAccess
+        self.actions = actions
+        let start = preview ?? PreviewState()
+        _phase = State(initialValue: start.phase)
+        _detectedText = State(initialValue: start.detectedText)
+        _translatedText = State(initialValue: start.translatedText)
+        _usedSelection = State(initialValue: start.usedSelection)
+        _errorMessage = State(initialValue: start.errorMessage)
     }
 
     var body: some View {
@@ -47,30 +68,60 @@ struct KeyboardPanelView: View {
 
             footer
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .padding(.top, 10)
+        .padding(.bottom, 8)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(.systemGroupedBackground).opacity(0.01))
+        .background(Color.clear)
+        .tint(Brand.blue)
     }
 
-    // MARK: - Sections
+    // MARK: - Header
 
     private var header: some View {
-        HStack {
-            HStack(spacing: 6) {
-                Image(systemName: "text.bubble.fill")
-                    .font(.footnote)
-                    .foregroundStyle(.tint)
-                Text("Control-V")
-                    .font(.footnote.weight(.semibold))
+        HStack(spacing: 8) {
+            BrandMark(size: 24, shadow: false)
+            Text("Control-V").font(.footnote.weight(.semibold))
+            Spacer(minLength: 4)
+            settingMenu(title: settings.targetLanguage.rawValue, systemImage: "globe") {
+                ForEach(SupportedLanguage.allCases) { language in
+                    Button {
+                        settings.targetLanguage = language
+                        KeyboardSettings.save(settings)
+                    } label: {
+                        if language == settings.targetLanguage { Label(language.rawValue, systemImage: "checkmark") } else { Text(language.rawValue) }
+                    }
+                }
             }
-
-            Spacer()
-
-            Text("→ \(settings.targetLanguage.rawValue)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            settingMenu(title: settings.tone.rawValue, systemImage: "slider.horizontal.3") {
+                ForEach(Tone.allCases) { tone in
+                    Button {
+                        settings.tone = tone
+                        KeyboardSettings.save(settings)
+                    } label: {
+                        if tone == settings.tone { Label(tone.rawValue, systemImage: "checkmark") } else { Text(tone.rawValue) }
+                    }
+                }
+            }
         }
     }
+
+    private func settingMenu<Content: View>(title: String, systemImage: String, @ViewBuilder content: () -> Content) -> some View {
+        Menu(content: content) {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                Text(title).font(.caption.weight(.semibold)).lineLimit(1)
+                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(.secondary)
+            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .glassPill()
+        }
+        .menuOrder(.fixed)
+    }
+
+    // MARK: - Content
 
     @ViewBuilder
     private var content: some View {
@@ -78,26 +129,24 @@ struct KeyboardPanelView: View {
         case .idle:
             VStack(spacing: 12) {
                 Text(idleHint)
-                    .font(.callout)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.horizontal, 8)
+                    .padding(.top, 6)
 
                 Button {
                     Task { await startTranslateFlow() }
                 } label: {
                     Label("Translate & Replace", systemImage: "arrow.left.arrow.right")
-                        .font(.body.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(PrimaryButtonStyle())
             }
-            .padding(.top, 8)
 
         case .confirmTyped:
             VStack(spacing: 10) {
-                Text("No selection detected. Replace this typed text?")
+                Text("No selection found. Replace what you typed?")
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.secondary)
 
@@ -105,101 +154,80 @@ struct KeyboardPanelView: View {
                     .font(.callout)
                     .lineLimit(3)
                     .truncationMode(.head)
-                    .padding(8)
+                    .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(.secondarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .glassCard(14)
 
-                HStack(spacing: 10) {
-                    Button("Cancel") {
-                        phase = .idle
-                    }
-                    .buttonStyle(.bordered)
-
-                    Button("Translate & Replace") {
+                HStack(spacing: 8) {
+                    Button("Cancel") { phase = .idle }
+                        .buttonStyle(GlassButtonStyle())
+                    Button {
                         Task { await translateTypedText() }
+                    } label: {
+                        Label("Translate & Replace", systemImage: "arrow.left.arrow.right")
                     }
-                    .buttonStyle(.borderedProminent)
+                    .buttonStyle(PrimaryButtonStyle(compact: true))
                 }
             }
 
         case .translating:
-            VStack(spacing: 10) {
-                ProgressView()
-                Text("Translating…")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.top, 20)
+            statusBlock(symbol: nil, tint: Brand.blue, title: "Translating to \(settings.targetLanguage.rawValue)…", detail: nil, action: nil)
 
         case .done:
-            VStack(spacing: 10) {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.title)
-                    .foregroundStyle(.green)
-                Text("Replaced with translation")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                Button("Translate more") {
-                    phase = .idle
-                }
-                .font(.footnote)
-            }
-            .padding(.top, 12)
+            statusBlock(symbol: "checkmark.circle.fill", tint: .green, title: "Replaced with the \(settings.targetLanguage.rawValue) translation", detail: nil, action: ("Translate more", { phase = .idle }))
 
         case .copiedFallback:
-            VStack(spacing: 10) {
-                Image(systemName: "doc.on.clipboard.fill")
-                    .font(.title2)
-                    .foregroundStyle(.blue)
-                Text("The text changed while translating, so nothing was replaced. The translation is on your clipboard — paste it where you need it.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 8)
-                Button("OK") {
-                    phase = .idle
-                }
-                .font(.footnote)
-            }
-            .padding(.top, 8)
+            statusBlock(symbol: "doc.on.clipboard.fill", tint: Brand.blue, title: "Copied instead", detail: "The text changed while translating, so nothing was replaced. Paste the translation from your clipboard.", action: ("OK", { phase = .idle }))
 
         case .error:
-            VStack(spacing: 10) {
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .font(.title2)
-                    .foregroundStyle(.orange)
-                Text(errorMessage ?? "Something went wrong")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 8)
-                Button("Try again") {
-                    phase = .idle
-                }
-                .font(.footnote)
-            }
-            .padding(.top, 12)
+            statusBlock(symbol: "exclamationmark.triangle.fill", tint: .orange, title: "Couldn't translate", detail: errorMessage ?? "Something went wrong.", action: ("Try again", { phase = .idle }))
         }
     }
 
+    private func statusBlock(symbol: String?, tint: Color, title: String, detail: String?, action: (String, () -> Void)?) -> some View {
+        VStack(spacing: 8) {
+            if let symbol {
+                Image(systemName: symbol).font(.title2).foregroundStyle(tint)
+            } else {
+                ProgressView().tint(tint)
+            }
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .multilineTextAlignment(.center)
+            if let detail {
+                Text(detail)
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 8)
+            }
+            if let action {
+                Button(action.0, action: action.1)
+                    .buttonStyle(GlassButtonStyle())
+                    .padding(.top, 2)
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.top, 8)
+    }
+
     private var fullAccessPrompt: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: 8) {
             Image(systemName: "lock.shield")
                 .font(.title2)
                 .foregroundStyle(.orange)
-            Text("To translate, enable \"Allow Full Access\" in Settings → General → Keyboard → Keyboards → Control-V.")
+            Text("Turn on Allow Full Access to translate")
+                .font(.subheadline.weight(.semibold))
+            Text("Settings → General → Keyboard → Keyboards → Control-V. Full Access only sends the text you choose to the translation service; keystrokes are never logged or stored.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
-                .padding(.horizontal, 12)
-            Text("Full Access is used only to send the text you choose to translate to the Control-V translation service. Keystrokes are never logged and nothing you type is stored.")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
-                .multilineTextAlignment(.center)
-                .padding(.horizontal, 12)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 8)
         }
-        .padding(.top, 12)
+        .frame(maxWidth: .infinity)
+        .padding(.top, 8)
     }
 
     private var footer: some View {
@@ -208,23 +236,25 @@ struct KeyboardPanelView: View {
                 actions.switchKeyboard()
             } label: {
                 Image(systemName: "globe")
-                    .font(.title3)
-                    .frame(width: 44, height: 36)
-                    .background(Color(.secondarySystemFill))
-                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .font(.body.weight(.medium))
+                    .frame(width: 44, height: 34)
+                    .glassPill()
             }
             .buttonStyle(.plain)
+            .accessibilityLabel("Next keyboard")
 
             Spacer()
 
-            Text(usedSelection ? "Using selected text" : "")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+            if usedSelection {
+                Label("Using selected text", systemImage: "text.cursor")
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            }
         }
     }
 
     private var idleHint: String {
-        "Select text — or just finish typing — then tap the button. The text is replaced with its \(settings.targetLanguage.rawValue) translation."
+        "Select text, or just finish typing, then tap the button. Your text is replaced with its \(settings.targetLanguage.rawValue) translation."
     }
 
     // MARK: - Flow control
@@ -352,6 +382,11 @@ struct KeyboardSettings {
             tone: decoded.tone,
             customTonePrompt: decoded.customTonePrompt
         )
+    }
+
+    static func save(_ settings: KeyboardSettings) {
+        let stored = Stored(targetLanguage: settings.targetLanguage, tone: settings.tone, customTonePrompt: settings.customTonePrompt)
+        if let data = try? JSONEncoder().encode(stored) { defaults.set(data, forKey: settingsKey) }
     }
 
     static func installID() -> String {

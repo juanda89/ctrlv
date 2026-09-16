@@ -196,3 +196,31 @@ Recommendation: try Option A first. If rejected under 4.4.1, build Option B.
 3. Commit to git as usual; the Xcode project picks up file additions/removals automatically (since we're using "Create groups").
 
 When ControlVCore evolves (we add new public APIs, fix bugs, etc.), the iOS target picks it up automatically because it's a local SPM dependency.
+
+## UI debug flags & screenshots
+
+The app reads NSUserDefaults launch arguments (see `Sources/ControlViOS/App/DebugLaunch.swift`), so every screen can be opened headlessly on the simulator:
+
+```bash
+xcrun simctl launch booted info.controlv.ios -ui.tab account -ui.licenseState expired
+```
+
+| Flag | Values | Effect |
+| --- | --- | --- |
+| `-ui.tab` | `translate` `history` `account` | Initial tab |
+| `-ui.licenseState` | `trial` `active` `expired` | Sticky license override (validation paths keep it) |
+| `-ui.showPaywall 1` | | Opens the paywall (dismissable if the license allows it) |
+| `-ui.showSignIn 1` / `-ui.showSetup 1` / `-ui.showFeedback 1` | | Opens that sheet |
+| `-ui.sourceText "…"` + `-ui.autoTranslate 1` | | Prefills the editor and translates on launch (real backend) |
+| `-ui.seedHistory 1` | | Adds three sample history entries |
+
+Then `xcrun simctl io booted screenshot out.png`. Note: when launched this way the StoreKit configuration is not attached, so the paywall shows its "Pricing isn't available" state; run from Xcode (scheme has `Configuration.storekit`) to see the real price and trial.
+
+The keyboard panel and the share sheet can't be driven from the command line, so a hosted test renders every state to PNG:
+
+```bash
+TEST_RUNNER_SNAPSHOT_DIR=/tmp/ctrlv-shots xcodebuild test -project ControlV.xcodeproj -scheme Control-V \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' -only-testing:'Control-V Snapshots'
+```
+
+Design tokens and shared components live in `Sources/ControlViOS/Design/` and are compiled into the app **and** both extensions (see `project.yml`).

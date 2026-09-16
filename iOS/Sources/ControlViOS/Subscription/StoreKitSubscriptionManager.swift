@@ -31,6 +31,7 @@ final class StoreKitSubscriptionManager {
         do {
             let products = try await Product.products(for: [Self.productID])
             self.product = products.first
+            self.loadError = products.isEmpty ? "Pricing isn't available right now." : nil
             await refreshEntitlements()
         } catch {
             self.loadError = error.localizedDescription

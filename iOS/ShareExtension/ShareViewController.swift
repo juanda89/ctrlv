@@ -98,94 +98,130 @@ private enum ShareError: LocalizedError {
 
 // MARK: - SwiftUI sheet shown inside the extension
 
-private struct ShareResultView: View {
+struct ShareResultView: View {
     let sourceText: String
     let onDone: () -> Void
     let onCopy: (String) -> Void
 
+    /// Fixed state for previews and snapshot tests; production passes nil and
+    /// runs the real translation on appear.
+    enum Preview { case loading, done(String), failed(String) }
+    private let preview: Preview?
+
     @State private var translated: String = ""
     @State private var isLoading = true
     @State private var errorMessage: String?
+    private let settings = ShareExtensionSettings.load()
+
+    init(sourceText: String, onDone: @escaping () -> Void, onCopy: @escaping (String) -> Void, preview: Preview? = nil) {
+        self.sourceText = sourceText
+        self.onDone = onDone
+        self.onCopy = onCopy
+        self.preview = preview
+        switch preview {
+        case .none, .loading: break
+        case .done(let text): _translated = State(initialValue: text); _isLoading = State(initialValue: false)
+        case .failed(let message): _errorMessage = State(initialValue: message); _isLoading = State(initialValue: false)
+        }
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .leading, spacing: 14) {
+                    HStack(spacing: 8) {
+                        Label("Auto-detect", systemImage: "sparkles")
+                            .font(.caption.weight(.medium)).foregroundStyle(.secondary)
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .glassPill(interactive: false)
+                        Image(systemName: "arrow.right").font(.caption2.weight(.bold)).foregroundStyle(.tertiary)
+                        Text(settings.targetLanguage.rawValue)
+                            .font(.caption.weight(.semibold))
+                            .padding(.horizontal, 10).padding(.vertical, 6)
+                            .glassPill(interactive: false)
+                        Spacer()
+                        Text(settings.tone.rawValue).font(.caption).foregroundStyle(.tertiary)
+                    }
+
                     if isLoading {
-                        HStack {
-                            ProgressView()
-                            Text("Translating…")
-                                .foregroundStyle(.secondary)
+                        HStack(spacing: 10) {
+                            ProgressView().tint(Brand.blue)
+                            Text("Translating…").font(.subheadline.weight(.medium)).foregroundStyle(.secondary)
                         }
-                        .padding(.top, 32)
                         .frame(maxWidth: .infinity)
+                        .padding(28)
+                        .glassCard(20)
                     } else if let errorMessage {
-                        Text(errorMessage)
-                            .foregroundStyle(.red)
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(.orange)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button {
+                                Task { isLoading = true; self.errorMessage = nil; await runTranslation() }
+                            } label: { Label("Try again", systemImage: "arrow.clockwise") }
+                            .buttonStyle(GlassButtonStyle())
+                        }
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassCard(16)
                     } else {
-                        VStack(alignment: .leading, spacing: 8) {
-                            Text("Original")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(sourceText)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 6) {
+                            SectionLabel(text: "Original")
+                            Text(sourceText).font(.subheadline).foregroundStyle(.secondary).lineLimit(4)
                         }
-
-                        Divider()
+                        .padding(14)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassCard(18)
 
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("Translation")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(translated)
-                                .font(.body)
-                                .textSelection(.enabled)
+                            SectionLabel(text: settings.targetLanguage.rawValue)
+                            Text(translated).font(.title3).textSelection(.enabled)
                         }
+                        .padding(16)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .glassCard(20)
+
+                        Button {
+                            onCopy(translated)
+                        } label: {
+                            Label("Copy translation", systemImage: "doc.on.doc")
+                        }
+                        .buttonStyle(PrimaryButtonStyle())
+                        .disabled(translated.isEmpty)
+
+                        Text("To replace text in place, use the Control-V keyboard.")
+                            .font(.caption).foregroundStyle(.tertiary)
+                            .frame(maxWidth: .infinity)
                     }
                 }
-                .padding()
+                .padding(18)
             }
+            .background(AuroraBackground())
             .navigationTitle("Control-V")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Cancel", action: onDone)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("Copy") {
-                        onCopy(translated)
-                    }
-                    .font(.body.weight(.semibold))
-                    .disabled(translated.isEmpty || isLoading)
-                }
+                ToolbarItem(placement: .topBarLeading) { Button("Cancel", action: onDone) }
             }
         }
-        .task {
-            await runTranslation()
-        }
+        .tint(Brand.blue)
+        .task { if preview == nil { await runTranslation() } }
     }
 
     private func runTranslation() async {
         defer { isLoading = false }
 
-        // Read user's preferred language + tone from App Group.
         // Usage limits (trial quota, character caps) are enforced server-side
         // by the translate Edge Function based on installID / session token.
-        let settings = ShareExtensionSettings.load()
-
         guard let endpoint = Constants.translationAPIURL else {
             errorMessage = "Translation service not configured."
             return
         }
 
-        let installID = ShareExtensionSettings.installID()
-        let sessionToken = ShareExtensionSettings.sessionToken()
-
         let provider = CtrlVCloudProvider(
             endpoint: endpoint,
-            installID: installID,
-            sessionToken: sessionToken
+            installID: ShareExtensionSettings.installID(),
+            sessionToken: ShareExtensionSettings.sessionToken()
         )
         let service = TranslationService(provider: provider)
         let request = TranslationRequest(
@@ -212,13 +248,13 @@ private struct ShareResultView: View {
 
 // MARK: - App Group helpers (mirror of main app's stores)
 
-private struct ShareSettingsRecord: Codable {
+struct ShareSettingsRecord: Codable {
     var targetLanguage: SupportedLanguage = .english
     var tone: Tone = .original
     var customTonePrompt: String = ""
 }
 
-private enum ShareExtensionSettings {
+enum ShareExtensionSettings {
     private static let appGroup = "group.info.controlv.shared"
     private static let settingsKey = "iOSAppSettings"
     private static let installIDKey = "ctrlvInstallID"

@@ -9,78 +9,74 @@ struct SignInScreen: View {
     @FocusState private var fieldFocus: Field?
 
     enum Field { case email, code }
+    private var awaitingCode: Bool { license.pendingMagicCodeEmail != nil }
 
     var body: some View {
-        Form {
-            if license.pendingMagicCodeEmail == nil {
-                Section {
-                    TextField("you@example.com", text: $email)
-                        .textContentType(.emailAddress)
-                        .keyboardType(.emailAddress)
-                        .textInputAutocapitalization(.never)
-                        .autocorrectionDisabled(true)
-                        .focused($fieldFocus, equals: .email)
-                } header: {
-                    Text("Email")
-                } footer: {
-                    Text("We'll send you a 6-digit code. No password required.")
-                }
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    BrandMark(size: 48)
+                    Text(awaitingCode ? "Check your email" : "Sign in").font(.largeTitle.weight(.bold))
+                    Text(awaitingCode ? "We sent a 6-digit code to \(license.pendingMagicCodeEmail ?? email)." : "No password. We'll email you a 6-digit code.")
+                        .font(.body).foregroundStyle(.secondary)
 
-                Section {
-                    Button("Send code") {
-                        Task { await requestCode() }
-                    }
-                    .disabled(license.isLoading || email.trimmingCharacters(in: .whitespaces).isEmpty)
-                }
-            } else {
-                Section {
-                    TextField("123456", text: $code)
-                        .keyboardType(.numberPad)
-                        .focused($fieldFocus, equals: .code)
-                        .onChange(of: code) { _, new in
-                            let filtered = String(new.filter(\.isNumber).prefix(6))
-                            if filtered != new { code = filtered }
+                    VStack(alignment: .leading, spacing: 10) {
+                        if !awaitingCode {
+                            TextField("you@example.com", text: $email)
+                                .textContentType(.emailAddress).keyboardType(.emailAddress)
+                                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                                .font(.title3).padding(14).glassCard(16)
+                                .focused($fieldFocus, equals: .email)
+                                .submitLabel(.continue)
+                                .onSubmit { Task { await requestCode() } }
+                        } else {
+                            TextField("123456", text: $code)
+                                .keyboardType(.numberPad).textContentType(.oneTimeCode)
+                                .font(.system(size: 34, weight: .semibold, design: .rounded)).kerning(6)
+                                .multilineTextAlignment(.center)
+                                .padding(14).glassCard(16)
+                                .focused($fieldFocus, equals: .code)
+                                .onChange(of: code) { _, new in
+                                    let filtered = String(new.filter(\.isNumber).prefix(6))
+                                    if filtered != new { code = filtered }
+                                }
                         }
-                } header: {
-                    Text("Enter the code")
-                } footer: {
-                    Text("Sent to \(license.pendingMagicCodeEmail ?? email).")
-                }
-
-                Section {
-                    Button("Verify") {
-                        Task { await verifyCode() }
                     }
-                    .disabled(license.isLoading || code.count != 6)
 
-                    Button("Use a different email", role: .cancel) {
-                        license.cancelPendingSignIn()
-                        code = ""
+                    if let error = license.lastError {
+                        Label(error, systemImage: "exclamationmark.triangle.fill").font(.footnote.weight(.medium)).foregroundStyle(.orange)
+                    }
+
+                    Button {
+                        Task { awaitingCode ? await verifyCode() : await requestCode() }
+                    } label: {
+                        if license.isLoading { ProgressView().tint(.white) } else { Text(awaitingCode ? "Verify" : "Continue") }
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .disabled(license.isLoading || (awaitingCode ? code.count != 6 : email.trimmingCharacters(in: .whitespaces).isEmpty))
+
+                    if awaitingCode {
+                        Button("Use a different email") { license.cancelPendingSignIn(); code = "" }
+                            .font(.subheadline).foregroundStyle(.secondary)
                     }
                 }
+                .padding(22)
             }
-
-            if let error = license.lastError {
-                Section {
-                    Text(error)
-                        .font(.callout)
-                        .foregroundStyle(.red)
-                }
+            .background(AuroraBackground())
+            .toolbar { ToolbarItem(placement: .topBarTrailing) { Button("Close") { dismiss() } } }
+            .onAppear {
+                if email.isEmpty { email = license.lastSignInEmail ?? "" }
+                fieldFocus = awaitingCode ? .code : .email
             }
         }
-        .navigationTitle("Sign in")
-        .navigationBarTitleDisplayMode(.inline)
-        .onAppear { fieldFocus = license.pendingMagicCodeEmail == nil ? .email : .code }
     }
 
     private func requestCode() async {
-        let ok = await license.requestMagicCode(email: email)
-        if ok { fieldFocus = .code }
+        if await license.requestMagicCode(email: email) { fieldFocus = .code }
     }
 
     private func verifyCode() async {
-        let ok = await license.verifyMagicCode(code)
-        if ok {
+        if await license.verifyMagicCode(code) {
             AppGroupBridge.syncSessionToken(from: license)
             dismiss()
         }

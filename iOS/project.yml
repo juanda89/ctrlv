@@ -59,6 +59,7 @@ targets:
     sources:
       - path: ShareExtension
       - path: Resources/Share
+      - path: Sources/ControlViOS/Design
     dependencies:
       - package: ControlVCore
         product: ControlVCore
@@ -88,6 +89,7 @@ targets:
     sources:
       - path: KeyboardExtension
       - path: Resources/Keyboard
+      - path: Sources/ControlViOS/Design
     dependencies:
       - package: ControlVCore
         product: ControlVCore
@@ -112,11 +114,34 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.keyboard
+  # Renders the keyboard panel and share sheet (which can't be driven from the
+  # command line) to PNGs: TEST_RUNNER_SNAPSHOT_DIR=/abs/dir xcodebuild test …
+  Control-V Snapshots:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests/Snapshots
+      - path: Sources/ControlViOS/Design
+      - path: KeyboardExtension
+      - path: ShareExtension
+    dependencies:
+      - target: Control-V
+      - package: ControlVCore
+        product: ControlVCore
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.snapshots
+        GENERATE_INFOPLIST_FILE: YES
 schemes:
   Control-V:
     build:
       targets:
         Control-V: all
+        Control-V Snapshots: [test]
+    test:
+      config: Debug
+      targets:
+        - Control-V Snapshots
     run:
       config: Debug
       # Local StoreKit config: the paywall shows the real product/price/trial in

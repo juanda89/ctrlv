@@ -3,70 +3,97 @@ import SwiftUI
 
 struct HistoryTabView: View {
     @State private var entries: [HistoryEntry] = []
+    @State private var query = ""
+    @State private var showToast = false
+    @State private var showClearConfirm = false
+
+    private var filtered: [HistoryEntry] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return entries }
+        return entries.filter { $0.translated.localizedCaseInsensitiveContains(q) || $0.source.localizedCaseInsensitiveContains(q) }
+    }
 
     var body: some View {
         NavigationStack {
             Group {
                 if entries.isEmpty {
-                    ContentUnavailableView(
-                        "No history yet",
-                        systemImage: "clock.arrow.circlepath",
-                        description: Text("Translations from the app and Share Extension will appear here.")
-                    )
+                    ContentUnavailableView("Nothing translated yet", systemImage: "clock.arrow.circlepath",
+                                           description: Text("Translations from the app, the Share sheet and the keyboard show up here."))
                 } else {
                     List {
-                        ForEach(entries) { entry in
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(entry.translated)
-                                    .font(.body)
-                                    .lineLimit(3)
-                                Text(entry.source)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(2)
-                                HStack {
-                                    Text("\(entry.language.rawValue) · \(entry.tone.rawValue)")
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                    Spacer()
-                                    Text(entry.timestamp, style: .relative)
-                                        .font(.caption2)
-                                        .foregroundStyle(.tertiary)
-                                }
+                        ForEach(filtered) { entry in
+                            HistoryRow(entry: entry) {
+                                UIPasteboard.general.string = entry.translated
+                                withAnimation { showToast = true }
                             }
-                            .padding(.vertical, 4)
-                            .swipeActions(edge: .leading) {
-                                Button {
-                                    UIPasteboard.general.string = entry.translated
-                                } label: {
-                                    Label("Copy", systemImage: "doc.on.doc")
-                                }
-                                .tint(.blue)
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets(top: 6, leading: 18, bottom: 6, trailing: 18))
+                            .swipeActions(edge: .trailing) {
+                                Button(role: .destructive) {
+                                    HistoryStore.shared.remove(id: entry.id)
+                                    entries = HistoryStore.shared.all()
+                                } label: { Label("Delete", systemImage: "trash") }
                             }
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                HistoryStore.shared.remove(id: entries[index].id)
-                            }
-                            entries = HistoryStore.shared.all()
                         }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .searchable(text: $query, prompt: "Search translations")
                 }
             }
+            .background(AuroraBackground())
             .navigationTitle("History")
             .toolbar {
                 if !entries.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button("Clear", role: .destructive) {
-                            HistoryStore.shared.clear()
-                            entries = []
-                        }
+                        Button("Clear", role: .destructive) { showClearConfirm = true }
                     }
                 }
             }
-            .onAppear {
-                entries = HistoryStore.shared.all()
+            .confirmationDialog("Clear all history?", isPresented: $showClearConfirm, titleVisibility: .visible) {
+                Button("Clear history", role: .destructive) { HistoryStore.shared.clear(); entries = [] }
+            } message: {
+                Text("Removes the translations saved on this iPhone. Your Mac isn't affected.")
             }
+            .toast("Copied", isPresented: $showToast)
+            .onAppear { entries = HistoryStore.shared.all() }
         }
+    }
+}
+
+private struct HistoryRow: View {
+    let entry: HistoryEntry
+    let onCopy: () -> Void
+
+    var body: some View {
+        Button(action: onCopy) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(entry.translated)
+                    .font(.body.weight(.medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(3)
+                    .multilineTextAlignment(.leading)
+                Text(entry.source)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+                HStack(spacing: 8) {
+                    Text(entry.language.rawValue)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(Brand.blue)
+                    Text("·").foregroundStyle(.tertiary)
+                    Text(entry.tone.rawValue).font(.caption).foregroundStyle(.secondary)
+                    Spacer()
+                    Text(entry.timestamp, style: .relative).font(.caption).foregroundStyle(.tertiary)
+                    Image(systemName: "doc.on.doc").font(.caption).foregroundStyle(.tertiary)
+                }
+            }
+            .padding(14)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .glassCard(18, interactive: true)
+        }
+        .buttonStyle(.plain)
     }
 }

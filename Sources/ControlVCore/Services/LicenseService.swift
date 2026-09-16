@@ -90,6 +90,10 @@ public final class LicenseService {
 
     public func loadState() {
         lastError = nil
+        if let debugStateOverride {
+            state = debugStateOverride
+            return
+        }
 
         guard let record = store.read(), !record.sessionToken.isEmpty else {
             state = localTrialOrExpiredState()
@@ -177,6 +181,10 @@ public final class LicenseService {
     /// Refresh subscription status. Used both manually and periodically.
     public func refreshSubscriptionStatus(forceNetwork: Bool = false) async {
         guard !isLoading else { return }
+        if let debugStateOverride {
+            state = debugStateOverride
+            return
+        }
         guard var record = store.read(), !record.sessionToken.isEmpty else {
             state = localTrialOrExpiredState()
             return
@@ -296,10 +304,17 @@ public final class LicenseService {
         loadState()
     }
 
+    /// Debug/preview override (menu snapshots, iOS `-ui.licenseState`). While
+    /// set, `loadState` and `refreshSubscriptionStatus` keep it instead of
+    /// recomputing: launch-time refreshes otherwise race with the override
+    /// and silently replace it.
+    private var debugStateOverride: LicenseState?
+
     public func applyDebugState(_ debugState: LicenseState) {
         revalidationTask?.cancel()
         isLoading = false
         lastError = nil
+        debugStateOverride = debugState
         state = debugState
     }
 
