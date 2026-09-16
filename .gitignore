@@ -26,3 +26,8 @@ supabase/.temp/
 *.ipa
 *.xcarchive
 scripts/docs-css/node_modules/
+
+# .NET (windows/)
+windows/**/bin/
+windows/**/obj/
+windows/**/TestResults/

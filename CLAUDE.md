@@ -34,6 +34,8 @@ supabase/migrations/             # Schema history (apply via Management API or C
 docs/                            # Static site on Vercel (index, download, success, cancel, privacy). CSS is precompiled Tailwind.
 scripts/                         # build-release.sh, generate-appcast.sh, build-docs-css.sh, benchmark-*.sh
 .github/workflows/release.yml    # Tag vX.Y.Z → build, sign, notarize, DMG, GitHub Release, appcast
+windows/                         # Windows client (.NET 8). ControlV.Core = C# port of ControlVCore (builds/tests on any OS:
+                                 # `dotnet test windows/ControlV.sln`); ControlV.App (WPF) lands in Phase 2. CI: windows-ci.yml
 ```
 
 ## Core flow

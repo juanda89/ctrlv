@@ -1,0 +1,23 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+    paths: ["windows/**", ".github/workflows/windows-ci.yml"]
+  pull_request:
+    paths: ["windows/**", ".github/workflows/windows-ci.yml"]
+
+jobs:
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+      - name: Restore
+        run: dotnet restore windows/ControlV.sln
+      - name: Build
+        run: dotnet build windows/ControlV.sln --no-restore --configuration Release
+      - name: Test
+        run: dotnet test windows/ControlV.sln --no-build --configuration Release --logger "trx;LogFileName=results.trx"
