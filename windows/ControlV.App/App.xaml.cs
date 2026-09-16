@@ -20,6 +20,7 @@ public partial class App : Application
     private LicenseService? _license;
     private ProfileCollection? _profiles;
     private IReadOnlyList<(Guid ProfileId, char Letter, bool Registered)> _hotkeyStatus = Array.Empty<(Guid, char, bool)>();
+    private readonly UpdateService _updates = new();
 
     private void OnStartup(object sender, StartupEventArgs e)
     {
@@ -56,10 +57,13 @@ public partial class App : Application
         _tray.TrayLeftMouseUp += (_, _) => ToggleFlyout();
         var menu = new System.Windows.Controls.ContextMenu();
         menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "Open ctrl+v", Command = new CommunityToolkit.Mvvm.Input.RelayCommand(ToggleFlyout) });
+        menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "Check for Updates", Command = new CommunityToolkit.Mvvm.Input.AsyncRelayCommand(async () => await _updates.CheckAndApplyAsync(interactive: true)) });
         menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "Debug", Command = new CommunityToolkit.Mvvm.Input.RelayCommand(ShowDebug) });
         menu.Items.Add(new System.Windows.Controls.Separator());
         menu.Items.Add(new System.Windows.Controls.MenuItem { Header = "Quit", Command = new CommunityToolkit.Mvvm.Input.RelayCommand(Quit) });
         _tray.ContextMenu = menu;
+
+        _updates.StartBackgroundChecks();
     }
 
     private void RegisterHotkeys()

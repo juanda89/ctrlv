@@ -217,3 +217,52 @@ jobs:
             dist/${{ env.VERSION }}/SHA256SUMS.txt
             dist/${{ env.VERSION }}/release-notes.md
             updates/stable/appcast.xml
+
+  # Windows build published to the same GitHub Release as the Mac artifacts.
+  # Unsigned for the private beta (code signing deferred until traction):
+  # testers use "More info → Run anyway" on SmartScreen once.
+  release-windows:
+    runs-on: windows-latest
+    needs: release
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve release version
+        shell: bash
+        run: |
+          if [[ -n "${{ github.event.inputs.version }}" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            echo "Windows release needs a tag or an explicit version"; exit 1
+          fi
+          echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Install Velopack CLI
+        run: dotnet tool install -g vpk
+
+      - name: Publish (self-contained, single folder)
+        shell: bash
+        run: |
+          dotnet publish windows/ControlV.App/ControlV.App.csproj -c Release -r win-x64 --self-contained true \
+            -p:Version=${VERSION} -p:PublishSingleFile=false -o windows/publish
+
+      - name: Package with Velopack
+        shell: bash
+        run: |
+          vpk pack --packId ctrlv --packVersion "${VERSION}" --packDir windows/publish --mainExe ctrlv.exe \
+            --packTitle "ctrl+v" --packAuthors "Control-V" --outputDir windows/releases
+          ls -la windows/releases
+
+      - name: Attach Windows assets to the release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ env.VERSION }}
+          files: |
+            windows/releases/*
