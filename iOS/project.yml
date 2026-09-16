@@ -1,0 +1,123 @@
+# XcodeGen spec — regenerate with `xcodegen generate` (run from iOS/).
+# The .xcodeproj is generated, not hand-edited; commit this file, not the project.
+name: ControlV
+options:
+  bundleIdPrefix: info.controlv
+  deploymentTarget:
+    iOS: "17.0"
+  createIntermediateGroups: true
+  generateEmptySchemes: false
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Automatic
+    # Set to the team ID (Viko Holdings LLC) before device builds / archives.
+    DEVELOPMENT_TEAM: ""
+    GENERATE_INFOPLIST_FILE: NO
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+packages:
+  ControlVCore:
+    path: ..
+targets:
+  Control-V:
+    type: application
+    platform: iOS
+    sources:
+      - path: Sources/ControlViOS
+      - path: Resources/App
+    dependencies:
+      - package: ControlVCore
+        product: ControlVCore
+      - target: Control-V Share
+      - target: Control-V Keyboard
+    info:
+      path: Generated/App-Info.plist
+      properties:
+        CFBundleDisplayName: Control-V
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        ITSAppUsesNonExemptEncryption: false
+        CtrlVTranslationAPIURL: https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate
+        CtrlVAuthAPIBaseURL: https://hdfhonbgkkiffhkwoivd.functions.supabase.co
+        NSUserActivityTypes: [info.controlv.translate]
+    entitlements:
+      path: Generated/Control-V.entitlements
+      properties:
+        com.apple.security.application-groups: [group.info.controlv.shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios
+        PRODUCT_NAME: Control-V
+  Control-V Share:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: ShareExtension
+      - path: Resources/Share
+    dependencies:
+      - package: ControlVCore
+        product: ControlVCore
+    info:
+      path: Generated/Share-Info.plist
+      properties:
+        CFBundleDisplayName: Control-V
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.share-services
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).ShareViewController
+          NSExtensionAttributes:
+            NSExtensionActivationRule:
+              NSExtensionActivationSupportsText: true
+              NSExtensionActivationSupportsWebURLWithMaxCount: 1
+    entitlements:
+      path: Generated/Control-V-Share.entitlements
+      properties:
+        com.apple.security.application-groups: [group.info.controlv.shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.share
+  Control-V Keyboard:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: KeyboardExtension
+      - path: Resources/Keyboard
+    dependencies:
+      - package: ControlVCore
+        product: ControlVCore
+    info:
+      path: Generated/Keyboard-Info.plist
+      properties:
+        CFBundleDisplayName: Control-V Keyboard
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.keyboard-service
+          NSExtensionPrincipalClass: $(PRODUCT_MODULE_NAME).KeyboardViewController
+          NSExtensionAttributes:
+            IsASCIICapable: false
+            PrefersRightToLeft: false
+            PrimaryLanguage: mul
+            RequestsOpenAccess: true
+    entitlements:
+      path: Generated/Control-V-Keyboard.entitlements
+      properties:
+        com.apple.security.application-groups: [group.info.controlv.shared]
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.keyboard
+schemes:
+  Control-V:
+    build:
+      targets:
+        Control-V: all
+    run:
+      config: Debug
+    archive:
+      config: Release

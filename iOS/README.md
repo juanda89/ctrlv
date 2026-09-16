@@ -52,157 +52,36 @@ All source consumes `ControlVCore` (the Swift Package library at `../Sources/Con
 
 ---
 
-## Manual Xcode setup (one-time)
+## Xcode project (generated, not hand-made)
 
-You'll do this once in Xcode. After that, day-to-day iOS work is just editing files we already added and rebuilding.
+The project is generated from `iOS/project.yml` with [XcodeGen](https://github.com/yonaskolb/XcodeGen)
+(`brew install xcodegen`). Do not edit `ControlV.xcodeproj` by hand; it is gitignored and
+regenerated on demand:
 
-### 1. Create the Xcode project
-
-```
-Open Xcode → File → New → Project
-  Choose: iOS → App
-  Product name: Control-V
-  Bundle identifier: info.controlv.ios       (or whatever you prefer; must match App Store Connect)
-  Interface: SwiftUI
-  Language: Swift
-  Min deployment: iOS 17.0
-  Save inside: iOS/  (resulting in iOS/Control-V.xcodeproj)
+```bash
+cd iOS && xcodegen generate
+open ControlV.xcodeproj
 ```
 
-Xcode generates:
-- `iOS/Control-V/ContentView.swift` ← delete this
-- `iOS/Control-V/Control_VApp.swift` ← delete this
+Targets: **Control-V** (app, `info.controlv.ios`), **Control-V Share** (`info.controlv.ios.share`),
+**Control-V Keyboard** (`info.controlv.ios.keyboard`). All three share the App Group
+`group.info.controlv.shared`, depend on the local `ControlVCore` package, and ship their
+own `PrivacyInfo.xcprivacy` (from `iOS/Resources/<target>/`). Info.plist keys (backend URLs,
+extension points, `RequestsOpenAccess` for the keyboard) come from `project.yml`.
 
-### 2. Add source files to the project
+Simulator build from the command line (no signing):
 
-In Xcode's left sidebar, right-click the project → **Add Files to "Control-V"** → select the `iOS/Sources/ControlViOS/` folder. Choose **Create groups** (not folder references).
-
-### 3. Add ControlVCore as a local Swift Package dependency
-
-```
-File → Add Package Dependencies
-  Click "Add Local..."
-  Choose the repository root (the folder containing Package.swift)
-  Select the ControlVCore product
-  Add to target: Control-V
+```bash
+cd iOS && xcodebuild -project ControlV.xcodeproj -scheme Control-V -sdk iphonesimulator \
+  -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
-### 4. Configure App Group capability
+Before building for a device or archiving, set `DEVELOPMENT_TEAM` in `project.yml`
+(Viko Holdings LLC team ID) and regenerate.
 
-```
-Project settings → Signing & Capabilities → + Capability → App Groups
-  Add: group.info.controlv.shared
-```
-
-This is what lets the Share Extension share session token + settings + history with the main app.
-
-### 5. Add the Share Extension target
-
-```
-File → New → Target → iOS → Share Extension
-  Product name: Control-V Share
-  Bundle ID: info.controlv.ios.share
-  Embed in: Control-V (main app)
-```
-
-Xcode generates a `Control-V Share/` directory. Replace its `ShareViewController.swift` with the one in `iOS/ShareExtension/ShareViewController.swift` (or drag the file in).
-
-Add the same App Group capability to the Share Extension target. Add `ControlVCore` as a dependency on the Share Extension target too.
-
-### 6. Configure the Share Extension Info.plist
-
-Edit `Info.plist` of the Share Extension target. Set under `NSExtension`:
-
-```xml
-<key>NSExtension</key>
-<dict>
-    <key>NSExtensionAttributes</key>
-    <dict>
-        <key>NSExtensionActivationRule</key>
-        <dict>
-            <key>NSExtensionActivationSupportsText</key>
-            <true/>
-            <key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
-            <integer>1</integer>
-        </dict>
-    </dict>
-    <key>NSExtensionMainStoryboard</key>
-    <string>MainInterface</string>
-    <key>NSExtensionPointIdentifier</key>
-    <string>com.apple.share-services</string>
-</dict>
-```
-
-Or, since we use a UIViewController directly, replace `NSExtensionMainStoryboard` with `NSExtensionPrincipalClass = ShareViewController` in Info.plist.
-
-### 6b. Add the Keyboard Extension target
-
-```
-File → New → Target → iOS → Custom Keyboard Extension
-  Product name: Control-V Keyboard
-  Bundle ID: info.controlv.ios.keyboard
-  Embed in: Control-V (main app)
-```
-
-Xcode generates a `Control-V Keyboard/` directory with a template
-`KeyboardViewController.swift` — delete it and drag in BOTH files from
-`iOS/KeyboardExtension/` (KeyboardViewController.swift + KeyboardPanelView.swift).
-In the add dialog: "Copy items if needed" UNCHECKED, target = Control-V Keyboard only.
-
-Then configure the Keyboard target:
-
-1. **Signing & Capabilities**:
-   - Team: Viko Holdings LLC
-   - + Capability → App Groups → check `group.info.controlv.shared`
-2. **Frameworks and Libraries**: add `ControlVCore`
-3. **Info.plist** of the keyboard target — under `NSExtension`:
-
-```xml
-<key>NSExtension</key>
-<dict>
-    <key>NSExtensionAttributes</key>
-    <dict>
-        <key>IsASCIICapable</key>
-        <false/>
-        <key>PrefersRightToLeft</key>
-        <false/>
-        <key>PrimaryLanguage</key>
-        <string>mul</string>
-        <key>RequestsOpenAccess</key>
-        <true/>
-    </dict>
-    <key>NSExtensionPointIdentifier</key>
-    <string>com.apple.keyboard-service</string>
-    <key>NSExtensionPrincipalClass</key>
-    <string>$(PRODUCT_MODULE_NAME).KeyboardViewController</string>
-</dict>
-```
-
-`RequestsOpenAccess = YES` is what makes iOS show the "Allow Full Access"
-toggle — required for network calls from the keyboard.
-
-**To test in simulator:**
-1. Run the Control-V Keyboard scheme (or just the main app once — the keyboard installs with it)
-2. Simulator → Settings → General → Keyboard → Keyboards → Add New Keyboard → Control-V Keyboard
-3. Tap Control-V Keyboard again → enable **Allow Full Access**
-4. Open Notes → type something → tap-hold the globe key → choose Control-V
-5. Tap "Translate & Replace" → text is replaced with the translation
-6. Also test with an explicit selection: select a sentence → switch to Control-V keyboard → translate
-
-### 7. Configure the main app Info.plist
-
-Add to the main app's `Info.plist`:
-
-```xml
-<key>CtrlVTranslationAPIURL</key>
-<string>https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate</string>
-<key>CtrlVAuthAPIBaseURL</key>
-<string>https://hdfhonbgkkiffhkwoivd.functions.supabase.co</string>
-<key>NSUserActivityTypes</key>
-<array>
-    <string>info.controlv.translate</string>
-</array>
-```
+**Keyboard test in the simulator:** run the app once → Settings → General → Keyboard →
+Keyboards → Add New Keyboard → Control-V Keyboard → enable **Allow Full Access** → in Notes,
+long-press the globe key → Control-V → **Translate & Replace**.
 
 ### 8. App Store Connect setup
 
@@ -216,7 +95,7 @@ Add to the main app's `Info.plist`:
    - Reference name: Control-V Pro
    - Product ID: info.controlv.pro.monthly        ← MUST match StoreKitSubscriptionManager.productID
    - Subscription Group: Control-V Pro
-   - Price: $8.99 / month
+   - Price: $4.99 / month (same as the Mac price for new users)
    - Add Introductory Offer:
      - Type: Free Trial
      - Duration: 14 days
@@ -226,7 +105,7 @@ Add to the main app's `Info.plist`:
 3. Configure App Store Server Notifications V2:
    - URL: https://hdfhonbgkkiffhkwoivd.functions.supabase.co/appstore-webhook
    - Version: V2
-   (We'll build the appstore-webhook Edge Function in a later phase.)
+   (Edge Function `appstore-webhook` is built; set this URL once the app record exists.)
 
 4. Generate App Store Server API key for receipt validation:
    - Users → Keys → In-App Purchase → +
@@ -290,16 +169,23 @@ Recommendation: try Option A first. If rejected under 4.4.1, build Option B.
 
 ---
 
+## Backend (done)
+
+- `validate-appstore-receipt` — the app POSTs the **signed** StoreKit 2 transaction (JWS);
+  the server verifies Apple's certificate chain against the pinned Apple Root CA - G3 using
+  Apple's official `app-store-server-library`, then upserts `account_subscriptions`
+  (provider `appstore`, keyed by `appstore_original_transaction_id`).
+- `appstore-webhook` — App Store Server Notifications V2: renewals, billing retry/grace,
+  expiry, refunds/revocations update the same row. Idempotent per `notificationUUID`.
+- Migration `20260915140000_appstore_subscriptions.sql`.
+- Secrets to set: `APPSTORE_BUNDLE_ID` (default `info.controlv.ios`) and
+  `APPSTORE_APP_APPLE_ID` (numeric, from App Store Connect; required for production
+  verification). Deploy both functions with `--no-verify-jwt`.
+
 ## What's NOT done yet
 
-- iOS-specific backend Edge Functions (Phase 3):
-  - `validate-appstore-receipt` — verifies StoreKit transactions server-side
-  - `appstore-webhook` — handles Apple Server Notifications V2 (renewals, cancellations)
-  - `_shared/appstore.ts` — JWS verification helpers
-- Backend migration: `appstore_original_transaction_id` column on `account_subscriptions`
-- TestFlight + App Store submission (Phase 5)
-
-The current iOS source compiles **standalone** against ControlVCore. Once the Xcode project is set up, you can build & run the iOS app immediately. Subscriptions will work locally via StoreKit; backend sync happens once Phase 3 lands.
+- App Store Connect setup (section 8) and the team ID in `project.yml`.
+- Sandbox purchase test on a device, TestFlight, App Store submission.
 
 ---
 

@@ -51,7 +51,7 @@ final class StoreKitSubscriptionManager {
         switch result {
         case .success(let verification):
             let transaction = try checkVerified(verification)
-            await forwardToBackend(transaction: transaction)
+            await forwardToBackend(signedTransaction: verification.jwsRepresentation)
             await transaction.finish()
             await refreshEntitlements()
         case .userCancelled:
@@ -89,7 +89,7 @@ final class StoreKitSubscriptionManager {
     private func handleTransactionUpdate(_ result: VerificationResult<Transaction>) async {
         do {
             let transaction = try checkVerified(result)
-            await forwardToBackend(transaction: transaction)
+            await forwardToBackend(signedTransaction: result.jwsRepresentation)
             await transaction.finish()
             await refreshEntitlements()
         } catch {
@@ -120,34 +120,22 @@ final class StoreKitSubscriptionManager {
         }
     }
 
-    /// Forward the StoreKit transaction to the backend so it can update
-    /// `account_subscriptions` with provider="appstore". This call is best-effort:
-    /// if the user is not signed in (no email account), we still grant local
-    /// subscription via Transaction.currentEntitlements.
-    private func forwardToBackend(transaction: Transaction) async {
+    /// Forward the SIGNED StoreKit transaction (JWS) to the backend, which
+    /// verifies Apple's signature chain server-side before updating
+    /// `account_subscriptions` with provider="appstore". Best-effort: without a
+    /// signed-in account there is nothing to link yet; StoreKit remains the
+    /// source of truth on this device and the user can sign in later to sync.
+    private func forwardToBackend(signedTransaction: String) async {
         guard let token = licenseService.storedSessionToken,
               let baseURL = Constants.authAPIBaseURL else {
-            // No backend account linked — that's fine. StoreKit is the source
-            // of truth on this device. User can sign in later to sync.
             return
         }
 
-        let url = baseURL.appendingPathComponent("validate-appstore-receipt")
-        var request = URLRequest(url: url)
+        var request = URLRequest(url: baseURL.appendingPathComponent("validate-appstore-receipt"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-        let payload: [String: Any] = [
-            "originalTransactionID": String(transaction.originalID),
-            "transactionID": String(transaction.id),
-            "productID": transaction.productID,
-            "purchaseDate": ISO8601DateFormatter().string(from: transaction.purchaseDate),
-            "expiresAt": transaction.expirationDate.map { ISO8601DateFormatter().string(from: $0) } as Any,
-            "appAccountToken": transaction.appAccountToken?.uuidString as Any
-        ]
-
-        request.httpBody = try? JSONSerialization.data(withJSONObject: payload)
+        request.httpBody = try? JSONSerialization.data(withJSONObject: ["signedTransaction": signedTransaction])
         _ = try? await URLSession.shared.data(for: request)
     }
 }
