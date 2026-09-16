@@ -46,7 +46,10 @@ final class AppCoordinator: ObservableObject {
                 // this catches the automatic sign-out on 401 (session expired),
                 // not just the manual sync points.
                 guard let service = serviceBox else { return }
-                AppGroupBridge.syncSessionToken(from: service)
+                // LicenseService is @MainActor and invokes this on the main actor.
+                MainActor.assumeIsolated {
+                    AppGroupBridge.syncSessionToken(from: service)
+                }
             }
         )
         serviceBox = license

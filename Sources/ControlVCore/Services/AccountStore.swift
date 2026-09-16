@@ -65,7 +65,7 @@ public final class AccountStore: AccountStoring {
     /// or network changes.
     private var symmetricKey: SymmetricKey {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.instanttranslator.app"
-        let username = ProcessInfo.processInfo.userName
+        let username = Self.userIdentity
         let salt = installSalt()
         var material = Data("\(bundleID)|\(username)|instanttranslator-account-v2|".utf8)
         material.append(salt)
@@ -79,11 +79,21 @@ public final class AccountStore: AccountStoring {
     /// to migrate existing records in `read()`.
     var legacySymmetricKey: SymmetricKey {
         let bundleID = Bundle.main.bundleIdentifier ?? "com.instanttranslator.app"
-        let username = ProcessInfo.processInfo.userName
+        let username = Self.userIdentity
         let hostname = ProcessInfo.processInfo.hostName
         let material = "\(bundleID)|\(username)|\(hostname)|instanttranslator-account-v1"
         let digest = SHA256.hash(data: Data(material.utf8))
         return SymmetricKey(data: Data(digest))
+    }
+
+    /// macOS keys include the login name; iOS has no such API and the app
+    /// sandbox already scopes the file to one user, so a constant is used.
+    private static var userIdentity: String {
+        #if os(macOS)
+        return ProcessInfo.processInfo.userName
+        #else
+        return "ios"
+        #endif
     }
 
     /// Random 32-byte salt created once per install and reused forever.

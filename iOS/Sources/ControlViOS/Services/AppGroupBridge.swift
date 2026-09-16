@@ -7,6 +7,7 @@ import Foundation
 ///
 /// Note: App Group UserDefaults is not encrypted like AccountStore, but it IS
 /// sandboxed to this app group. Session tokens are revocable server-side.
+@MainActor
 enum AppGroupBridge {
     private static let appGroup = "group.info.controlv.shared"
     private static let tokenKey = "iOSSessionToken"

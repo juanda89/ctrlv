@@ -27,10 +27,6 @@ final class StoreKitSubscriptionManager {
         observeTransactions()
     }
 
-    deinit {
-        transactionObserver?.cancel()
-    }
-
     func loadProducts() async {
         do {
             let products = try await Product.products(for: [Self.productID])
