@@ -1,0 +1,11 @@
+<Window x:Class="ControlV.App.Views.IslandWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None" AllowsTransparency="True" Background="Transparent" Topmost="True" ShowInTaskbar="False" ShowActivated="False"
+        ResizeMode="NoResize" SizeToContent="WidthAndHeight" Focusable="False">
+  <Border Background="#E6161628" CornerRadius="18" Padding="16,9">
+    <StackPanel Orientation="Horizontal">
+      <Ellipse Width="8" Height="8" Fill="#52CCE6" Margin="0,0,8,0" VerticalAlignment="Center"/>
+      <TextBlock Text="Translating…" Foreground="White" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center"/>
+    </StackPanel>
+  </Border>
+</Window>
