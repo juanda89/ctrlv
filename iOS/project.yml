@@ -119,5 +119,8 @@ schemes:
         Control-V: all
     run:
       config: Debug
+      # Local StoreKit config: the paywall shows the real product/price/trial in
+      # the simulator without App Store Connect. Sandbox/production use ASC.
+      storeKitConfiguration: Configuration.storekit
     archive:
       config: Release
