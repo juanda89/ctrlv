@@ -44,6 +44,9 @@ targets:
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen: {}
         UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        # iPhone-only, portrait-only. Without this App Store Connect rejects the
+        # upload (ITMS-90474: portrait-only apps must opt out of iPad multitasking).
+        UIRequiresFullScreen: true
         ITSAppUsesNonExemptEncryption: false
         CtrlVTranslationAPIURL: https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate
         CtrlVAuthAPIBaseURL: https://hdfhonbgkkiffhkwoivd.functions.supabase.co
