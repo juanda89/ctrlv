@@ -94,6 +94,27 @@ long-press the globe key → Control-V → **Translate & Replace**.
 
 ### 8. App Store Connect setup
 
+**Done on 2026-09-20 (via the browser, Account Holder session):** app record
+**Control-V** (Apple ID `6814210564`, SKU `controlv-ios`, bundle `info.controlv.ios`),
+subtitle, categories (Productivity / Utilities), content rights, age rating 4+,
+App Privacy published (Email Address, Other User Content, User ID — app functionality,
+linked, no tracking), privacy policy URL, pricing Free in 175 countries (Mac and
+Vision Pro opted out), App Store Server Notifications prod + sandbox → `appstore-webhook`,
+subscription group **Control-V Pro** (`22399702`) with **Control-V Pro Monthly**
+(`info.controlv.pro.monthly`, Apple ID `6814211123`): 1 month, USD 4.99 base, all
+countries, en-US display name/description, introductory offer **free for 2 weeks**
+from Sep 20 2026 (no end date). Version 1.0 metadata, keywords, URLs, copyright,
+review contact and review notes are filled; release is set to manual. Supabase secret
+`APPSTORE_APP_APPLE_ID=6814210564` is set. The four App IDs and the App Group were
+registered by Xcode automatic signing (team `5ZFYF422LX`).
+
+**Still pending in App Store Connect:** Paid Apps Agreement + banking + tax forms
+(Account Holder only — Diego), EU trader status (Business → Compliance, Admin can do
+it), the IAP review screenshot (paywall PNG) on the subscription, the 6.9" screenshots
+on version 1.0 (`iOS/AppStore/screenshots/`), a sandbox tester (Users and Access →
+Sandbox), and the first build (TestFlight). Historical checklist follows.
+
+
 ```
 1. Create app record:
    - Name: Control-V
