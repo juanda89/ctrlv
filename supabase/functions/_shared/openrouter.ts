@@ -18,7 +18,25 @@ export type OpenRouterResult = {
   /// True when the first answer failed the fidelity check and a strict retry
   /// produced the returned text.
   retried: boolean;
+  /// Upstream provider OpenRouter routed the winning request to (e.g. "Google").
+  provider: string | null;
+  /// Sum of the completed attempts' costs in USD as reported by OpenRouter
+  /// (aborted hedge losers are not included).
+  costUSD: number | null;
 };
+
+/// One completed upstream request.
+type Completion = { text: string; provider: string | null; costUSD: number | null };
+
+/// Optional provider routing preference for OpenRouter ("latency",
+/// "throughput" or "price"). Unset keeps OpenRouter's default routing.
+/// Toggled through a secret so it can be A/B tested without a deploy.
+const providerSortValues = ["latency", "throughput", "price"] as const;
+type ProviderSort = typeof providerSortValues[number];
+function configuredProviderSort(): ProviderSort | null {
+  const value = Deno.env.get("OPENROUTER_PROVIDER_SORT")?.trim().toLowerCase();
+  return (providerSortValues as readonly string[]).includes(value ?? "") ? (value as ProviderSort) : null;
+}
 
 // The user turn is delimited so the model reads it as material, never as a
 // message addressed to it. Text that starts with "can you help me answer
@@ -92,10 +110,11 @@ export async function translateWithOpenRouter(
         signal: options.signal,
         hedgeAfterMs: options.hedgeAfterMs ?? hedgeDelayFor(text.length),
       };
-      const first = sanitizeTranslation(await callOpenRouter(request), text);
+      const firstCompletion = await callOpenRouter(request);
+      const first = sanitizeTranslation(firstCompletion.text, text);
       const firstIssues = fidelityIssues(text, first);
       if (firstIssues.length === 0) {
-        return { translatedText: first, model, fallbackUsed: i > 0, retried: false };
+        return { translatedText: first, model, fallbackUsed: i > 0, retried: false, ...billing(firstCompletion) };
       }
 
       // The model dropped lines/anchors or answered the text. One strict
@@ -103,17 +122,19 @@ export async function translateWithOpenRouter(
       // plus anchor loss) the request fails: a wrong message must never be
       // pasted over the user's text.
       console.warn(`[fidelity] ${model} first attempt: ${firstIssues.join(",")}; retrying strict`);
-      const second = sanitizeTranslation(await callOpenRouter({ ...request, strict: true }), text);
+      const secondCompletion = await callOpenRouter({ ...request, strict: true });
+      const second = sanitizeTranslation(secondCompletion.text, text);
       const secondIssues = fidelityIssues(text, second);
+      const bill = billing(firstCompletion, secondCompletion);
       if (secondIssues.length === 0) {
-        return { translatedText: second, model, fallbackUsed: i > 0, retried: true };
+        return { translatedText: second, model, fallbackUsed: i > 0, retried: true, ...bill };
       }
       console.warn(`[fidelity] ${model} strict retry: ${secondIssues.join(",")}`);
       if (looksLikeReply(firstIssues) && looksLikeReply(secondIssues)) {
         throw new FidelityError(secondIssues);
       }
       const useSecond = secondIssues.length < firstIssues.length;
-      return { translatedText: useSecond ? second : first, model, fallbackUsed: i > 0, retried: useSecond };
+      return { translatedText: useSecond ? second : first, model, fallbackUsed: i > 0, retried: useSecond, ...bill };
     } catch (error) {
       if (options.signal?.aborted) {
         // The caller gave up (access rejected): no fallback, no retry.
@@ -160,7 +181,7 @@ type CallParams = {
  *   - once both are in flight, the call fails only when both have failed;
  *   - the caller's abort signal aborts both.
  */
-function callOpenRouter(params: CallParams): Promise<string> {
+function callOpenRouter(params: CallParams): Promise<Completion> {
   const controllers: AbortController[] = [];
   const attempt = () => {
     const controller = linkedController(params.signal);
@@ -168,7 +189,7 @@ function callOpenRouter(params: CallParams): Promise<string> {
     return requestOpenRouter({ ...params, signal: controller.signal });
   };
 
-  return new Promise<string>((resolve, reject) => {
+  return new Promise<Completion>((resolve, reject) => {
     let settled = false;
     let firstFailed = false;
     let hedgeFailed = false;
@@ -203,6 +224,14 @@ function callOpenRouter(params: CallParams): Promise<string> {
   });
 }
 
+function billing(...completions: Completion[]): { provider: string | null; costUSD: number | null } {
+  const costs = completions.map((c) => c.costUSD).filter((c): c is number => c !== null);
+  return {
+    provider: completions[completions.length - 1]?.provider ?? null,
+    costUSD: costs.length > 0 ? Number(costs.reduce((a, b) => a + b, 0).toFixed(8)) : null,
+  };
+}
+
 /// A controller that follows the parent signal, so the hedge machinery can
 /// abort one request without touching the other.
 function linkedController(parent?: AbortSignal): AbortController {
@@ -214,7 +243,8 @@ function linkedController(parent?: AbortSignal): AbortController {
   return controller;
 }
 
-async function requestOpenRouter(params: CallParams): Promise<string> {
+async function requestOpenRouter(params: CallParams): Promise<Completion> {
+  const sort = configuredProviderSort();
   const response = await fetch(`${defaultBaseURL}/chat/completions`, {
     method: "POST",
     signal: params.signal,
@@ -232,6 +262,9 @@ async function requestOpenRouter(params: CallParams): Promise<string> {
         effort: "none",
         exclude: true,
       },
+      // Cost accounting per request (usage.cost) for the debug timings.
+      usage: { include: true },
+      ...(sort ? { provider: { sort } } : {}),
       messages: [
         { role: "system", content: params.systemPrompt + (params.strict ? strictRetrySuffix : inputFormatSuffix) },
         { role: "user", content: `${textOpen}\n${params.text}\n${textClose}` },
@@ -254,7 +287,15 @@ async function requestOpenRouter(params: CallParams): Promise<string> {
   if (!translatedText) {
     throw new Error("OpenRouter returned an empty translation");
   }
-  return translatedText;
+  return { text: translatedText, ...extractBilling(payload) };
+}
+
+function extractBilling(payload: unknown): { provider: string | null; costUSD: number | null } {
+  const record = (payload && typeof payload === "object") ? payload as Record<string, unknown> : {};
+  const provider = typeof record.provider === "string" ? record.provider : null;
+  const usage = (record.usage && typeof record.usage === "object") ? record.usage as Record<string, unknown> : {};
+  const cost = typeof usage.cost === "number" ? usage.cost : null;
+  return { provider, costUSD: cost };
 }
 
 /// Models occasionally echo the delimiters back; they are never part of the text.

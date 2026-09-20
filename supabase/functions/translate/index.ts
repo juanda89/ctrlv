@@ -97,7 +97,9 @@ Deno.serve(async (req) => {
 
     // Per-phase timings only for callers that opt in: `modelMs` is measured
     // from the request start because the model call overlaps the RPC.
-    const timings = req.headers.get("X-Ctrlv-Debug") === "1" ? { rpcMs, modelMs } : undefined;
+    const timings = req.headers.get("X-Ctrlv-Debug") === "1"
+      ? { rpcMs, modelMs, provider: result.provider, costUSD: result.costUSD }
+      : undefined;
     return json({
       translatedText: result.translatedText,
       model: result.model,

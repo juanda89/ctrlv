@@ -6,7 +6,7 @@ Select text anywhere, press a shortcut, the text is replaced by its translation 
 ## Tech stack
 - **Client:** Swift 5.9+, SwiftUI, macOS 14+, SPM. MVVM + services. `@Observable` everywhere.
 - **Backend:** Supabase Edge Functions (Deno/TypeScript) + Postgres. Project ref `hdfhonbgkkiffhkwoivd` (named "ctrlv-staging" in the dashboard but it IS production).
-- **LLM:** OpenRouter with a fallback chain from the `OPENROUTER_MODELS` secret (comma-separated). The client sends the system prompt (built by `PromptBuilder`); the server sanitizes output.
+- **LLM:** OpenRouter with a fallback chain from the `OPENROUTER_MODELS` secret (comma-separated). `OPENROUTER_PROVIDER_SORT=latency` (secret, set 2026-09-19) routes to the fastest upstream provider: measured ~25% lower model latency at identical cost versus default routing; unset it to A/B (`scripts/benchmark-translate-debug.sh` prints provider, cost and phase timings). The client sends the system prompt (built by `PromptBuilder`); the server sanitizes output.
 - **Auth + billing:** email magic code (6 digits) → session token (sliding 30-day expiry, renewed on use) → Stripe subscription tied to the account email. Checkout/portal open in the browser.
 - **Updates:** Sparkle, appcast published to GitHub Releases by CI. **Signing:** Developer ID + notarization in CI.
 - **Deps:** soffes/HotKey (global shortcuts), Sparkle, TelemetryDeck.

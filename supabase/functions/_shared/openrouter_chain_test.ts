@@ -13,7 +13,7 @@ function withFetch(stub: typeof fetch, run: () => Promise<void>): Promise<void> 
 }
 
 function completion(text: string): Response {
-  return new Response(JSON.stringify({ choices: [{ message: { content: text } }] }), {
+  return new Response(JSON.stringify({ provider: "Google", usage: { cost: 0.00012 }, choices: [{ message: { content: text } }] }), {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
@@ -50,6 +50,8 @@ Deno.test("a model failure still falls through to the next model", async () => {
     assertEquals(result.translatedText, "hola");
     assertEquals(result.model, "model-b");
     assertEquals(result.fallbackUsed, true);
+    assertEquals(result.provider, "Google");
+    assertEquals(result.costUSD, 0.00012);
   });
   assertEquals(calls, ["model-a", "model-b"]);
 });
@@ -124,4 +126,20 @@ Deno.test("hedge: caller abort cancels both requests and no fallback runs", asyn
     await assertRejects(() => pending, DOMException);
   });
   assertEquals(stub.calls.length, 2); // first + hedge, both on model-a; model-b never tried
+});
+
+Deno.test("provider sort is sent only when the secret names a valid value", async () => {
+  const bodies: Record<string, unknown>[] = [];
+  const stub = ((_url: RequestInfo | URL, init?: RequestInit) => {
+    bodies.push(JSON.parse(String(init?.body)));
+    return Promise.resolve(completion("hola"));
+  }) as typeof fetch;
+  Deno.env.set("OPENROUTER_PROVIDER_SORT", "latency");
+  await withFetch(stub, async () => { await translateWithOpenRouter("hello", "Translate."); });
+  Deno.env.set("OPENROUTER_PROVIDER_SORT", "fastest-please");
+  await withFetch(stub, async () => { await translateWithOpenRouter("hello", "Translate."); });
+  Deno.env.delete("OPENROUTER_PROVIDER_SORT");
+  assertEquals(bodies[0].provider, { sort: "latency" });
+  assertEquals("provider" in bodies[1], false);
+  assertEquals(bodies[0].usage, { include: true });
 });
