@@ -51,12 +51,14 @@ windows/                         # Windows client (.NET 8). ControlV.Core = C# p
 - **Tests never touch real stores.** `AccountStore(directoryURL:)` and `UserDefaults(suiteName:)` in tests; the old suite deleted the developer's live session on every run.
 - **Key material for local encryption must be stable** (per-install salt). Never derive from `ProcessInfo.hostName` (changes with the network).
 - **Whitespace-only is "no text"** at every stage (AX selection, clipboard fallback trigger, local guard). The server trims and rejects.
-- **Deploy Edge Functions with `--no-verify-jwt`** (they validate the app's own session token). No CI deploys functions; pushing to main changes nothing server-side.
+- **Deploy Edge Functions with `--no-verify-jwt`** (they validate the app's own session token). No CI deploys functions; pushing to main changes nothing server-side. Both local Supabase CLIs hang: use `scripts/deploy-function.sh <slug>` and `scripts/apply-migration.sh <file>` (Management API, need `SUPABASE_ACCESS_TOKEN`).
+- **Abuse controls live server-side and fail closed** (security review 2026-09-19): magic codes burn after 5 wrong attempts (`consume_magic_code`), per-network caps on issued codes and on new trial identities (`translate_begin`), `warmupOnly` never reaches the model, all POST endpoints require `Content-Type: application/json`, `anon`/`authenticated` have no table grants (RLS is the second barrier), pg_cron purges usage events (7d), magic codes (24h), expired sessions (7d) and webhook payloads (30d). `APPSTORE_ALLOW_SANDBOX=true` is the private-beta switch: set it to anything else before the iOS launch.
 - **Validate behavior empirically**: probe the live endpoint (curl), query the DB (Management API), read the app's Debug panel. Prompt instructions are not guarantees; put invariants in the server sanitizer.
 - Existing users' settings must survive every migration (`AppSettings` decodes the legacy flat shape and mirrors profile 0 back for downgrades).
 
 ## Debug & verification tooling
 - ⋯ → Debug in the popover: last stage, timings, license validation, hotkeys.
+- Server timings/provider/cost per request: send `X-Ctrlv-Debug: <CTRLV_DEBUG_TOKEN>` (the secret's value is in `~/.config/ctrlv/debug-token` on the dev Mac; `scripts/fidelity-suite.ts` and `scripts/benchmark-translate-debug.sh` read it from there or from the env). The Supabase secrets API only returns digests, so keep that file.
 - Headless popover render: `.build/debug/InstantTranslator --render-menu-snapshot out.png --menu-scenario active|trial|expired|twoprofiles --menu-appearance light|dark` (scenarios lowercase). Extra flags via NSUserDefaults args: `-feedback.translationCount 30`, `-debug.showFeedbackOnLaunch 1`.
 - The SPM binary has its own UserDefaults domain but shares `~/Library/Application Support/ctrl+v/` (AccountStore) with the installed app.
 
