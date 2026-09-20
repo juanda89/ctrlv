@@ -108,6 +108,25 @@ review contact and review notes are filled; release is set to manual. Supabase s
 `APPSTORE_APP_APPLE_ID=6814210564` is set. The four App IDs and the App Group were
 registered by Xcode automatic signing (team `5ZFYF422LX`).
 
+**Build 1.0 (1) uploaded on 2026-09-20** from the command line (no Xcode GUI):
+
+```
+xcodebuild -project iOS/ControlV.xcodeproj -scheme Control-V -configuration Release \
+  -destination 'generic/platform=iOS' -archivePath /tmp/ControlV.xcarchive \
+  -allowProvisioningUpdates -allowProvisioningDeviceRegistration archive
+xcodebuild -exportArchive -archivePath /tmp/ControlV.xcarchive \
+  -exportOptionsPlist iOS/ExportOptions.plist -exportPath /tmp/export -allowProvisioningUpdates
+```
+
+`ExportOptions.plist` = app-store-connect + destination upload + automatic signing, so the
+second command uploads straight to App Store Connect using the Apple Account signed into
+Xcode. Three things bit on the first attempts: automatic signing needs at least one
+registered device on the team (the archive is dev-signed first), XcodeGen's per-target
+default `TARGETED_DEVICE_FAMILY = "1,2"` overrides the project-level value (now pinned to
+`"1"` on every target), and a portrait-only app must set `UIRequiresFullScreen` or App
+Store Connect rejects the upload (ITMS-90474). Bump `CURRENT_PROJECT_VERSION` before every
+new upload.
+
 **Still pending in App Store Connect:** Paid Apps Agreement + banking + tax forms
 (Account Holder only — Diego), EU trader status (Business → Compliance, Admin can do
 it), the IAP review screenshot (paywall PNG) on the subscription, the 6.9" screenshots
