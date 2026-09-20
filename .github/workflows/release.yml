@@ -20,16 +20,24 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Resolve release version
+        # The dispatch input goes through an env var: interpolating it into
+        # the script text would let a workflow_dispatch caller inject shell.
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [[ -n "${{ github.event.inputs.version }}" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [[ -n "${INPUT_VERSION}" ]]; then
+            VERSION="${INPUT_VERSION}"
           elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             VERSION=$(/usr/libexec/PlistBuddy -c "Print:CFBundleShortVersionString" Resources/Info.plist)
+          fi
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION must follow semantic format x.y.z. Got: ${VERSION}"
+            exit 1
           fi
           echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
 
@@ -73,14 +81,22 @@ jobs:
       - name: Ensure scripts are executable
         run: chmod +x scripts/*.sh
 
-      - name: Validate Sparkle signing secret
+      - name: Validate signing secrets
+        # A missing secret used to degrade silently to an ad-hoc, un-notarized
+        # build that Sparkle would still install everywhere. Fail here instead.
         env:
           SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
+          APPLE_DEVELOPER_ID_APPLICATION: ${{ secrets.APPLE_DEVELOPER_ID_APPLICATION }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
         run: |
-          if [[ -z "${SPARKLE_EDDSA_PRIVATE_KEY}" ]]; then
-            echo "SPARKLE_EDDSA_PRIVATE_KEY is required to publish signed Sparkle updates."
-            exit 1
-          fi
+          for name in SPARKLE_EDDSA_PRIVATE_KEY APPLE_DEVELOPER_ID_APPLICATION APPLE_ID APPLE_TEAM_ID APPLE_APP_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "${name} is required to publish a signed, notarized release."
+              exit 1
+            fi
+          done
 
       - name: Build release artifacts
         env:
@@ -88,7 +104,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
-          CTRLV_REQUIRE_STABLE_SIGNING: ${{ vars.CTRLV_REQUIRE_STABLE_SIGNING }}
+          CTRLV_REQUIRE_STABLE_SIGNING: "1"
           SPARKLE_EDDSA_PRIVATE_KEY: ${{ secrets.SPARKLE_EDDSA_PRIVATE_KEY }}
         run: ./scripts/build-release.sh "${VERSION}" "${BUILD_NUMBER}"
 
@@ -111,6 +127,10 @@ jobs:
           fi
 
           codesign --verify --deep --strict --verbose=2 "${APP_PATH}"
+          # Gatekeeper's own verdict and the stapled notarization ticket: an
+          # ad-hoc or un-notarized build fails here instead of shipping.
+          spctl --assess --type exec --verbose=2 "${APP_PATH}"
+          xcrun stapler validate "${APP_PATH}"
 
           SPARKLE_BASE="${APP_PATH}/Contents/Frameworks/Sparkle.framework/Versions/B"
           REQUIRED_EXECUTABLES=(
@@ -177,35 +197,8 @@ jobs:
             exit 1
           fi
 
-      - name: Build landing metadata
-        env:
-          DOWNLOAD_URL_PREFIX: ${{ vars.CTRLV_DOWNLOADS_BASE_URL }}
-        run: |
-          DOWNLOAD_PREFIX="${DOWNLOAD_URL_PREFIX:-https://github.com/juanda89/ctrlv/releases/latest/download}"
-          CHECKSUMS="dist/${VERSION}/SHA256SUMS.txt"
-          ZIP_SHA=$(awk '/ctrlv-.*\.zip/{print $1}' "${CHECKSUMS}" | head -n 1)
-          DMG_SHA=$(awk '/ctrlv-.*\.dmg/{print $1}' "${CHECKSUMS}" | head -n 1)
-          cat > docs/latest.json <<EOF
-          {
-            "version": "${VERSION}",
-            "dmg_url": "${DOWNLOAD_PREFIX}/ctrlv-${VERSION}.dmg",
-            "zip_url": "${DOWNLOAD_PREFIX}/ctrlv-${VERSION}.zip",
-            "dmg_sha256": "${DMG_SHA}",
-            "zip_sha256": "${ZIP_SHA}"
-          }
-          EOF
-          cp "dist/${VERSION}/SHA256SUMS.txt" "docs/SHA256SUMS.txt"
-
-      - name: Copy binaries to Pages
-        run: |
-          mkdir -p docs/downloads docs/release-notes
-          cp "dist/${VERSION}/ctrlv-${VERSION}.dmg" "docs/downloads/"
-          cp "dist/${VERSION}/ctrlv-latest.dmg" "docs/downloads/"
-          cp "dist/${VERSION}/ctrlv-${VERSION}.zip" "docs/downloads/"
-          cp "dist/${VERSION}/release-notes.md" "docs/release-notes/ctrlv-${VERSION}.md"
-
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: v${{ env.VERSION }}
           generate_release_notes: true
@@ -218,6 +211,12 @@ jobs:
             dist/${{ env.VERSION }}/release-notes.md
             updates/stable/appcast.xml
 
+      - name: Remove signing keychain
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/app-signing.keychain-db" 2>/dev/null || true
+          rm -f "$RUNNER_TEMP/certificate.p12"
+
   # Windows build published to the same GitHub Release as the Mac artifacts.
   # Unsigned for the private beta (code signing deferred until traction):
   # testers use "More info → Run anyway" on SmartScreen once.
@@ -226,21 +225,26 @@ jobs:
     needs: release
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
       - name: Resolve release version
         shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [[ -n "${{ github.event.inputs.version }}" ]]; then
-            VERSION="${{ github.event.inputs.version }}"
+          if [[ -n "${INPUT_VERSION}" ]]; then
+            VERSION="${INPUT_VERSION}"
           elif [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then
             VERSION="${GITHUB_REF_NAME#v}"
           else
             echo "Windows release needs a tag or an explicit version"; exit 1
           fi
+          if [[ ! "${VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "VERSION must follow semantic format x.y.z. Got: ${VERSION}"; exit 1
+          fi
           echo "VERSION=${VERSION}" >> "${GITHUB_ENV}"
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9 # v4.3.1
         with:
           dotnet-version: "8.0.x"
 
@@ -261,7 +265,7 @@ jobs:
           ls -la windows/releases
 
       - name: Attach Windows assets to the release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: v${{ env.VERSION }}
           files: |
