@@ -65,14 +65,14 @@ Deno.serve(async (req) => {
 
     // Speculative model call: started before we know whether the request is
     // allowed, so the DB round trip overlaps the model's latency instead of
-    // preceding it. Rejections abort it. Texts that could only pass on a paid
-    // plan wait for a session token, so an expired trial cannot burn long
-    // completions by hammering the endpoint.
+    // preceding it. Rejections abort it, but an abort does not stop a
+    // non-streaming completion upstream, so the speculation is bounded to
+    // trial-sized texts: nothing a caller sends (a bogus session token, a
+    // rotated installID) can start a paid-sized completion before the access
+    // check passes. Longer texts wait for the RPC (~60 ms).
     const abort = new AbortController();
     abortSpeculative = () => abort.abort();
-    const mayTranslate = !untranslatable &&
-      (request.text.length <= limits.trialMaxCharacters ||
-        (tokenHash !== null && request.text.length <= limits.paidMaxCharacters));
+    const mayTranslate = !untranslatable && request.text.length <= limits.trialMaxCharacters;
     const speculative = mayTranslate
       ? translateWithOpenRouter(request.text, request.systemPrompt, { signal: abort.signal })
       : null;
