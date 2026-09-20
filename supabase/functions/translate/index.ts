@@ -51,6 +51,7 @@ Deno.serve(async (req) => {
       return json({ warmed: true, model: result.model }, 200, req);
     }
 
+    const startedAt = performance.now();
     const client = createServiceClient();
     const [identityHash, tokenHash] = await Promise.all([
       sha256Hex(request.installID),
@@ -77,7 +78,9 @@ Deno.serve(async (req) => {
       : null;
     speculative?.catch(() => {}); // surfaced on the await below, never as an unhandled rejection
 
+    const rpcStartedAt = performance.now();
     const decision = await beginAccess(client, identityHash, tokenHash, request.text.length, !untranslatable);
+    const rpcMs = Math.round(performance.now() - rpcStartedAt);
     if (!decision.ok) {
       abort.abort();
       return json(decision.rejection.body, decision.rejection.status, req);
@@ -89,13 +92,18 @@ Deno.serve(async (req) => {
     }
 
     const result = await (speculative ?? translateWithOpenRouter(request.text, request.systemPrompt));
+    const modelMs = Math.round(performance.now() - startedAt);
     await inBackground(recordUsage(client, identityHash, plan, request.text.length, result.model));
 
+    // Per-phase timings only for callers that opt in: `modelMs` is measured
+    // from the request start because the model call overlaps the RPC.
+    const timings = req.headers.get("X-Ctrlv-Debug") === "1" ? { rpcMs, modelMs } : undefined;
     return json({
       translatedText: result.translatedText,
       model: result.model,
       retried: result.retried,
       plan: plan.plan,
+      ...(timings ? { timings } : {}),
     }, 200, req);
   } catch (error) {
     abortSpeculative?.();

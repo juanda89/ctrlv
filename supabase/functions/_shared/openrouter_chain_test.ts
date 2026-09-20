@@ -66,3 +66,62 @@ Deno.test("the user turn is delimited and the markers are stripped from the answ
   });
   assertEquals(userTurn, "<<<TEXT\nhello\nTEXT>>>");
 });
+
+// Hedge behaviour. The stub rejects on abort like a real fetch would.
+function stubFetch(handler: (model: string, signal: AbortSignal | null | undefined, n: number) => Promise<Response>): { fetch: typeof fetch; calls: number[] } {
+  const state = { calls: [] as number[] };
+  let n = 0;
+  const impl = ((_url: RequestInfo | URL, init?: RequestInit) => {
+    n += 1;
+    state.calls.push(n);
+    const model = JSON.parse(String(init?.body)).model;
+    return handler(model, init?.signal, n);
+  }) as typeof fetch;
+  return { fetch: impl, calls: state.calls };
+}
+const hang = (signal: AbortSignal | null | undefined) =>
+  new Promise<Response>((_, reject) => signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError"))));
+
+Deno.test("hedge: a stalled first request is beaten by the second one", async () => {
+  const stub = stubFetch((_model, signal, n) => n === 1 ? hang(signal) : Promise.resolve(completion("hola")));
+  await withFetch(stub.fetch, async () => {
+    const result = await translateWithOpenRouter("hello", "Translate.", { hedgeAfterMs: 20 });
+    assertEquals(result.translatedText, "hola");
+    assertEquals(result.model, "model-a");
+  });
+  assertEquals(stub.calls.length, 2);
+});
+
+Deno.test("hedge: a fast failure does not wait for a hedge", async () => {
+  const started = performance.now();
+  const stub = stubFetch((model, _signal, n) => {
+    if (model === "model-a" && n === 1) return Promise.reject(new Error("boom"));
+    return Promise.resolve(completion("hola"));
+  });
+  await withFetch(stub.fetch, async () => {
+    const result = await translateWithOpenRouter("hello", "Translate.", { hedgeAfterMs: 500 });
+    assertEquals(result.model, "model-b");
+  });
+  assertEquals(stub.calls.length, 2); // model-a once, model-b once, no hedge
+  assertEquals(performance.now() - started < 400, true);
+});
+
+Deno.test("hedge: a fast success never starts a second request", async () => {
+  const stub = stubFetch(() => Promise.resolve(completion("hola")));
+  await withFetch(stub.fetch, async () => {
+    await translateWithOpenRouter("hello", "Translate.", { hedgeAfterMs: 20 });
+    await new Promise((r) => setTimeout(r, 60));
+  });
+  assertEquals(stub.calls.length, 1);
+});
+
+Deno.test("hedge: caller abort cancels both requests and no fallback runs", async () => {
+  const controller = new AbortController();
+  const stub = stubFetch((_model, signal) => hang(signal));
+  await withFetch(stub.fetch, async () => {
+    const pending = translateWithOpenRouter("hello", "Translate.", { hedgeAfterMs: 20, signal: controller.signal });
+    setTimeout(() => controller.abort(), 50);
+    await assertRejects(() => pending, DOMException);
+  });
+  assertEquals(stub.calls.length, 2); // first + hedge, both on model-a; model-b never tried
+});

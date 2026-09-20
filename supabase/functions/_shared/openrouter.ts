@@ -49,7 +49,19 @@ export type TranslateOptions = {
   /// Lets the caller cancel a speculative call (started before the access
   /// check finished) without falling through to the next model in the chain.
   signal?: AbortSignal;
+  /// Overrides the hedge delay (tests). See hedgeDelayFor.
+  hedgeAfterMs?: number;
 };
+
+/// Tail-latency hedge. Providers occasionally stall a single request for
+/// 7–25 s while an identical one answers in ~1 s. If an attempt has not
+/// settled after this delay, a second identical request starts and the
+/// first to succeed wins; the other is aborted. Scaled by text length so
+/// long texts (legitimately slower) do not hedge on every call.
+const defaultHedgeBaseMs = Number(Deno.env.get("OPENROUTER_HEDGE_MS") ?? "3000");
+export function hedgeDelayFor(textLength: number, baseMs = defaultHedgeBaseMs): number {
+  return baseMs + textLength;
+}
 
 export async function translateWithOpenRouter(
   text: string,
@@ -70,7 +82,16 @@ export async function translateWithOpenRouter(
   for (let i = 0; i < models.length; i += 1) {
     const model = models[i];
     try {
-      const request = { apiKey, referer, title, model, text, systemPrompt, signal: options.signal };
+      const request = {
+        apiKey,
+        referer,
+        title,
+        model,
+        text,
+        systemPrompt,
+        signal: options.signal,
+        hedgeAfterMs: options.hedgeAfterMs ?? hedgeDelayFor(text.length),
+      };
       const first = sanitizeTranslation(await callOpenRouter(request), text);
       const firstIssues = fidelityIssues(text, first);
       if (firstIssues.length === 0) {
@@ -118,7 +139,7 @@ export async function translateWithOpenRouter(
   throw new Error(`All OpenRouter models failed: ${errors.join(" | ")}`);
 }
 
-async function callOpenRouter(params: {
+type CallParams = {
   apiKey: string;
   referer: string;
   title: string;
@@ -127,7 +148,73 @@ async function callOpenRouter(params: {
   systemPrompt: string;
   strict?: boolean;
   signal?: AbortSignal;
-}): Promise<string> {
+  hedgeAfterMs: number;
+};
+
+/**
+ * One logical call = one request, plus a hedge request if the first has not
+ * settled after `hedgeAfterMs`. Rules:
+ *   - the first success wins and the other request is aborted;
+ *   - a failure before the hedge starts fails immediately (no hedge on errors,
+ *     only on slowness);
+ *   - once both are in flight, the call fails only when both have failed;
+ *   - the caller's abort signal aborts both.
+ */
+function callOpenRouter(params: CallParams): Promise<string> {
+  const controllers: AbortController[] = [];
+  const attempt = () => {
+    const controller = linkedController(params.signal);
+    controllers.push(controller);
+    return requestOpenRouter({ ...params, signal: controller.signal });
+  };
+
+  return new Promise<string>((resolve, reject) => {
+    let settled = false;
+    let firstFailed = false;
+    let hedgeFailed = false;
+    let hedgeStarted = false;
+    const finish = (settle: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      for (const controller of controllers) controller.abort();
+      settle();
+    };
+    const timer = setTimeout(() => {
+      if (settled) return;
+      hedgeStarted = true;
+      console.warn(`[hedge] ${params.model} slow after ${params.hedgeAfterMs}ms; starting a second request`);
+      attempt().then(
+        (value) => finish(() => resolve(value)),
+        (error) => {
+          hedgeFailed = true;
+          if (firstFailed) finish(() => reject(error));
+        },
+      );
+    }, params.hedgeAfterMs);
+
+    attempt().then(
+      (value) => finish(() => resolve(value)),
+      (error) => {
+        firstFailed = true;
+        if (!hedgeStarted || hedgeFailed) finish(() => reject(error));
+      },
+    );
+  });
+}
+
+/// A controller that follows the parent signal, so the hedge machinery can
+/// abort one request without touching the other.
+function linkedController(parent?: AbortSignal): AbortController {
+  const controller = new AbortController();
+  if (parent) {
+    if (parent.aborted) controller.abort(parent.reason);
+    else parent.addEventListener("abort", () => controller.abort(parent.reason), { once: true });
+  }
+  return controller;
+}
+
+async function requestOpenRouter(params: CallParams): Promise<string> {
   const response = await fetch(`${defaultBaseURL}/chat/completions`, {
     method: "POST",
     signal: params.signal,
