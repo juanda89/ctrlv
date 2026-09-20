@@ -87,7 +87,7 @@ for (const c of cases) {
   const started = Date.now();
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Ctrlv-Debug": "1" },
+    headers: { "Content-Type": "application/json", "X-Ctrlv-Debug": Deno.env.get("CTRLV_DEBUG_TOKEN") ?? "" },
     body: JSON.stringify({ text: c.text, systemPrompt: buildSystemPrompt(c.lang, c.tone, c.custom), installID }),
   });
   const ms = Date.now() - started;

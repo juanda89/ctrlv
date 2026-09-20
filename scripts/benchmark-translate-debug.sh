@@ -3,7 +3,7 @@
 # /translate endpoint (X-Ctrlv-Debug: 1). Use it to A/B provider routing
 # (OPENROUTER_PROVIDER_SORT secret) or model changes.
 #
-# Usage: scripts/benchmark-translate-debug.sh [iterations=6] [label]
+# Usage: CTRLV_DEBUG_TOKEN=<secret> scripts/benchmark-translate-debug.sh [iterations=6] [label]
 set -euo pipefail
 ITER="${1:-6}"
 LABEL="${2:-run}"
@@ -20,7 +20,7 @@ run_case() {
   local kind="$1" text="$2" i="$3"
   local out total json
   out="$(jq -n --arg t "$text" --arg p "$PROMPT" --arg id "$INSTALL_ID" '{text:$t,systemPrompt:$p,installID:$id}' \
-    | curl -s -m 90 -X POST "$ENDPOINT" -H "Content-Type: application/json" -H "X-Ctrlv-Debug: 1" \
+    | curl -s -m 90 -X POST "$ENDPOINT" -H "Content-Type: application/json" -H "X-Ctrlv-Debug: ${CTRLV_DEBUG_TOKEN:-}" \
       --data-binary @- -w '\n%{time_total}')"
   total="$(tail -n1 <<<"$out")"
   json="$(sed '$d' <<<"$out")"

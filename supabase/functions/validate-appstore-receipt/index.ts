@@ -1,7 +1,7 @@
-import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
+import { handlePreflight, json, methodNotAllowed, requireJSON } from "../_shared/http.ts";
 import { sha256Hex } from "../_shared/security.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
-import { isoOrNull, statusFromTransaction, VerificationException, verifyTransaction } from "../_shared/appstore.ts";
+import { allowSandbox, isoOrNull, statusFromTransaction, VerificationException, verifyTransaction } from "../_shared/appstore.ts";
 
 /// Called by the iOS app after a purchase/renewal with the signed StoreKit 2
 /// transaction. Verifies Apple's signature chain and links the subscription
@@ -10,6 +10,8 @@ Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
   if (req.method !== "POST") return methodNotAllowed(req);
+  const notJSON = requireJSON(req);
+  if (notJSON) return notJSON;
 
   const token = bearerToken(req.headers.get("Authorization"));
   if (!token) return json({ error: "Missing bearer token" }, 401, req);
@@ -37,6 +39,22 @@ Deno.serve(async (req) => {
     return json({ error: "Verification unavailable" }, 500, req);
   }
   if (!tx.originalTransactionId || !tx.productId) return json({ error: "Malformed transaction" }, 400, req);
+  if (tx.environment !== "Production" && !allowSandbox) {
+    return json({ error: "Sandbox transactions are not accepted" }, 403, req);
+  }
+
+  // A signed transaction is not a secret (any device with the purchase can
+  // export it). Once linked, a subscription never changes owner through this
+  // endpoint; a second account gets 409 instead of silently taking it over.
+  const { data: existing, error: existingError } = await client
+    .from("account_subscriptions")
+    .select("account_id")
+    .eq("appstore_original_transaction_id", tx.originalTransactionId)
+    .maybeSingle();
+  if (existingError) return json({ error: "Could not save subscription" }, 500, req);
+  if (existing?.account_id && existing.account_id !== session.account_id) {
+    return json({ error: "This subscription is linked to another account" }, 409, req);
+  }
 
   const status = statusFromTransaction(tx);
   const { error } = await client.from("account_subscriptions").upsert({

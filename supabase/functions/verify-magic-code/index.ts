@@ -1,13 +1,16 @@
-import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
-import { randomToken, secureCompare, sha256Hex } from "../_shared/security.ts";
+import { handlePreflight, json, methodNotAllowed, requireJSON } from "../_shared/http.ts";
+import { randomToken, sha256Hex } from "../_shared/security.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 
 const sessionLifetimeDays = Number(Deno.env.get("SESSION_LIFETIME_DAYS") ?? "30");
+const maxAttemptsPerCode = Number(Deno.env.get("MAGIC_CODE_MAX_ATTEMPTS") ?? "5");
 
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
   if (req.method !== "POST") return methodNotAllowed(req);
+  const notJSON = requireJSON(req);
+  if (notJSON) return notJSON;
 
   let payload: { email?: string; code?: string };
   try {
@@ -21,6 +24,11 @@ Deno.serve(async (req) => {
   if (!email || !code) {
     return json({ error: "Email and code are required" }, 400, req);
   }
+  // Codes are exactly six digits; anything else cannot match and must not
+  // burn an attempt on the real code.
+  if (!/^\d{6}$/.test(code)) {
+    return json({ error: "Invalid or expired code" }, 401, req);
+  }
 
   const pepper = Deno.env.get("MAGIC_CODE_PEPPER");
   if (!pepper) {
@@ -28,45 +36,31 @@ Deno.serve(async (req) => {
   }
 
   const client = createServiceClient();
-  const nowISO = new Date().toISOString();
 
-  const { data: magicCodeRecord, error: lookupError } = await client
-    .from("magic_codes")
-    .select("id, code_hash, expires_at")
-    .eq("email", email)
-    .is("consumed_at", null)
-    .gt("expires_at", nowISO)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (lookupError) {
+  // One atomic statement: locks the newest live code, consumes it on a match,
+  // counts a failed attempt otherwise and burns the code after
+  // maxAttemptsPerCode. The generic 401 hides whether a code exists at all.
+  const candidateHash = await sha256Hex(`${code}:${pepper}`);
+  const { data: outcome, error: consumeError } = await client.rpc("consume_magic_code", {
+    p_email: email,
+    p_code_hash: candidateHash,
+    p_max_attempts: maxAttemptsPerCode,
+  });
+  if (consumeError) {
     return json({ error: "Failed to verify code" }, 500, req);
   }
-  if (!magicCodeRecord) {
-    return json({ error: "Code not found or expired" }, 401, req);
+  if (outcome !== "ok") {
+    return json({ error: "Invalid or expired code" }, 401, req);
   }
 
-  const candidateHash = await sha256Hex(`${code}:${pepper}`);
-  if (!secureCompare(candidateHash, magicCodeRecord.code_hash as string)) {
-    return json({ error: "Invalid code" }, 401, req);
-  }
-
-  const { error: consumeError } = await client
-    .from("magic_codes")
-    .update({ consumed_at: nowISO })
-    .eq("id", magicCodeRecord.id);
-  if (consumeError) {
-    return json({ error: "Failed to process code" }, 500, req);
-  }
-
+  // The address has proven it receives mail: create (or find) its account.
   const { data: account, error: accountError } = await client
     .from("subscription_accounts")
+    .upsert({ email }, { onConflict: "email" })
     .select("id")
-    .eq("email", email)
     .single();
   if (accountError || !account?.id) {
-    return json({ error: "Account not found" }, 500, req);
+    return json({ error: "Failed to create account" }, 500, req);
   }
 
   const token = randomToken(32);
@@ -88,6 +82,7 @@ Deno.serve(async (req) => {
 function normalizeEmail(input: string | undefined): string | null {
   if (!input) return null;
   const normalized = input.trim().toLowerCase();
-  if (!normalized.includes("@")) return null;
+  if (normalized.length > 254) return null;
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) return null;
   return normalized;
 }

@@ -54,6 +54,22 @@ const strictRetrySuffix = inputFormatSuffix +
   "\nYour previous output dropped part of the text or answered it instead of translating it. " +
   "Reproduce the structure exactly: the same number of lines, in order, with every timestamp, @handle, number and name kept verbatim.";
 
+/// Warms the isolate's TLS connection to OpenRouter without paying for a
+/// completion: a tiny authenticated GET. Errors are swallowed; a warmup is
+/// best-effort by definition.
+export async function warmOpenRouter(): Promise<void> {
+  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+  if (!apiKey) return;
+  try {
+    await fetch(`${defaultBaseURL}/auth/key`, {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (_error) {
+    // best effort
+  }
+}
+
 export class FidelityError extends Error {
   issues: string[];
   constructor(issues: string[]) {
@@ -401,7 +417,7 @@ function normalizeAnchorText(text: string): string {
  *   2. OPENROUTER_MODEL env var (single primary, no fallback) — back-compat
  *   3. Hardcoded defaultModels chain
  */
-function resolveModelChain(): string[] {
+export function resolveModelChain(): string[] {
   const chain = Deno.env.get("OPENROUTER_MODELS");
   if (chain && chain.trim()) {
     const list = chain.split(",")

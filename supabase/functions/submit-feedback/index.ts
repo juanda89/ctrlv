@@ -1,4 +1,4 @@
-import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
+import { handlePreflight, json, methodNotAllowed, requireJSON } from "../_shared/http.ts";
 import { sha256Hex } from "../_shared/security.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { feedbackEmailHTML, feedbackEmailSubject, sendEmail } from "../_shared/email.ts";
@@ -23,6 +23,8 @@ Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
   if (req.method !== "POST") return methodNotAllowed(req);
+  const notJSON = requireJSON(req);
+  if (notJSON) return notJSON;
 
   let body: unknown;
   try {
@@ -42,11 +44,14 @@ Deno.serve(async (req) => {
 
   // Rate limit per install to keep the mailbox and table sane.
   const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-  const { count } = await client
+  const { count, error: countError } = await client
     .from("app_feedback")
     .select("*", { count: "exact", head: true })
     .eq("install_id_hash", installIDHash)
     .gte("created_at", since);
+  if (countError) {
+    return json({ error: "Could not submit feedback" }, 500, req);
+  }
   if (count !== null && count >= dailyLimitPerInstall) {
     return json({ error: "Too much feedback for today. Thank you, we got it!" }, 429, req);
   }

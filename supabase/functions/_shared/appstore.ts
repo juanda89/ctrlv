@@ -18,6 +18,10 @@ export type { JWSTransactionDecodedPayload, JWSRenewalInfoDecodedPayload, Respon
 const appleRootCaG3Base64 = "MIICQzCCAcmgAwIBAgIILcX8iNLFS5UwCgYIKoZIzj0EAwMwZzEbMBkGA1UEAwwSQXBwbGUgUm9vdCBDQSAtIEczMSYwJAYDVQQLDB1BcHBsZSBDZXJ0aWZpY2F0aW9uIEF1dGhvcml0eTETMBEGA1UECgwKQXBwbGUgSW5jLjELMAkGA1UEBhMCVVMwHhcNMTQwNDMwMTgxOTA2WhcNMzkwNDMwMTgxOTA2WjBnMRswGQYDVQQDDBJBcHBsZSBSb290IENBIC0gRzMxJjAkBgNVBAsMHUFwcGxlIENlcnRpZmljYXRpb24gQXV0aG9yaXR5MRMwEQYDVQQKDApBcHBsZSBJbmMuMQswCQYDVQQGEwJVUzB2MBAGByqGSM49AgEGBSuBBAAiA2IABJjpLz1AcqTtkyJygRMc3RCV8cWjTnHcFBbZDuWmBSp3ZHtfTjjTuxxEtX/1H7YyYl3J6YRbTzBPEVoA/VhYDKX1DyxNB0cTddqXl5dvMVztK517IDvYuVTZXpmkOlEKMaNCMEAwHQYDVR0OBBYEFLuw3qFYM4iapIqZ3r6966/ayySrMA8GA1UdEwEB/wQFMAMBAf8wDgYDVR0PAQH/BAQDAgEGMAoGCCqGSM49BAMDA2gAMGUCMQCD6cHEFl4aXTQY2e3v9GwOAEZLuN+yRhHFD/3meoyhpmvOwgPUnPWTxnS4at+qIxUCMG1mihDK1A3UT82NQz60imOlM27jbdoXt2QfyFMm+YhidDkLF1vLUagM6BgD56KyKA==";
 
 export const bundleId = Deno.env.get("APPSTORE_BUNDLE_ID") ?? "info.controlv.ios";
+/// Sandbox/TestFlight transactions are Apple-signed too, so they verify. They
+/// only count as a paid entitlement while this explicit switch is on (private
+/// beta); flip it off at launch so a free sandbox purchase never unlocks Pro.
+export const allowSandbox = Deno.env.get("APPSTORE_ALLOW_SANDBOX") === "true";
 /// Numeric App Apple ID from App Store Connect; required for PRODUCTION verification.
 const appAppleId = Number(Deno.env.get("APPSTORE_APP_APPLE_ID") ?? "") || undefined;
 

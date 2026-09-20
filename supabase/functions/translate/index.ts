@@ -1,5 +1,5 @@
-import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
-import { FidelityError, OpenRouterRateLimitError, isUntranslatable, translateWithOpenRouter } from "../_shared/openrouter.ts";
+import { clientIP, handlePreflight, json, methodNotAllowed, requireJSON } from "../_shared/http.ts";
+import { FidelityError, OpenRouterRateLimitError, isUntranslatable, resolveModelChain, translateWithOpenRouter, warmOpenRouter } from "../_shared/openrouter.ts";
 import { sha256Hex } from "../_shared/security.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { sessionLifetimeDays } from "../_shared/session.ts";
@@ -14,6 +14,14 @@ const limits: AccessLimits = {
   paidDailyCharacterLimit: Number(Deno.env.get("PAID_CHARACTERS_PER_DAY") ?? "1200000"),
   paidMaxCharacters: Number(Deno.env.get("PAID_MAX_CHARACTERS") ?? "12000"),
 };
+/// The client's prompt is ~3.5 KB plus the user's custom tone; anything far
+/// beyond that is someone using the endpoint as a general LLM proxy.
+const maxSystemPromptChars = Number(Deno.env.get("MAX_SYSTEM_PROMPT_CHARACTERS") ?? "16000");
+/// New trial identities one network may create per day (see translate_begin).
+const newIdentitiesPerNetworkPerDay = Number(Deno.env.get("NEW_IDENTITIES_PER_IP_PER_DAY") ?? "50");
+/// Per-phase timings and raw error details are returned only to callers that
+/// present this secret in X-Ctrlv-Debug. Unset → never.
+const debugToken = Deno.env.get("CTRLV_DEBUG_TOKEN")?.trim() || null;
 
 type TranslateRequest = {
   text: string;
@@ -37,6 +45,10 @@ Deno.serve(async (req) => {
   if (preflight) return preflight;
   if (req.method !== "POST") return methodNotAllowed(req);
 
+  const notJSON = requireJSON(req);
+  if (notJSON) return notJSON;
+  const debug = debugToken !== null && req.headers.get("X-Ctrlv-Debug") === debugToken;
+
   let abortSpeculative: (() => void) | null = null;
   try {
     const body = await req.json();
@@ -45,18 +57,34 @@ Deno.serve(async (req) => {
       return json({ error: parsed.error }, 400, req);
     }
     const request = parsed.value;
-
-    if (request.warmupOnly) {
-      const result = await translateWithOpenRouter(request.text, request.systemPrompt);
-      return json({ warmed: true, model: result.model }, 200, req);
+    // Nobody may send more than the paid ceiling; refusing before any work
+    // keeps oversized bodies from reaching the DB or the model.
+    if (request.text.length > limits.paidMaxCharacters) {
+      return json({ error: `Request exceeds ${limits.paidMaxCharacters} characters.` }, 429, req);
     }
 
     const startedAt = performance.now();
     const client = createServiceClient();
-    const [identityHash, tokenHash] = await Promise.all([
+    const pepper = Deno.env.get("MAGIC_CODE_PEPPER") ?? "";
+    const ip = clientIP(req);
+    const [identityHash, tokenHash, ipHash] = await Promise.all([
       sha256Hex(request.installID),
       hashSessionToken(request.sessionToken),
+      ip ? sha256Hex(`ip:${ip}:${pepper}`) : Promise.resolve(null),
     ]);
+
+    // Warmup: keeps the isolate and the TLS connection to OpenRouter hot
+    // without a completion. The access check still runs so an expired or
+    // blocked identity cannot use warmups as a free ping, and the client's
+    // text is ignored (it used to be forwarded to the model unmetered).
+    if (request.warmupOnly) {
+      const decision = await beginAccess(client, identityHash, tokenHash, ipHash, 4, false);
+      if (!decision.ok) {
+        return json(decision.rejection.body, decision.rejection.status, req);
+      }
+      await warmOpenRouter();
+      return json({ warmed: true, model: resolveModelChain()[0] ?? null }, 200, req);
+    }
 
     // Nothing to translate (bare URL, bare email, no letters): echoed back
     // unchanged after the access check. Skips the LLM entirely — free,
@@ -79,7 +107,7 @@ Deno.serve(async (req) => {
     speculative?.catch(() => {}); // surfaced on the await below, never as an unhandled rejection
 
     const rpcStartedAt = performance.now();
-    const decision = await beginAccess(client, identityHash, tokenHash, request.text.length, !untranslatable);
+    const decision = await beginAccess(client, identityHash, tokenHash, ipHash, request.text.length, !untranslatable);
     const rpcMs = Math.round(performance.now() - rpcStartedAt);
     if (!decision.ok) {
       abort.abort();
@@ -97,9 +125,7 @@ Deno.serve(async (req) => {
 
     // Per-phase timings only for callers that opt in: `modelMs` is measured
     // from the request start because the model call overlaps the RPC.
-    const timings = req.headers.get("X-Ctrlv-Debug") === "1"
-      ? { rpcMs, modelMs, provider: result.provider, costUSD: result.costUSD }
-      : undefined;
+    const timings = debug ? { rpcMs, modelMs, provider: result.provider, costUSD: result.costUSD } : undefined;
     return json({
       translatedText: result.translatedText,
       model: result.model,
@@ -129,9 +155,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Debug header reveals underlying error for triage. Safe to leave because
-    // it requires the caller to opt in by passing X-Ctrlv-Debug: 1.
-    if (req.headers.get("X-Ctrlv-Debug") === "1") {
+    // Raw error detail only for holders of the debug secret.
+    if (debug) {
       const detail = error instanceof Error ? error.message : String(error);
       return json({ error: "Translation failed", detail }, 500, req);
     }
@@ -158,6 +183,7 @@ async function beginAccess(
   client: ReturnType<typeof createServiceClient>,
   identityHash: string,
   tokenHash: string | null,
+  ipHash: string | null,
   textLength: number,
   enforceLimits: boolean,
 ): Promise<AccessDecision> {
@@ -165,9 +191,18 @@ async function beginAccess(
     p_identity_hash: identityHash,
     p_token_hash: tokenHash,
     p_session_lifetime_days: sessionLifetimeDays,
+    p_ip_hash: ipHash,
+    p_new_identity_limit: newIdentitiesPerNetworkPerDay,
   });
   if (error) {
     throw new Error(error.message);
+  }
+  if (data && typeof data === "object" && "blocked" in (data as Record<string, unknown>)) {
+    // A script rotating installIDs from one network: no new trial for it.
+    return {
+      ok: false,
+      rejection: { status: 429, body: { error: "Too many new devices from this network today. Sign in to continue.", retry_after_seconds: 3600 } },
+    };
   }
   return decideAccess(parseAccessSnapshot(data), textLength, limits, { enforceLimits });
 }
@@ -200,6 +235,12 @@ function parseRequest(body: unknown): { ok: true; value: TranslateRequest } | { 
 
   if (!text || !systemPrompt || !installID) {
     return { ok: false, error: "Missing text, systemPrompt or installID" };
+  }
+  if (systemPrompt.length > maxSystemPromptChars) {
+    return { ok: false, error: "System prompt too long" };
+  }
+  if (installID.length > 128) {
+    return { ok: false, error: "Invalid installID" };
   }
 
   return {

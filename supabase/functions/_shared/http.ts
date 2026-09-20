@@ -38,3 +38,22 @@ export function handlePreflight(req: Request): Response | null {
 
   return new Response("ok", { headers: buildCorsHeaders(req) });
 }
+
+/// Browsers may send cross-origin POSTs without a preflight when the body is
+/// text/plain or form-encoded; requiring JSON forces the preflight, which the
+/// origin allowlist above then blocks. Every first-party client sends JSON.
+export function requireJSON(req: Request): Response | null {
+  const type = req.headers.get("content-type") ?? "";
+  if (type.toLowerCase().startsWith("application/json")) return null;
+  return json({ error: "Content-Type must be application/json" }, 415, req);
+}
+
+/// Best-effort client address for abuse caps (never stored raw: callers hash
+/// it with the server pepper). Null when the platform did not set a header.
+export function clientIP(req: Request): string | null {
+  const forwarded = req.headers.get("x-forwarded-for");
+  const first = forwarded?.split(",")[0]?.trim();
+  if (first) return first;
+  const direct = req.headers.get("cf-connecting-ip")?.trim();
+  return direct && direct.length > 0 ? direct : null;
+}
