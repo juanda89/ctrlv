@@ -31,7 +31,7 @@ struct PaywallView: View {
                         benefit("text.cursor", "Replace text in any app", "Select → Translate → Replace in Messages, WhatsApp, Mail, Notes.")
                         benefit("person.wave.2", "Sounds like you", "Keeps your tone, slang and formatting. Five tones plus your own.")
                         benefit("laptopcomputer.and.iphone", "Mac and iPhone", "One subscription, all your devices.")
-                        benefit("lock.shield", "Private by design", "Only the text you choose is sent. Never stored, never logged.")
+                        benefit("lock.shield", "Private by design", "Only the text you choose is sent. Never stored on our servers, never logged.")
                     }
                     .padding(18)
                     .glassCard(24)

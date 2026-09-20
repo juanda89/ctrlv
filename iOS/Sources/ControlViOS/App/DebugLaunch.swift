@@ -5,6 +5,7 @@ import Foundation
 /// screenshots and QA: `xcrun simctl launch <udid> info.controlv.ios -ui.tab account`.
 /// Never set by real users; every value is optional.
 enum DebugLaunch {
+#if DEBUG
     private static let d = UserDefaults.standard
     static var tab: String? { d.string(forKey: "ui.tab") }
     static var showPaywall: Bool { d.bool(forKey: "ui.showPaywall") }
@@ -22,4 +23,17 @@ enum DebugLaunch {
         default: return nil
         }
     }
+#else
+    // Release builds ignore launch arguments entirely: no forced license
+    // state, no prefilled text, no seeded history.
+    static var tab: String? { nil }
+    static var showPaywall: Bool { false }
+    static var showSignIn: Bool { false }
+    static var showSetup: Bool { false }
+    static var showFeedback: Bool { false }
+    static var sourceText: String? { nil }
+    static var autoTranslate: Bool { false }
+    static var seedHistory: Bool { false }
+    static var licenseState: LicenseState? { nil }
+#endif
 }

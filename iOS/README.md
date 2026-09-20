@@ -1,6 +1,6 @@
 # Control-V iOS
 
-Status: **source files written, Xcode project setup pending (manual)**.
+Status: **ready to archive** (team ID, app icon and privacy manifests for all four targets are in `project.yml`; App Store Connect setup pending, see section 8).
 
 The macOS app is built with Swift Package Manager directly. iOS apps with App Store submission require an actual Xcode project (`.xcodeproj`), so this directory contains the iOS source files, ready to be picked up by an Xcode project the user creates once.
 
@@ -85,8 +85,8 @@ cd iOS && xcodebuild -project ControlV.xcodeproj -scheme Control-V -sdk iphonesi
   -destination 'generic/platform=iOS Simulator' CODE_SIGNING_ALLOWED=NO build
 ```
 
-Before building for a device or archiving, set `DEVELOPMENT_TEAM` in `project.yml`
-(Viko Holdings LLC team ID) and regenerate.
+`DEVELOPMENT_TEAM` in `project.yml` is the Viko Holdings LLC team (5ZFYF422LX); Xcode's
+automatic signing registers the extension bundle IDs and the App Group on first archive.
 
 **Keyboard test in the simulator:** run the app once → Settings → General → Keyboard →
 Keyboards → Add New Keyboard → Control-V Keyboard → enable **Allow Full Access** → in Notes,
@@ -121,19 +121,14 @@ long-press the globe key → Control-V → **Translate & Replace**.
    - Save the .p8 file securely
 ```
 
-### 8b. Privacy manifests (required — upload is flagged without them)
+### 8b. Privacy manifests (done)
 
-All three targets use UserDefaults (a "required reason API"), so each needs a
-`PrivacyInfo.xcprivacy` in its bundle or App Store Connect rejects the upload
-with ITMS-91053. Pre-written manifests live in `iOS/PrivacyManifests/`:
-
-- `App-PrivacyInfo.xcprivacy` → drag into the **Control-V** (main app) target,
-  rename to `PrivacyInfo.xcprivacy` when adding
-- `Extension-PrivacyInfo.xcprivacy` → drag one copy into **Control-V Share**
-  and one into **Control-V Keyboard**, renamed to `PrivacyInfo.xcprivacy`
-
-In the add dialog: "Copy items if needed" CHECKED (each target needs its own
-copy in its bundle), target membership = the respective target only.
+Every target that touches UserDefaults (a "required reason API") ships a
+`PrivacyInfo.xcprivacy` from `iOS/Resources/<target>/`, wired through `project.yml`
+(App, Share, Keyboard and Translation). The simulator build's bundles were checked
+on 2026-09-20: all four contain the manifest. The app icon lives in
+`iOS/Resources/App/Assets.xcassets` (1024×1024, no alpha, flattened from the macOS mark).
+Debug launch arguments (`DebugLaunch.swift`) compile to no-ops in Release.
 
 ### 8c. App Review preparation (do this before submitting)
 
@@ -193,7 +188,8 @@ Recommendation: try Option A first. If rejected under 4.4.1, build Option B.
 
 ## What's NOT done yet
 
-- App Store Connect setup (section 8) and the team ID in `project.yml`.
+- App Store Connect setup (section 8): app record, subscription, server notification URL,
+  sandbox tester, and the numeric App Apple ID → `APPSTORE_APP_APPLE_ID` secret.
 - Sandbox purchase test on a device, TestFlight, App Store submission.
 - Default-translation flow on a real device. Verified by JD in the iOS 26.5
   simulator on 2026-09-16 (Settings → Apps → Default Apps → Translation →
