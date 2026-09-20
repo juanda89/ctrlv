@@ -42,7 +42,7 @@ windows/                         # Windows client (.NET 8). ControlV.Core = C# p
 1. Global hotkey fires for a profile (up to 3 profiles, each with its own ⌘⇧letter, language and tone; auto-paste is global).
 2. Island overlay shows immediately.
 3. Capture: AX selected text → if nil/whitespace, whole-field value for editable roles → else simulated Cmd+C and poll the pasteboard `changeCount` up to 600ms, skipping whitespace-only writes (Google Docs is a canvas and copies asynchronously).
-4. POST `/translate` with installID (+ sessionToken when signed in). Server: rate limits, bare-URL/email/no-letters passthrough, model chain, sanitizer (strip `¿¡—–` unless in source, keep ALL CAPS, preserve leading/trailing whitespace and indentation).
+4. POST `/translate` with installID (+ sessionToken when signed in). Server: rate limits, bare-URL/email/no-letters passthrough, model chain, sanitizer (strip `¿¡—–` unless in source, keep ALL CAPS, preserve leading/trailing whitespace and indentation), fidelity guard (`fidelityIssues` in `_shared/openrouter.ts`: the user turn is wrapped in `<<<TEXT … TEXT>>>`; if the output drops lines/anchors it retries once with a strict prompt, and if it still looks like a reply to the text it returns 422 instead of pasting an invented message).
 5. Translation always lands in the clipboard; if auto-paste is on and the focus is editable, replace via AX or simulated Cmd+V.
 
 ## Hard-won rules (do not regress)

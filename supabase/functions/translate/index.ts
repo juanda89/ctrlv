@@ -1,5 +1,5 @@
 import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
-import { OpenRouterRateLimitError, isUntranslatable, translateWithOpenRouter } from "../_shared/openrouter.ts";
+import { FidelityError, OpenRouterRateLimitError, isUntranslatable, translateWithOpenRouter } from "../_shared/openrouter.ts";
 import { sha256Hex } from "../_shared/security.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
 import { renewSessionExpiry } from "../_shared/session.ts";
@@ -77,6 +77,7 @@ Deno.serve(async (req) => {
     return json({
       translatedText: result.translatedText,
       model: result.model,
+      retried: result.retried,
       plan: plan.plan,
     }, 200, req);
   } catch (error) {
@@ -84,6 +85,18 @@ Deno.serve(async (req) => {
       return json(
         { error: "Translation service is busy. Please try again shortly.", retry_after_seconds: error.retryAfterSeconds },
         429, req,
+      );
+    }
+
+    // The model answered the text instead of translating it, twice. A wrong
+    // message must never be pasted over the user's selection: fail loudly
+    // with a hint the popover shows verbatim. 422 keeps it apart from the
+    // generic 500 in logs and lets the client stay unchanged.
+    if (error instanceof FidelityError) {
+      console.warn(`[fidelity] rejected: ${error.issues.join(",")}`);
+      return json(
+        { error: "The text could not be translated faithfully. Select only the text to translate and try again.", fidelity: error.issues },
+        422, req,
       );
     }
 
