@@ -40,7 +40,6 @@ struct AccountTabView: View {
             .sheet(isPresented: $showSetup, onDismiss: { isSetUp = SetupState.anyReady }) {
                 KeyboardSetupView { showSetup = false }
                     .presentationDetents([.large])
-                    .presentationDragIndicator(.visible)
             }
             .sheet(isPresented: $showFeedback) { FeedbackSheet(initialRating: nil).presentationDetents([.large]).presentationDragIndicator(.visible) }
         }

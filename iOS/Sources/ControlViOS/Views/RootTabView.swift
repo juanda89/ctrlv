@@ -11,8 +11,9 @@ struct RootTabView: View {
     @State private var paywallRequested = DebugLaunch.showPaywall
     // Only on a first run that still cannot translate anywhere: a user who
     // already turned on either path never sees this sheet.
-    @State private var showSetup = DebugLaunch.showSetup
-        || (!SetupState.anyReady && !(UserDefaults(suiteName: iOSSettingsStore.appGroup)?.bool(forKey: "hasSeenKeyboardSetup") ?? false))
+    // Shown until at least one path works: the app exists to translate inside
+    // other apps, and none of that is reachable before setup.
+    @State private var showSetup = DebugLaunch.showSetup || !SetupState.anyReady
 
     enum Tab: String { case translate, history, account }
 
@@ -54,7 +55,6 @@ struct RootTabView: View {
                 showSetup = false
             }
             .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
     }
 
