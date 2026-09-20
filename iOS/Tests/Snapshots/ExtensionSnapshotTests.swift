@@ -103,6 +103,18 @@ final class ExtensionSnapshotTests: XCTestCase {
         try snapshot(paywall, size: CGSize(width: 402, height: 874), name: "paywall-review-dark", dark: true, background: .systemBackground)
     }
 
+    /// The Spanish layout must carry Ñ in the middle row; the simulator runs in
+    /// English, so the language is injected rather than inferred here.
+    @MainActor
+    func test_renderKeyboardLayout_spanish() throws {
+        var settings = ExtensionSettings()
+        let binding = Binding(get: { settings }, set: { settings = $0 })
+        let view = KeyboardLayoutView(actions: noopActions, settings: binding, onTranslate: {}, language: .spanish)
+            .frame(width: 402)
+        try snapshot(view, size: CGSize(width: 402, height: 224), name: "kb-spanish", background: Self.lightKeyboard, ignoresSafeArea: true)
+        try snapshot(view, size: CGSize(width: 402, height: 224), name: "kb-spanish-dark", dark: true, background: Self.darkKeyboard, ignoresSafeArea: true)
+    }
+
     // MARK: - Rendering
 
     @MainActor

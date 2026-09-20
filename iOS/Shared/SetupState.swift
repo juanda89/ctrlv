@@ -36,17 +36,32 @@ public enum SetupState {
         defaults.set(Date(), forKey: shareSeenKey)
     }
 
+    // MARK: - Confirmed by the user
+
+    /// iOS never tells an app that it is the default translation app, and the
+    /// extension can only record itself once someone actually translates with
+    /// it. So the user gets to say "it's on" and the app believes them.
+    private static let menuConfirmedKey = "setup.translationProviderConfirmed"
+    private static let keyboardConfirmedKey = "setup.keyboardConfirmed"
+
+    public static func confirmTranslationProvider() { defaults.set(true, forKey: menuConfirmedKey) }
+    public static func confirmKeyboard() { defaults.set(true, forKey: keyboardConfirmedKey) }
+
     // MARK: - Read by the app
 
     /// The keyboard has been added and opened at least once.
     public static var keyboardAdded: Bool { defaults.object(forKey: keyboardSeenKey) != nil }
 
     /// Added *and* allowed to reach the network, which is what it needs to translate.
-    public static var keyboardReady: Bool { keyboardAdded && defaults.bool(forKey: keyboardFullAccessKey) }
+    public static var keyboardReady: Bool {
+        (keyboardAdded && defaults.bool(forKey: keyboardFullAccessKey)) || defaults.bool(forKey: keyboardConfirmedKey)
+    }
 
     /// Control-V has been used as the system translation provider, which only
     /// happens once it is the default translation app.
-    public static var translationProviderReady: Bool { defaults.object(forKey: translationSeenKey) != nil }
+    public static var translationProviderReady: Bool {
+        defaults.object(forKey: translationSeenKey) != nil || defaults.bool(forKey: menuConfirmedKey)
+    }
 
     /// At least one path works, so the app is usable outside itself.
     public static var anyReady: Bool { keyboardReady || translationProviderReady }
@@ -63,6 +78,7 @@ public enum SetupState {
 
     public static func resetForPreview() {
         let d = defaults
-        [keyboardSeenKey, keyboardFullAccessKey, translationSeenKey, shareSeenKey].forEach(d.removeObject(forKey:))
+        [keyboardSeenKey, keyboardFullAccessKey, translationSeenKey, shareSeenKey,
+         menuConfirmedKey, keyboardConfirmedKey].forEach(d.removeObject(forKey:))
     }
 }

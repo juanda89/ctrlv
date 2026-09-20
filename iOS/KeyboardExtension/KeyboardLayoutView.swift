@@ -16,6 +16,9 @@ struct KeyboardLayoutView: View {
 
     @Environment(\.colorScheme) private var scheme
     @State private var plane: Plane = .letters
+    /// Follows the language the phone is set to, so a Spanish keyboard has its
+    /// Ñ where the user expects it instead of an English-only layout.
+    var language: KeyboardLanguage = .current
     @State private var shift: Shift = .on
     @State private var deleteRepeat: Timer?
 
@@ -62,7 +65,7 @@ struct KeyboardLayoutView: View {
 
     private var middleKeys: [String] {
         switch plane {
-        case .letters: return "asdfghjkl".map(String.init)
+        case .letters: return language.middleLetters
         case .numbers: return ["-", "/", ":", ";", "(", ")", "$", "&", "@", "\""]
         case .symbols: return ["_", "\\", "|", "~", "<", ">", "€", "£", "¥", "·"]
         }
@@ -84,13 +87,15 @@ struct KeyboardLayoutView: View {
     }
 
     /// Nine letters inset by half a key, the way the system keyboard stages it.
+    /// A ten-letter row (Spanish, with Ñ) is flush like the row above it.
     private func middleRow(unit: CGFloat) -> some View {
-        HStack(spacing: keySpacing) {
-            if plane == .letters { Spacer(minLength: 0).frame(width: (unit + keySpacing) / 2) }
+        let inset = plane == .letters && middleKeys.count < 10
+        return HStack(spacing: keySpacing) {
+            if inset { Spacer(minLength: 0).frame(width: (unit + keySpacing) / 2) }
             ForEach(middleKeys, id: \.self) { k in
                 characterKey(k, width: unit)
             }
-            if plane == .letters { Spacer(minLength: 0).frame(width: (unit + keySpacing) / 2) }
+            if inset { Spacer(minLength: 0).frame(width: (unit + keySpacing) / 2) }
         }
     }
 
@@ -102,7 +107,7 @@ struct KeyboardLayoutView: View {
         return HStack(spacing: keySpacing) {
             switch plane {
             case .letters:
-                modifierKey(shiftSymbol, width: modifierWidth, prominent: shift != .off) { toggleShift() }
+                modifierKey(shiftSymbol, width: modifierWidth, muted: shift == .off) { toggleShift() }
                     .simultaneousGesture(LongPressGesture().onEnded { _ in shift = .locked })
             case .numbers:
                 modifierKey(text: "#+=", width: modifierWidth) { plane = .symbols }
@@ -132,7 +137,7 @@ struct KeyboardLayoutView: View {
             }
             .buttonStyle(.plain)
             translateKey(width: sideWidth)
-            modifierKey(text: "return", width: returnWidth, prominent: true) { insert("\n") }
+            modifierKey(text: "return", width: returnWidth) { insert("\n") }
         }
     }
 
@@ -178,17 +183,17 @@ struct KeyboardLayoutView: View {
         .frame(width: width)
     }
 
-    private func modifierKey(_ symbol: String, width: CGFloat, prominent: Bool = false, action: @escaping () -> Void) -> some View {
+    private func modifierKey(_ symbol: String, width: CGFloat, muted: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            keyFace(Image(systemName: symbol).font(.system(size: 20)), prominent: prominent, muted: !prominent)
+            keyFace(Image(systemName: symbol).font(.system(size: 20)), prominent: false, muted: muted)
         }
         .buttonStyle(.plain)
         .frame(width: width)
     }
 
-    private func modifierKey(text: String, width: CGFloat, prominent: Bool = false, action: @escaping () -> Void) -> some View {
+    private func modifierKey(text: String, width: CGFloat, muted: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            keyFace(Text(text).font(.system(size: 16)), prominent: prominent, muted: !prominent)
+            keyFace(Text(text).font(.system(size: 16)), prominent: false, muted: muted)
         }
         .buttonStyle(.plain)
         .frame(width: width)
@@ -218,7 +223,7 @@ struct KeyboardLayoutView: View {
 
     private func keyColor(prominent: Bool, muted: Bool) -> Color {
         if prominent { return Brand.blue }
-        if scheme == .dark { return muted ? Color(white: 0.29) : Color(white: 0.42) }
+        if scheme == .dark { return muted ? Color(white: 0.22) : Color(white: 0.29) }
         return muted ? Color(red: 0.67, green: 0.69, blue: 0.72) : .white
     }
 
@@ -263,5 +268,24 @@ struct KeyboardLayoutView: View {
         deleteRepeat?.invalidate()
         deleteRepeat = nil
         syncShiftWithContext()
+    }
+}
+
+
+/// The letter layout the phone's language expects. Only the middle row differs
+/// between the layouts Control-V ships; everything else is shared.
+enum KeyboardLanguage {
+    case english, spanish
+
+    static var current: KeyboardLanguage {
+        let code = Locale.preferredLanguages.first?.prefix(2).lowercased() ?? "en"
+        return code == "es" ? .spanish : .english
+    }
+
+    var middleLetters: [String] {
+        switch self {
+        case .english: return "asdfghjkl".map(String.init)
+        case .spanish: return "asdfghjklñ".map(String.init)
+        }
     }
 }

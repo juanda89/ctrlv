@@ -78,12 +78,25 @@ struct KeyboardPanelView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.clear)
         .tint(Brand.blue)
-        .animation(.snappy(duration: 0.2), value: isBusy)
+        .animation(.smooth(duration: 0.28), value: phaseID)
     }
 
     private var isBusy: Bool {
         if case .idle = phase { return false }
         return true
+    }
+
+    /// Drives the animation between states so translating → done cross-fades
+    /// instead of snapping.
+    private var phaseID: Int {
+        switch phase {
+        case .idle: return 0
+        case .confirmTyped: return 1
+        case .translating: return 2
+        case .done: return 3
+        case .copiedFallback: return 4
+        case .error: return 5
+        }
     }
 
     // MARK: - Transient status
@@ -111,10 +124,12 @@ struct KeyboardPanelView: View {
         case .done:
             statusStrip(symbol: "checkmark.circle.fill", tint: .green, text: "Replaced") {
                 Button("Undo") { undoReplacement() }
-                    .buttonStyle(GlassButtonStyle())
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
             }
             .task {
-                try? await Task.sleep(for: .seconds(2))
+                try? await Task.sleep(for: .seconds(2.5))
                 if case .done = phase { phase = .idle }
             }
 
@@ -179,9 +194,10 @@ struct KeyboardPanelView: View {
         if let typed, !typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             detectedText = typed
             usedSelection = false
-            // Do NOT auto-replace: the host may have a selection it doesn't
-            // expose to the proxy. Show what we captured and let the user decide.
-            phase = .confirmTyped
+            // Straight to work: asking "replace what you typed?" on every tap
+            // was friction for the common case. Undo covers the rare miss, and
+            // translateTypedText still refuses to delete text it didn't capture.
+            await translateTypedText()
             return
         }
 

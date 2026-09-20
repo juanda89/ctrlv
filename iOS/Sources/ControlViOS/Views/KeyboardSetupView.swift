@@ -30,7 +30,8 @@ struct KeyboardSetupView: View {
                     symbol: "text.cursor",
                     isReady: menuReady,
                     steps: [.init("Select text", symbol: "text.cursor"), .init("Tap Translate", symbol: "globe"), .init("Tap Replace", symbol: "arrow.left.arrow.right")],
-                    path: "Settings › Apps › Default Apps › Translation › Control-V"
+                    path: "Settings › Apps › Default Apps › Translation › Control-V",
+                    confirm: { SetupState.confirmTranslationProvider(); refresh() }
                 )
             }
             option(
@@ -38,7 +39,8 @@ struct KeyboardSetupView: View {
                 symbol: "keyboard",
                 isReady: keyboardReady,
                 steps: [.init("Write or select", symbol: "keyboard"), .init("Tap the V key", brandKey: true), .init("It's replaced", symbol: "checkmark.circle")],
-                path: "Settings › General › Keyboard › Keyboards › Control-V › Allow Full Access"
+                path: "Settings › General › Keyboard › Keyboards › Control-V › Allow Full Access",
+                confirm: { SetupState.confirmKeyboard(); refresh() }
             )
 
             Label("Full Access only sends the text you pick. Nothing you type is logged or stored.", systemImage: "lock.shield")
@@ -90,7 +92,7 @@ struct KeyboardSetupView: View {
         init(_ caption: String, brandKey: Bool) { self.caption = caption; self.brandKey = brandKey }
     }
 
-    private func option(title: String, symbol: String, isReady: Bool, steps: [Step], path: String) -> some View {
+    private func option(title: String, symbol: String, isReady: Bool, steps: [Step], path: String, confirm: @escaping () -> Void) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
                 Image(systemName: isReady ? "checkmark.circle.fill" : symbol)
@@ -98,12 +100,24 @@ struct KeyboardSetupView: View {
                     .foregroundStyle(isReady ? Color.green : Brand.blue)
                 Text(title).font(.body.weight(.semibold))
                 Spacer(minLength: 0)
-                Text(isReady ? "On" : "Off")
-                    .font(.caption2.weight(.bold))
-                    .foregroundStyle(isReady ? Color.green : Color.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background((isReady ? Color.green : Color.secondary).opacity(0.15), in: Capsule())
+                if isReady {
+                    Text("On")
+                        .font(.caption2.weight(.bold))
+                        .foregroundStyle(Color.green)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Color.green.opacity(0.15), in: Capsule())
+                } else {
+                    // Being the default translation app is invisible to us, so
+                    // the user can just say so.
+                    Button("It's on", action: confirm)
+                        .font(.caption2.weight(.bold))
+                        .buttonStyle(.plain)
+                        .foregroundStyle(Brand.blue)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(Brand.blue.opacity(0.12), in: Capsule())
+                }
             }
 
             stepStrip(steps)
