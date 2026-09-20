@@ -129,8 +129,17 @@ final class TranslatorViewModel {
             notifyAppDelegate { $0.restoreDefaultIcon() }
         }
 
+        // License revalidation and text capture are independent, so they
+        // overlap: the occasional network revalidation (~300ms) hides behind
+        // the capture (up to ~600ms in canvas apps) instead of preceding it.
         let licenseStartedAt = Date()
-        await licenseService.refreshSubscriptionStatus(forceNetwork: false)
+        async let licenseRefresh: Void = licenseService.refreshSubscriptionStatus(forceNetwork: false)
+
+        let captureStartedAt = Date()
+        let capture = await captureSelectedText()
+        debugLastCaptureLatencyMs = elapsedMs(since: captureStartedAt)
+
+        await licenseRefresh
         debugLastLicenseLatencyMs = elapsedMs(since: licenseStartedAt)
         guard licenseService.state.canTranslate else {
             debugLastStage = "Blocked: license"
@@ -150,9 +159,6 @@ final class TranslatorViewModel {
             return
         }
 
-        let captureStartedAt = Date()
-        let capture = await captureSelectedText()
-        debugLastCaptureLatencyMs = elapsedMs(since: captureStartedAt)
         // Whitespace-only counts as empty: the server trims and rejects it
         // with a 400 ("Missing text"), so block it locally with a clear error.
         // Google Docs' async copy can leave a bare newline in the pasteboard.
