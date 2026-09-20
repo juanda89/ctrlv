@@ -75,7 +75,8 @@ const cases: Case[] = [
 
 const endpoint = Deno.args[0];
 const label = Deno.args[1] ?? "run";
-const installID = "fidelity-suite-2026-09-19";
+// Trial identities get 50 translations/day; override to keep runs from colliding.
+const installID = Deno.env.get("FIDELITY_INSTALL_ID") ?? "fidelity-suite-2026-09-19";
 const results: unknown[] = [];
 const firstLine = (s: string) => (s.split(/\r?\n/).find((l) => l.trim()) ?? "").slice(0, 70);
 const lines = (s: string) => s.split(/\r?\n/).filter((l) => l.trim()).length;
