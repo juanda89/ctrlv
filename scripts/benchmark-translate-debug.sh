@@ -10,6 +10,10 @@ LABEL="${2:-run}"
 ENDPOINT="${ENDPOINT:-https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate}"
 INSTALL_ID="${INSTALL_ID:-bench-$LABEL-$(date +%s)}"
 command -v jq >/dev/null || { echo "jq is required" >&2; exit 1; }
+# Debug secret: env var, else ~/.config/ctrlv/debug-token (never in the repo).
+if [[ -z "${CTRLV_DEBUG_TOKEN:-}" && -r "$HOME/.config/ctrlv/debug-token" ]]; then
+  CTRLV_DEBUG_TOKEN="$(tr -d '\n' < "$HOME/.config/ctrlv/debug-token")"
+fi
 
 PROMPT="You are an expert bilingual writer. Re-express the text in English as a native speaker would. Return ONLY the final text, keep line breaks."
 SHORT="hola, nos vemos mañana"

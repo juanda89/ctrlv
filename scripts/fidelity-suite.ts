@@ -73,6 +73,17 @@ const cases: Case[] = [
   { id: "c5-url-en-fr-concise", lang: "French", tone: "concise", text: "Check https://control-v.info for the new #release, it ships v2.3.1 today", group: "control" },
 ];
 
+// Debug secret: env var, else ~/.config/ctrlv/debug-token (never in the repo).
+function readDebugToken(): string {
+  const fromEnv = Deno.env.get("CTRLV_DEBUG_TOKEN")?.trim();
+  if (fromEnv) return fromEnv;
+  try {
+    return Deno.readTextFileSync(`${Deno.env.get("HOME")}/.config/ctrlv/debug-token`).trim();
+  } catch {
+    return "";
+  }
+}
+const debugToken = readDebugToken();
 const endpoint = Deno.args[0];
 const label = Deno.args[1] ?? "run";
 // Trial identities get 50 translations/day; override to keep runs from colliding.
@@ -87,7 +98,7 @@ for (const c of cases) {
   const started = Date.now();
   const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json", "X-Ctrlv-Debug": Deno.env.get("CTRLV_DEBUG_TOKEN") ?? "" },
+    headers: { "Content-Type": "application/json", "X-Ctrlv-Debug": debugToken },
     body: JSON.stringify({ text: c.text, systemPrompt: buildSystemPrompt(c.lang, c.tone, c.custom), installID }),
   });
   const ms = Date.now() - started;
