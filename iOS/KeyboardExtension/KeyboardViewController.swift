@@ -14,7 +14,7 @@ import UIKit
 /// keys work without it, only translation is blocked.
 final class KeyboardViewController: UIInputViewController {
     private var hostingController: UIHostingController<KeyboardPanelView>?
-    private let panelHeight: CGFloat = 280
+    private let panelHeight: CGFloat = 224
 
     override func viewDidLoad() {
         super.viewDidLoad()

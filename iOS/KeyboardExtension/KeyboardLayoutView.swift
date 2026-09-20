@@ -1,3 +1,4 @@
+import ControlVCore
 import SwiftUI
 import UIKit
 
@@ -9,6 +10,9 @@ import UIKit
 /// costs the user nothing: same layout, same key sizes, same planes.
 struct KeyboardLayoutView: View {
     let actions: KeyboardActions
+    @Binding var settings: ExtensionSettings
+    /// Tapping the Control-V key; a long press opens language and tone instead.
+    let onTranslate: () -> Void
 
     @Environment(\.colorScheme) private var scheme
     @State private var plane: Plane = .letters
@@ -113,8 +117,8 @@ struct KeyboardLayoutView: View {
     }
 
     private func bottomRow(unit: CGFloat, available: CGFloat) -> some View {
-        let sideWidth = floorToPixel(unit * 1.3)
-        let returnWidth = floorToPixel(unit * 2.2)
+        let sideWidth = floorToPixel(unit * 1.25)
+        let returnWidth = floorToPixel(unit * 1.9)
         return HStack(spacing: keySpacing) {
             modifierKey(text: plane == .letters ? "123" : "ABC", width: sideWidth) {
                 plane = plane == .letters ? .numbers : .letters
@@ -127,8 +131,40 @@ struct KeyboardLayoutView: View {
                 keyFace(Text("space").font(.system(size: 16)), prominent: false)
             }
             .buttonStyle(.plain)
+            translateKey(width: sideWidth)
             modifierKey(text: "return", width: returnWidth, prominent: true) { insert("\n") }
         }
+    }
+
+    /// The whole point of the keyboard: translate without leaving it. Sits
+    /// where the user's thumb already is, next to space and return.
+    private func translateKey(width: CGFloat) -> some View {
+        Menu {
+            Picker("Language", selection: languageBinding) {
+                ForEach(SupportedLanguage.allCases) { Text($0.rawValue).tag($0) }
+            }
+            Picker("Tone", selection: toneBinding) {
+                ForEach(Tone.allCases) { Text($0.rawValue).tag($0) }
+            }
+        } label: {
+            keyFace(
+                Text("V").font(.system(size: 23, weight: .heavy, design: .rounded)),
+                prominent: true,
+                brand: true
+            )
+        } primaryAction: {
+            onTranslate()
+        }
+        .frame(width: width)
+        .accessibilityLabel("Translate and replace")
+    }
+
+    private var languageBinding: Binding<SupportedLanguage> {
+        Binding(get: { settings.targetLanguage }, set: { settings.targetLanguage = $0; ExtensionBridge.save(settings) })
+    }
+
+    private var toneBinding: Binding<Tone> {
+        Binding(get: { settings.tone }, set: { settings.tone = $0; ExtensionBridge.save(settings) })
     }
 
     // MARK: - Keys
@@ -168,12 +204,15 @@ struct KeyboardLayoutView: View {
             }, perform: startDeleteRepeat)
     }
 
-    private func keyFace<Content: View>(_ label: Content, prominent: Bool, muted: Bool = false) -> some View {
+    private func keyFace<Content: View>(_ label: Content, prominent: Bool, muted: Bool = false, brand: Bool = false) -> some View {
         label
             .foregroundStyle(prominent ? Color.white : Color.primary)
             .frame(maxWidth: .infinity)
             .frame(height: keyHeight)
-            .background(keyColor(prominent: prominent, muted: muted), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+            .background {
+                let shape = RoundedRectangle(cornerRadius: 5, style: .continuous)
+                if brand { shape.fill(Brand.gradient) } else { shape.fill(keyColor(prominent: prominent, muted: muted)) }
+            }
             .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.28), radius: 0, y: 1)
     }
 

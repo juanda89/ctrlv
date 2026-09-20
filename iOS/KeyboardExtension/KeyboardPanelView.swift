@@ -58,94 +58,81 @@ struct KeyboardPanelView: View {
     }
 
     var body: some View {
-        VStack(spacing: 8) {
-            actionBar
-                .frame(height: 46)
-                .padding(.horizontal, 6)
-            KeyboardLayoutView(actions: actions)
+        ZStack(alignment: .top) {
+            KeyboardLayoutView(
+                actions: actions,
+                settings: $settings,
+                onTranslate: { Task { await startTranslateFlow() } }
+            )
+
+            // Only while something is happening: at rest this is an ordinary
+            // keyboard, with the Control-V key next to space.
+            if isBusy {
+                statusBar
+                    .padding(.horizontal, 6)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
-        .padding(.top, 6)
+        .padding(.top, 5)
         .padding(.bottom, 4)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.clear)
         .tint(Brand.blue)
+        .animation(.snappy(duration: 0.2), value: isBusy)
     }
 
-    // MARK: - Action bar
+    private var isBusy: Bool {
+        if case .idle = phase { return false }
+        return true
+    }
+
+    // MARK: - Transient status
 
     @ViewBuilder
-    private var actionBar: some View {
-        if !hasFullAccess {
-            statusBar(symbol: "lock.shield", tint: .orange,
-                      text: "Turn on Allow Full Access in Settings to translate",
-                      action: nil)
-        } else {
-            switch phase {
-            case .idle:
-                HStack(spacing: 8) {
-                    Button { Task { await startTranslateFlow() } } label: {
-                        Label("Translate", systemImage: "arrow.left.arrow.right")
-                    }
-                    .buttonStyle(PrimaryButtonStyle(compact: true))
+    private var statusBar: some View {
+        switch phase {
+        case .idle:
+            EmptyView()
 
-                    settingMenu(title: settings.targetLanguage.rawValue, systemImage: "globe") {
-                        ForEach(SupportedLanguage.allCases) { language in
-                            Button {
-                                settings.targetLanguage = language
-                                ExtensionBridge.save(settings)
-                            } label: {
-                                if language == settings.targetLanguage { Label(language.rawValue, systemImage: "checkmark") } else { Text(language.rawValue) }
-                            }
-                        }
-                    }
-                    settingMenu(title: nil, systemImage: "slider.horizontal.3") {
-                        ForEach(Tone.allCases) { tone in
-                            Button {
-                                settings.tone = tone
-                                ExtensionBridge.save(settings)
-                            } label: {
-                                if tone == settings.tone { Label(tone.rawValue, systemImage: "checkmark") } else { Text(tone.rawValue) }
-                            }
-                        }
-                    }
-                }
-
-            case .confirmTyped:
-                HStack(spacing: 8) {
-                    VStack(alignment: .leading, spacing: 1) {
-                        Text("Replace what you typed?").font(.caption.weight(.semibold))
-                        Text(detectedText).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
-                    }
-                    Spacer(minLength: 0)
+        case .confirmTyped:
+            statusStrip(symbol: "text.cursor", tint: Brand.blue, text: "Replace what you typed?") {
+                HStack(spacing: 6) {
                     Button("Cancel") { phase = .idle }
                         .buttonStyle(GlassButtonStyle())
-                    Button { Task { await translateTypedText() } } label: { Text("Replace") }
+                    Button("Replace") { Task { await translateTypedText() } }
                         .buttonStyle(PrimaryButtonStyle(compact: true))
                         .fixedSize()
                 }
+            }
 
-            case .translating:
-                statusBar(symbol: nil, tint: Brand.blue, text: "Translating to \(settings.targetLanguage.rawValue)…", action: nil)
+        case .translating:
+            statusStrip(symbol: nil, tint: Brand.blue, text: "Translating to \(settings.targetLanguage.rawValue)…") { EmptyView() }
 
-            case .done:
-                statusBar(symbol: "checkmark.circle.fill", tint: .green,
-                          text: "Replaced with the \(settings.targetLanguage.rawValue) translation",
-                          action: ("Undo", undoReplacement))
+        case .done:
+            statusStrip(symbol: "checkmark.circle.fill", tint: .green, text: "Replaced") {
+                Button("Undo") { undoReplacement() }
+                    .buttonStyle(GlassButtonStyle())
+            }
+            .task {
+                try? await Task.sleep(for: .seconds(2))
+                if case .done = phase { phase = .idle }
+            }
 
-            case .copiedFallback:
-                statusBar(symbol: "doc.on.clipboard.fill", tint: Brand.blue,
-                          text: "The text changed, so the translation was copied instead",
-                          action: ("OK", { phase = .idle }))
+        case .copiedFallback:
+            statusStrip(symbol: "doc.on.clipboard.fill", tint: Brand.blue, text: "Text changed, so it was copied") {
+                Button("OK") { phase = .idle }
+                    .buttonStyle(GlassButtonStyle())
+            }
 
-            case .error:
-                statusBar(symbol: "exclamationmark.triangle.fill", tint: .orange,
-                          text: errorMessage ?? "Something went wrong.",
-                          action: ("Try again", { phase = .idle }))
+        case .error:
+            statusStrip(symbol: "exclamationmark.triangle.fill", tint: .orange, text: errorMessage ?? "Something went wrong.") {
+                Button("OK") { phase = .idle }
+                    .buttonStyle(GlassButtonStyle())
             }
         }
     }
 
-    private func statusBar(symbol: String?, tint: Color, text: String, action: (String, () -> Void)?) -> some View {
+    private func statusStrip<Trailing: View>(symbol: String?, tint: Color, text: String, @ViewBuilder trailing: () -> Trailing) -> some View {
         HStack(spacing: 8) {
             if let symbol {
                 Image(systemName: symbol).font(.subheadline).foregroundStyle(tint)
@@ -154,34 +141,16 @@ struct KeyboardPanelView: View {
             }
             Text(text)
                 .font(.caption.weight(.medium))
-                .foregroundStyle(.primary)
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
             Spacer(minLength: 0)
-            if let action {
-                Button(action.0, action: action.1)
-                    .buttonStyle(GlassButtonStyle())
-            }
+            trailing()
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
-        .frame(height: 46)
+        .frame(height: 44)
         .glassCard(12)
-    }
-
-    private func settingMenu<Content: View>(title: String?, systemImage: String, @ViewBuilder content: () -> Content) -> some View {
-        Menu(content: content) {
-            HStack(spacing: 4) {
-                Image(systemName: systemImage).font(.caption.weight(.semibold))
-                if let title { Text(title).font(.caption.weight(.semibold)).lineLimit(1) }
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 12)
-            .frame(height: 40)
-            .glassPill()
-        }
-        .menuOrder(.fixed)
-        .fixedSize()
+        .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
     }
 
     // MARK: - Flow control
@@ -191,6 +160,12 @@ struct KeyboardPanelView: View {
     private func startTranslateFlow() async {
         settings = ExtensionBridge.loadSettings()
         errorMessage = nil
+
+        guard hasFullAccess else {
+            errorMessage = "Turn on Allow Full Access in Settings to translate."
+            phase = .error
+            return
+        }
 
         let selection = actions.readSelectedText()
         if let selection, !selection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
