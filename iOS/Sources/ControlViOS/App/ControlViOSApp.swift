@@ -13,6 +13,12 @@ struct ControlViOSApp: App {
                 .environment(coordinator.subscriptionManager)
                 .environment(coordinator.settings)
                 .task {
+                    switch DebugLaunch.setupState {
+                    case "none": SetupState.resetForPreview()
+                    case "keyboard": SetupState.resetForPreview(); SetupState.overrideForPreview(keyboard: true, translationProvider: false)
+                    case "both": SetupState.overrideForPreview(keyboard: true, translationProvider: true)
+                    default: break
+                    }
                     if DebugLaunch.seedHistory, HistoryStore.shared.all().count < 3 {
                         HistoryStore.shared.append(source: "nos vemos manana en la oficina, llevo el reporte", translated: "See you tomorrow at the office, I'll bring the report.", language: .english, tone: .original)
                         HistoryStore.shared.append(source: "Can we move the call to Thursday?", translated: "Podemos mover la llamada al jueves?", language: .spanish, tone: .casual)

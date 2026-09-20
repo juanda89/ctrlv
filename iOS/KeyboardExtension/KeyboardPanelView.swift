@@ -2,9 +2,12 @@ import ControlVCore
 import SwiftUI
 import UIKit
 
-/// The keyboard's UI: a compact translation panel instead of a QWERTY layout.
-/// The user types with their normal keyboard, then switches to this one to
-/// translate what they wrote (or what they selected).
+/// The Control-V keyboard: a normal QWERTY keyboard with one extra button.
+///
+/// The first version replaced the whole keyboard with a translation panel, so
+/// using it meant switching keyboards for every translation and switching back
+/// to type. Now the user can leave Control-V enabled as their keyboard and the
+/// translate action is always one tap away, above the keys.
 ///
 /// Safety model (defends against host-app quirks):
 /// - Selection path: only replaces if the selection still matches after the
@@ -55,206 +58,130 @@ struct KeyboardPanelView: View {
     }
 
     var body: some View {
-        VStack(spacing: 10) {
-            header
-
-            if !hasFullAccess {
-                fullAccessPrompt
-            } else {
-                content
-            }
-
-            Spacer(minLength: 0)
-
-            footer
+        VStack(spacing: 8) {
+            actionBar
+                .frame(height: 46)
+                .padding(.horizontal, 6)
+            KeyboardLayoutView(actions: actions)
         }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 8)
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.top, 6)
+        .padding(.bottom, 4)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .background(Color.clear)
         .tint(Brand.blue)
     }
 
-    // MARK: - Header
-
-    private var header: some View {
-        HStack(spacing: 8) {
-            BrandMark(size: 24, shadow: false)
-            Text("Control-V").font(.footnote.weight(.semibold))
-            Spacer(minLength: 4)
-            settingMenu(title: settings.targetLanguage.rawValue, systemImage: "globe") {
-                ForEach(SupportedLanguage.allCases) { language in
-                    Button {
-                        settings.targetLanguage = language
-                        ExtensionBridge.save(settings)
-                    } label: {
-                        if language == settings.targetLanguage { Label(language.rawValue, systemImage: "checkmark") } else { Text(language.rawValue) }
-                    }
-                }
-            }
-            settingMenu(title: settings.tone.rawValue, systemImage: "slider.horizontal.3") {
-                ForEach(Tone.allCases) { tone in
-                    Button {
-                        settings.tone = tone
-                        ExtensionBridge.save(settings)
-                    } label: {
-                        if tone == settings.tone { Label(tone.rawValue, systemImage: "checkmark") } else { Text(tone.rawValue) }
-                    }
-                }
-            }
-        }
-    }
-
-    private func settingMenu<Content: View>(title: String, systemImage: String, @ViewBuilder content: () -> Content) -> some View {
-        Menu(content: content) {
-            HStack(spacing: 4) {
-                Image(systemName: systemImage).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
-                Text(title).font(.caption.weight(.semibold)).lineLimit(1)
-                Image(systemName: "chevron.down").font(.system(size: 8, weight: .bold)).foregroundStyle(.secondary)
-            }
-            .foregroundStyle(.primary)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 6)
-            .glassPill()
-        }
-        .menuOrder(.fixed)
-    }
-
-    // MARK: - Content
+    // MARK: - Action bar
 
     @ViewBuilder
-    private var content: some View {
-        switch phase {
-        case .idle:
-            VStack(spacing: 12) {
-                Text(idleHint)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 8)
-                    .padding(.top, 6)
-
-                Button {
-                    Task { await startTranslateFlow() }
-                } label: {
-                    Label("Translate & Replace", systemImage: "arrow.left.arrow.right")
-                }
-                .buttonStyle(PrimaryButtonStyle())
-            }
-
-        case .confirmTyped:
-            VStack(spacing: 10) {
-                Text("No selection found. Replace what you typed?")
-                    .font(.footnote.weight(.medium))
-                    .foregroundStyle(.secondary)
-
-                Text(detectedText)
-                    .font(.callout)
-                    .lineLimit(3)
-                    .truncationMode(.head)
-                    .padding(10)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .glassCard(14)
-
+    private var actionBar: some View {
+        if !hasFullAccess {
+            statusBar(symbol: "lock.shield", tint: .orange,
+                      text: "Turn on Allow Full Access in Settings to translate",
+                      action: nil)
+        } else {
+            switch phase {
+            case .idle:
                 HStack(spacing: 8) {
-                    Button("Cancel") { phase = .idle }
-                        .buttonStyle(GlassButtonStyle())
-                    Button {
-                        Task { await translateTypedText() }
-                    } label: {
-                        Label("Translate & Replace", systemImage: "arrow.left.arrow.right")
+                    Button { Task { await startTranslateFlow() } } label: {
+                        Label("Translate", systemImage: "arrow.left.arrow.right")
                     }
                     .buttonStyle(PrimaryButtonStyle(compact: true))
+
+                    settingMenu(title: settings.targetLanguage.rawValue, systemImage: "globe") {
+                        ForEach(SupportedLanguage.allCases) { language in
+                            Button {
+                                settings.targetLanguage = language
+                                ExtensionBridge.save(settings)
+                            } label: {
+                                if language == settings.targetLanguage { Label(language.rawValue, systemImage: "checkmark") } else { Text(language.rawValue) }
+                            }
+                        }
+                    }
+                    settingMenu(title: nil, systemImage: "slider.horizontal.3") {
+                        ForEach(Tone.allCases) { tone in
+                            Button {
+                                settings.tone = tone
+                                ExtensionBridge.save(settings)
+                            } label: {
+                                if tone == settings.tone { Label(tone.rawValue, systemImage: "checkmark") } else { Text(tone.rawValue) }
+                            }
+                        }
+                    }
                 }
+
+            case .confirmTyped:
+                HStack(spacing: 8) {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text("Replace what you typed?").font(.caption.weight(.semibold))
+                        Text(detectedText).font(.caption2).foregroundStyle(.secondary).lineLimit(1).truncationMode(.head)
+                    }
+                    Spacer(minLength: 0)
+                    Button("Cancel") { phase = .idle }
+                        .buttonStyle(GlassButtonStyle())
+                    Button { Task { await translateTypedText() } } label: { Text("Replace") }
+                        .buttonStyle(PrimaryButtonStyle(compact: true))
+                        .fixedSize()
+                }
+
+            case .translating:
+                statusBar(symbol: nil, tint: Brand.blue, text: "Translating to \(settings.targetLanguage.rawValue)…", action: nil)
+
+            case .done:
+                statusBar(symbol: "checkmark.circle.fill", tint: .green,
+                          text: "Replaced with the \(settings.targetLanguage.rawValue) translation",
+                          action: ("Undo", undoReplacement))
+
+            case .copiedFallback:
+                statusBar(symbol: "doc.on.clipboard.fill", tint: Brand.blue,
+                          text: "The text changed, so the translation was copied instead",
+                          action: ("OK", { phase = .idle }))
+
+            case .error:
+                statusBar(symbol: "exclamationmark.triangle.fill", tint: .orange,
+                          text: errorMessage ?? "Something went wrong.",
+                          action: ("Try again", { phase = .idle }))
             }
-
-        case .translating:
-            statusBlock(symbol: nil, tint: Brand.blue, title: "Translating to \(settings.targetLanguage.rawValue)…", detail: nil, action: nil)
-
-        case .done:
-            statusBlock(symbol: "checkmark.circle.fill", tint: .green, title: "Replaced with the \(settings.targetLanguage.rawValue) translation", detail: nil, action: ("Translate more", { phase = .idle }))
-
-        case .copiedFallback:
-            statusBlock(symbol: "doc.on.clipboard.fill", tint: Brand.blue, title: "Copied instead", detail: "The text changed while translating, so nothing was replaced. Paste the translation from your clipboard.", action: ("OK", { phase = .idle }))
-
-        case .error:
-            statusBlock(symbol: "exclamationmark.triangle.fill", tint: .orange, title: "Couldn't translate", detail: errorMessage ?? "Something went wrong.", action: ("Try again", { phase = .idle }))
         }
     }
 
-    private func statusBlock(symbol: String?, tint: Color, title: String, detail: String?, action: (String, () -> Void)?) -> some View {
-        VStack(spacing: 8) {
+    private func statusBar(symbol: String?, tint: Color, text: String, action: (String, () -> Void)?) -> some View {
+        HStack(spacing: 8) {
             if let symbol {
-                Image(systemName: symbol).font(.title2).foregroundStyle(tint)
+                Image(systemName: symbol).font(.subheadline).foregroundStyle(tint)
             } else {
-                ProgressView().tint(tint)
+                ProgressView().controlSize(.small).tint(tint)
             }
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .multilineTextAlignment(.center)
-            if let detail {
-                Text(detail)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 8)
-            }
+            Text(text)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(.primary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
+            Spacer(minLength: 0)
             if let action {
                 Button(action.0, action: action.1)
                     .buttonStyle(GlassButtonStyle())
-                    .padding(.top, 2)
             }
         }
+        .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
-        .padding(.top, 8)
+        .frame(height: 46)
+        .glassCard(12)
     }
 
-    private var fullAccessPrompt: some View {
-        VStack(spacing: 8) {
-            Image(systemName: "lock.shield")
-                .font(.title2)
-                .foregroundStyle(.orange)
-            Text("Turn on Allow Full Access to translate")
-                .font(.subheadline.weight(.semibold))
-            Text("Settings → General → Keyboard → Keyboards → Control-V. Full Access only sends the text you choose to the translation service; keystrokes are never logged or stored.")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, 8)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 8)
-    }
-
-    private var footer: some View {
-        HStack {
-            Button {
-                actions.switchKeyboard()
-            } label: {
-                Image(systemName: "globe")
-                    .font(.body.weight(.medium))
-                    .frame(width: 44, height: 34)
-                    .glassPill()
+    private func settingMenu<Content: View>(title: String?, systemImage: String, @ViewBuilder content: () -> Content) -> some View {
+        Menu(content: content) {
+            HStack(spacing: 4) {
+                Image(systemName: systemImage).font(.caption.weight(.semibold))
+                if let title { Text(title).font(.caption.weight(.semibold)).lineLimit(1) }
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Next keyboard")
-
-            Spacer()
-
-            if usedSelection {
-                Label("Using selected text", systemImage: "text.cursor")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+            .foregroundStyle(.primary)
+            .padding(.horizontal, 12)
+            .frame(height: 40)
+            .glassPill()
         }
-    }
-
-    private var idleHint: String {
-        "Select text, or just finish typing, then tap the button. Your text is replaced with its \(settings.targetLanguage.rawValue) translation."
+        .menuOrder(.fixed)
+        .fixedSize()
     }
 
     // MARK: - Flow control
@@ -323,6 +250,13 @@ struct KeyboardPanelView: View {
             UIPasteboard.general.string = translation
             phase = .copiedFallback
         }
+    }
+
+    /// Puts the original text back when the user says the replacement was wrong.
+    private func undoReplacement() {
+        guard !translatedText.isEmpty, !detectedText.isEmpty else { phase = .idle; return }
+        actions.replaceTypedText(translatedText, detectedText)
+        phase = .idle
     }
 
     /// Shared network call. Returns nil after setting the error phase.

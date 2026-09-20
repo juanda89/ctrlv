@@ -45,7 +45,13 @@ struct TranslationProviderView: View {
         .background(AuroraBackground())
         .tint(Brand.blue)
         .toast("Copied", isPresented: $showCopied)
-        .task { if preview == nil { await translate() } }
+        .task {
+            if preview == nil {
+                // Only reachable when Control-V is the default translation app.
+                SetupState.markTranslationProviderActive()
+                await translate()
+            }
+        }
     }
 
     // MARK: - Sections

@@ -28,6 +28,8 @@ targets:
     sources:
       - path: Sources/ControlViOS
       - path: Resources/App
+      # Permission marks the extensions write and the app reads.
+      - path: Shared/SetupState.swift
     dependencies:
       - package: ControlVCore
         product: ControlVCore

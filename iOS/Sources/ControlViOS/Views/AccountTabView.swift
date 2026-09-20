@@ -4,37 +4,66 @@ import SwiftUI
 struct AccountTabView: View {
     @Environment(LicenseService.self) private var license
     @Environment(StoreKitSubscriptionManager.self) private var subscriptions
+    @Environment(\.scenePhase) private var scenePhase
     @State private var showSignIn = DebugLaunch.showSignIn
     @State private var showSetup = false
     @State private var showFeedback = DebugLaunch.showFeedback
-    @State private var feedbackRating: Int?
+    @State private var isSetUp = SetupState.anyReady
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 14) {
-                    statusHero
-                    keyboardCard
-                    syncCard
-                    feedbackCard
-                    linksCard
-                    Text("Control-V \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
-                        .font(.caption)
-                        .foregroundStyle(.tertiary)
-                        .padding(.top, 6)
+                    // Nothing else matters until the user can translate outside
+                    // the app, so that card comes first and the rest is inert.
+                    if !isSetUp { setupCard }
+
+                    VStack(spacing: 14) {
+                        statusHero
+                        accountCard
+                        linksCard
+                        Text("Control-V \(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "")")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .padding(.top, 6)
+                    }
+                    .opacity(isSetUp ? 1 : 0.4)
+                    .disabled(!isSetUp)
                 }
                 .padding(.horizontal, 18)
                 .padding(.bottom, 32)
             }
             .background(AuroraBackground())
             .navigationTitle("Account")
+            .task(id: scenePhase) { isSetUp = SetupState.anyReady }
             .sheet(isPresented: $showSignIn) { SignInScreen().presentationDetents([.large]).presentationDragIndicator(.visible) }
-            .sheet(isPresented: $showSetup) { KeyboardSetupView { showSetup = false }.presentationDetents([.large]).presentationDragIndicator(.visible) }
-            .sheet(isPresented: $showFeedback) { FeedbackSheet(initialRating: feedbackRating).presentationDetents([.large]).presentationDragIndicator(.visible) }
+            .sheet(isPresented: $showSetup, onDismiss: { isSetUp = SetupState.anyReady }) {
+                KeyboardSetupView { showSetup = false }
+                    .presentationDetents([.large])
+                    .presentationDragIndicator(.visible)
+            }
+            .sheet(isPresented: $showFeedback) { FeedbackSheet(initialRating: nil).presentationDetents([.large]).presentationDragIndicator(.visible) }
         }
     }
 
     // MARK: - Cards
+
+    private var setupCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label("Finish setup", systemImage: "exclamationmark.circle.fill")
+                .font(.headline)
+                .foregroundStyle(.orange)
+            Text("Control-V translates text inside other apps. Turn on the Translate menu or the Control-V keyboard once, and you're done.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            Button { showSetup = true } label: { Label("Set it up", systemImage: "arrow.right") }
+                .buttonStyle(PrimaryButtonStyle())
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(22)
+    }
 
     private var statusHero: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -44,7 +73,7 @@ struct AccountTabView: View {
                     Text(statusTitle).font(.title3.weight(.bold))
                     Text(statusDetail).font(.subheadline).foregroundStyle(.secondary)
                 }
-                Spacer()
+                Spacer(minLength: 0)
             }
             HStack(spacing: 8) {
                 if case .active = license.state {
@@ -59,35 +88,23 @@ struct AccountTabView: View {
             }
         }
         .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard(22)
     }
 
-    private var keyboardCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label("Translate in any app", systemImage: "keyboard").font(.headline)
-                Spacer()
-            }
-            Text("Make Control-V your default translation app: select text in Messages, WhatsApp or Mail, tap Translate, tap Replace. The Control-V keyboard also translates what you just typed.")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
-                Button { showSetup = true } label: { Label("Set it up", systemImage: "arrow.right") }
-                    .buttonStyle(PrimaryButtonStyle())
-            }
-        }
-        .padding(16)
-        .glassCard(22)
-    }
-
-    private var syncCard: some View {
+    private var accountCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             Label("Sync with your Mac", systemImage: "laptopcomputer.and.iphone").font(.headline)
-            if license.isSignedIn, let email = license.storedEmail {
-                Text("Signed in as \(email)").font(.subheadline).foregroundStyle(.secondary)
-                Button("Sign out", role: .destructive) { license.signOut(); AppGroupBridge.syncSessionToken(from: license) }
-                    .buttonStyle(GlassButtonStyle())
+            if let email = signedInEmail {
+                HStack(spacing: 10) {
+                    Text(email)
+                        .font(.subheadline).foregroundStyle(.secondary)
+                        .lineLimit(1).truncationMode(.middle)
+                    Spacer(minLength: 8)
+                    Button("Sign out", role: .destructive) { license.signOut(); AppGroupBridge.syncSessionToken(from: license) }
+                        .buttonStyle(GlassButtonStyle())
+                        .fixedSize()
+                }
             } else {
                 Text("One subscription covers all your devices. Sign in with the email you use on the Mac app.")
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -96,53 +113,55 @@ struct AccountTabView: View {
             }
         }
         .padding(16)
-        .glassCard(22)
-    }
-
-    private var feedbackCard: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("How's Control-V working for you?").font(.headline)
-            Text("Rate it, request a feature, or tell us what broke.").font(.subheadline).foregroundStyle(.secondary)
-            HStack {
-                HStack(spacing: 6) {
-                    ForEach(1...5, id: \.self) { star in
-                        Button { feedbackRating = star; showFeedback = true } label: {
-                            Image(systemName: "star").font(.title3).foregroundStyle(Color(red: 0.98, green: 0.74, blue: 0.20))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                Spacer()
-                Button { feedbackRating = nil; showFeedback = true } label: { Text("Leave feedback ›").font(.subheadline.weight(.semibold)).foregroundStyle(Brand.blue) }
-                    .buttonStyle(.plain)
-            }
-        }
-        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .glassCard(22)
     }
 
     private var linksCard: some View {
         VStack(spacing: 0) {
+            Button { showFeedback = true } label: {
+                row(title: "Leave feedback", symbol: "star.bubble", trailing: "chevron.right")
+            }
+            .buttonStyle(.plain)
+            Divider().padding(.leading, 48)
+            if isSetUp, !(SetupState.keyboardReady && SetupState.translationProviderReady) {
+                Button { showSetup = true } label: {
+                    row(title: "Set up the other way to translate", symbol: "slider.horizontal.3", trailing: "chevron.right")
+                }
+                .buttonStyle(.plain)
+                Divider().padding(.leading, 48)
+            }
             linkRow("Website", "globe", "https://control-v.info")
-            Divider().padding(.leading, 44)
+            Divider().padding(.leading, 48)
             linkRow("Privacy Policy", "hand.raised", "https://control-v.info/privacy")
-            Divider().padding(.leading, 44)
+            Divider().padding(.leading, 48)
             linkRow("Contact support", "envelope", "mailto:info@control-v.info")
         }
+        .frame(maxWidth: .infinity)
         .glassCard(22)
+    }
+
+    private func row(title: String, symbol: String, trailing: String) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: symbol).frame(width: 22).foregroundStyle(Brand.blue)
+            Text(title).foregroundStyle(.primary)
+            Spacer(minLength: 0)
+            Image(systemName: trailing).font(.caption).foregroundStyle(.tertiary)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
     }
 
     private func linkRow(_ title: String, _ symbol: String, _ url: String) -> some View {
         Link(destination: URL(string: url)!) {
-            HStack(spacing: 12) {
-                Image(systemName: symbol).frame(width: 20).foregroundStyle(Brand.blue)
-                Text(title).foregroundStyle(.primary)
-                Spacer()
-                Image(systemName: "arrow.up.right").font(.caption).foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 13)
+            row(title: title, symbol: symbol, trailing: "arrow.up.right")
         }
+    }
+
+    private var signedInEmail: String? {
+        if DebugLaunch.fakeSignedIn { return "you@example.com" }
+        return license.isSignedIn ? license.storedEmail : nil
     }
 
     // MARK: - Status

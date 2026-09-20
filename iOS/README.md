@@ -36,6 +36,27 @@ TranslationExtension/                      (iOS 18.4+ default translation app: t
 Shared/ExtensionBridge.swift               (App Group settings/session/history for all extensions)
 ```
 
+### The keyboard is a full keyboard
+
+`KeyboardExtension/KeyboardLayoutView.swift` draws a standard QWERTY (letters,
+numbers, symbols, shift with caps lock, repeating delete, globe, return) so the
+user can leave Control-V enabled as their keyboard. `KeyboardPanelView` is now
+just the bar above the keys: Translate, target language, tone, and the
+translating/done/error states. The first version replaced the whole keyboard
+with a translation panel, which forced a keyboard switch for every translation
+and another one to keep typing.
+
+Key widths are floored to a device pixel (`floorToPixel`); ten fractional key
+widths rounded up overflow the row and clip the last key.
+
+### Setup status is detected, not asked
+
+iOS has no API for "is my keyboard installed?" or "am I the default translation
+app?", so each extension records that it ran in the App Group
+(`Shared/SetupState.swift`) and the app reads those marks. The setup sheet polls
+while it is open, flips each path to **Ready** on its own, and closes once one
+of them works. It never appears when a path is already on.
+
 ### Three ways to translate from any app
 
 1. **System Translate menu (iOS 18.4+, the primary path).** `TranslationExtension/`

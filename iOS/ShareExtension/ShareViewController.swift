@@ -205,7 +205,12 @@ struct ShareResultView: View {
             }
         }
         .tint(Brand.blue)
-        .task { if preview == nil { await runTranslation() } }
+        .task {
+            if preview == nil {
+                SetupState.markShareActive()
+                await runTranslation()
+            }
+        }
     }
 
     private func runTranslation() async {

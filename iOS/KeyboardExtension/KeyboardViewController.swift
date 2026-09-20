@@ -2,19 +2,19 @@ import ControlVCore
 import SwiftUI
 import UIKit
 
-/// Control-V Keyboard: the iOS equivalent of the Mac global shortcut.
+/// Control-V Keyboard: a full QWERTY keyboard with a Translate button above it.
 ///
-/// Flow (Grammarly-style in-place replacement):
-/// 1. User selects text in ANY app (or finishes typing a message)
-/// 2. Switches to the Control-V keyboard (globe key)
-/// 3. Taps "Translate" → the keyboard reads the selection (or the text
-///    before the cursor), calls the backend, and REPLACES it in-place
-/// 4. Switches back to their normal keyboard
+/// Flow:
+/// 1. The user types with Control-V the way they would with any keyboard.
+/// 2. They select text (or just finish typing) and tap **Translate**.
+/// 3. The keyboard reads the selection (or the text before the cursor), calls
+///    the backend, and replaces it in place.
 ///
-/// Requires "Allow Full Access" (Settings → Keyboard) for network calls.
+/// Requires "Allow Full Access" (Settings → Keyboard) for network calls; the
+/// keys work without it, only translation is blocked.
 final class KeyboardViewController: UIInputViewController {
     private var hostingController: UIHostingController<KeyboardPanelView>?
-    private let panelHeight: CGFloat = 260
+    private let panelHeight: CGFloat = 280
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -61,9 +61,16 @@ final class KeyboardViewController: UIInputViewController {
                 insertText: { [weak self] text in
                     self?.textDocumentProxy.insertText(text)
                 },
+                deleteBackward: { [weak self] in
+                    self?.textDocumentProxy.deleteBackward()
+                },
+                contextBeforeInput: { [weak self] in
+                    self?.textDocumentProxy.documentContextBeforeInput
+                },
                 switchKeyboard: { [weak self] in
                     self?.advanceToNextInputMode()
-                }
+                },
+                showsKeyboardSwitch: needsInputModeSwitchKey
             )
         )
 
@@ -88,14 +95,26 @@ final class KeyboardViewController: UIInputViewController {
 
         hostingController = host
     }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        // The app cannot ask iOS whether this keyboard is installed, so record
+        // the fact here; the setup screen reads it to show live status.
+        SetupState.markKeyboardActive(hasFullAccess: hasFullAccess)
+    }
 }
 
-/// Callbacks bridging SwiftUI panel → UITextDocumentProxy.
+/// Callbacks bridging SwiftUI keys → UITextDocumentProxy.
 struct KeyboardActions {
     let readSelectedText: () -> String?
     let readTypedText: () -> String?
     let replaceSelectedText: (String) -> Void
     let replaceTypedText: (_ original: String, _ translation: String) -> Void
     let insertText: (String) -> Void
+    let deleteBackward: () -> Void
+    let contextBeforeInput: () -> String?
     let switchKeyboard: () -> Void
+    /// False when Control-V is the only keyboard installed: iOS then hides its
+    /// own globe key, and showing ours would be a dead end.
+    var showsKeyboardSwitch: Bool = true
 }

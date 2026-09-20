@@ -3,11 +3,16 @@ import SwiftUI
 
 struct RootTabView: View {
     @Environment(LicenseService.self) private var licenseService
-    @State private var selection: Tab = Tab(rawValue: DebugLaunch.tab ?? "") ?? .translate
+    // Account first: it carries the trial counter, upgrade and sign-in, and it
+    // is where an unfinished setup is chased down.
+    @State private var selection: Tab = Tab(rawValue: DebugLaunch.tab ?? "") ?? .account
     /// Set by "Go Pro" while the trial is still running; the cover is also
     /// forced (non-dismissable) once the license is expired or invalid.
     @State private var paywallRequested = DebugLaunch.showPaywall
-    @State private var showSetup = DebugLaunch.showSetup || !UserDefaults(suiteName: iOSSettingsStore.appGroup)!.bool(forKey: "hasSeenKeyboardSetup")
+    // Only on a first run that still cannot translate anywhere: a user who
+    // already turned on either path never sees this sheet.
+    @State private var showSetup = DebugLaunch.showSetup
+        || (!SetupState.anyReady && !(UserDefaults(suiteName: iOSSettingsStore.appGroup)?.bool(forKey: "hasSeenKeyboardSetup") ?? false))
 
     enum Tab: String { case translate, history, account }
 

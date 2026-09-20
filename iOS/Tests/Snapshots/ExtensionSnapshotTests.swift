@@ -25,7 +25,7 @@ final class MockTranslationContext: TranslationUIProviderContext {
 ///
 /// Without SNAPSHOT_DIR the images land in the host app's tmp directory.
 final class ExtensionSnapshotTests: XCTestCase {
-    private static let keyboardSize = CGSize(width: 402, height: 260)
+    private static let keyboardSize = CGSize(width: 402, height: 280)
     private static let sheetSize = CGSize(width: 402, height: 620)
     private static let lightKeyboard = UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1)
     private static let darkKeyboard = UIColor(white: 0.17, alpha: 1)
@@ -37,7 +37,8 @@ final class ExtensionSnapshotTests: XCTestCase {
 
     private var noopActions: KeyboardActions {
         KeyboardActions(readSelectedText: { nil }, readTypedText: { nil }, replaceSelectedText: { _ in },
-                        replaceTypedText: { _, _ in }, insertText: { _ in }, switchKeyboard: {})
+                        replaceTypedText: { _, _ in }, insertText: { _ in }, deleteBackward: {},
+                        contextBeforeInput: { nil }, switchKeyboard: {})
     }
 
     @MainActor

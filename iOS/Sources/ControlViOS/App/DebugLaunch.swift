@@ -22,6 +22,11 @@ enum DebugLaunch {
     static var previewPricing: PaywallView.Preview? {
         d.bool(forKey: "ui.previewPricing") ? .init(priceText: "$4.99", trialDays: 14) : nil
     }
+    /// Forces the recorded setup state so the account and setup screens can be
+    /// captured in every configuration: none, one path on, both on.
+    static var setupState: String? { d.string(forKey: "ui.setupState") }
+    /// Renders the signed-in account card without a real session (screenshots).
+    static var fakeSignedIn: Bool { d.bool(forKey: "ui.fakeSignedIn") }
     static var licenseState: LicenseState? {
         switch d.string(forKey: "ui.licenseState") {
         case "trial": return .trial(daysRemaining: 9)
@@ -42,6 +47,8 @@ enum DebugLaunch {
     static var autoTranslate: Bool { false }
     static var seedHistory: Bool { false }
     static var previewPricing: PaywallView.Preview? { nil }
+    static var setupState: String? { nil }
+    static var fakeSignedIn: Bool { false }
     static var licenseState: LicenseState? { nil }
 #endif
 }
