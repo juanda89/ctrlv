@@ -60,6 +60,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios
+        TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_NAME: Control-V
   Control-V Share:
@@ -93,6 +94,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.share
+        TARGETED_DEVICE_FAMILY: "1"
   Control-V Keyboard:
     type: app-extension
     platform: iOS
@@ -125,6 +127,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.keyboard
+        TARGETED_DEVICE_FAMILY: "1"
   # Default translation app (iOS 18.4+): ExtensionKit extension the system
   # hosts when people tap Translate on selected text in any app.
   Control-V Translation:
@@ -155,6 +158,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.translation
+        TARGETED_DEVICE_FAMILY: "1"
         LD_RUNPATH_SEARCH_PATHS: "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks"
   # Renders the keyboard panel, share sheet and translation sheet (which can't
   # be driven from the command line) to PNGs:
@@ -179,6 +183,7 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.snapshots
+        TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
 schemes:
   Control-V:
