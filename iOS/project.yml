@@ -14,7 +14,7 @@ settings:
     CURRENT_PROJECT_VERSION: "1"
     TARGETED_DEVICE_FAMILY: "1"
     CODE_SIGN_STYLE: Automatic
-    # Set to the team ID (Viko Holdings LLC) before device builds / archives.
+    # Viko Holdings LLC (Apple Developer Program, organization).
     DEVELOPMENT_TEAM: "5ZFYF422LX"
     GENERATE_INFOPLIST_FILE: NO
     ENABLE_USER_SCRIPT_SANDBOXING: YES
