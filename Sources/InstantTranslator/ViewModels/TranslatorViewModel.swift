@@ -239,7 +239,7 @@ final class TranslatorViewModel {
         } catch {
             debugLastStage = "Error: \(error.localizedDescription)"
             lastError = error.localizedDescription
-            TelemetryService.trackTranslationFailed(provider: .ctrlVCloud, errorType: String(describing: error))
+            TelemetryService.trackTranslationFailed(provider: .ctrlVCloud, errorType: Self.telemetryLabel(for: error))
         }
     }
 
@@ -248,6 +248,26 @@ final class TranslatorViewModel {
             self?.triggerTranslation(source: "hotkey", profileID: profileID)
         }
         refreshHotkeyRegistration()
+    }
+
+    /// Telemetry gets a category, never the server's message: an error body
+    /// could quote user text, and String(describing:) would forward it.
+    static func telemetryLabel(for error: Error) -> String {
+        guard let translationError = error as? TranslationError else {
+            return String(describing: type(of: error))
+        }
+        switch translationError {
+        case .noTextSelected: return "noTextSelected"
+        case .accessibilityNotGranted: return "accessibilityNotGranted"
+        case .backendNotConfigured: return "backendNotConfigured"
+        case .networkError: return "networkError"
+        case .apiError(let statusCode, _): return "apiError(\(statusCode))"
+        case .rateLimited: return "rateLimited"
+        case .trialExpired: return "trialExpired"
+        case .trialQuotaExceeded: return "trialQuotaExceeded"
+        case .trialTextTooLong: return "trialTextTooLong"
+        case .replacementFailed: return "replacementFailed"
+        }
     }
 
     private func makeCloudProvider(isTrialMode: Bool) -> CtrlVCloudProvider? {
@@ -450,7 +470,7 @@ final class TranslatorViewModel {
         default:
             debugLastStage = "Error: \(error.localizedDescription)"
             lastError = error.localizedDescription
-            TelemetryService.trackTranslationFailed(provider: .ctrlVCloud, errorType: String(describing: error))
+            TelemetryService.trackTranslationFailed(provider: .ctrlVCloud, errorType: Self.telemetryLabel(for: error))
         }
     }
 

@@ -64,7 +64,7 @@ public final class MagicCodeAuthClient: MagicCodeAuthClientProtocol {
     public func createCheckoutSession(token: String) async throws -> URL {
         let url = try endpoint("/create-checkout-session")
         let response: URLResponse = try await postJSON(url: url, payload: EmptyPayload(), bearerToken: token)
-        guard let result = URL(string: response.url) else {
+        guard let result = Self.validatedBillingURL(response.url) else {
             throw AuthError.invalidResponse
         }
         return result
@@ -73,10 +73,31 @@ public final class MagicCodeAuthClient: MagicCodeAuthClientProtocol {
     public func createPortalSession(token: String) async throws -> URL {
         let url = try endpoint("/create-portal-session")
         let response: URLResponse = try await postJSON(url: url, payload: EmptyPayload(), bearerToken: token)
-        guard let result = URL(string: response.url) else {
+        guard let result = Self.validatedBillingURL(response.url) else {
             throw AuthError.invalidResponse
         }
         return result
+    }
+
+    /// Hosts the app is willing to hand to the system browser from a server
+    /// response. The backend is first-party, but a compromised function must
+    /// not be able to launch arbitrary schemes or a look-alike domain through
+    /// the "Subscribe" button.
+    static let billingHosts: Set<String> = [
+        "checkout.stripe.com",
+        "billing.stripe.com",
+        "control-v.info",
+        "www.control-v.info",
+    ]
+
+    static func validatedBillingURL(_ string: String) -> URL? {
+        guard let url = URL(string: string),
+              url.scheme?.lowercased() == "https",
+              let host = url.host?.lowercased(),
+              billingHosts.contains(host) || host.hasSuffix(".stripe.com") else {
+            return nil
+        }
+        return url
     }
 
     private func endpoint(_ path: String) throws -> URL {

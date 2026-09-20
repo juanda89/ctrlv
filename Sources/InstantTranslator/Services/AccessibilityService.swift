@@ -107,7 +107,7 @@ final class AccessibilityService {
         // whole-field / clipboard fallbacks.
         if textResult == .success, let text = selectedText as? String,
            !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            log.info("Got selected text: \(text.prefix(50)) editable=\(isEditable)")
+            log.info("Got selected text: \(text.count) chars editable=\(isEditable)")
             return CaptureResult(text: text, isWholeFieldValue: false, isEditable: isEditable)
         }
 
@@ -124,7 +124,7 @@ final class AccessibilityService {
             )
             if valueResult == .success, let text = value as? String,
                !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                log.info("No selection; using whole field value: \(text.prefix(50))")
+                log.info("No selection; using whole field value: \(text.count) chars")
                 return CaptureResult(text: text, isWholeFieldValue: true, isEditable: true)
             }
             log.info("Selection empty and value read returned nothing (AXError: \(valueResult.rawValue))")
