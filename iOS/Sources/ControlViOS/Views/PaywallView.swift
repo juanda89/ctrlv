@@ -7,12 +7,30 @@ import SwiftUI
 /// Shown as an overlay by RootTabView; `onClose` hides it.
 struct PaywallView: View {
     var onClose: () -> Void = {}
+
+    /// Fixed pricing for snapshots (App Review screenshot, design review). The
+    /// StoreKit product is only available when the app runs from a scheme with
+    /// a StoreKit configuration or against the real store, so screenshots taken
+    /// any other way would show the "pricing unavailable" state.
+    struct Preview {
+        var priceText: String
+        var trialDays: Int?
+    }
+    let preview: Preview?
+
     @Environment(StoreKitSubscriptionManager.self) private var subscriptions
     @Environment(LicenseService.self) private var license
     @State private var isWorking = false
     @State private var hasLoaded = false
     @State private var trialDays: Int?
     @State private var errorMessage: String?
+
+    init(preview: Preview? = nil, onClose: @escaping () -> Void = {}) {
+        self.preview = preview
+        self.onClose = onClose
+        _trialDays = State(initialValue: preview?.trialDays)
+        _hasLoaded = State(initialValue: preview != nil)
+    }
 
     var body: some View {
         ZStack {
@@ -57,7 +75,7 @@ struct PaywallView: View {
                 .accessibilityLabel("Not now")
             }
         }
-        .task { await load() }
+        .task { if preview == nil { await load() } }
     }
 
     // MARK: - Pricing
@@ -65,11 +83,11 @@ struct PaywallView: View {
     @ViewBuilder
     private var pricing: some View {
         VStack(spacing: 10) {
-            if let product = subscriptions.product {
-                Button { Task { await purchase(product) } } label: {
+            if let priceText = preview?.priceText ?? subscriptions.product?.displayPrice {
+                Button { Task { if let product = subscriptions.product { await purchase(product) } } } label: {
                     VStack(spacing: 2) {
                         Text(ctaTitle).font(.headline)
-                        Text(ctaDetail(for: product)).font(.caption).opacity(0.85)
+                        Text(ctaDetail(price: priceText)).font(.caption).opacity(0.85)
                     }
                 }
                 .buttonStyle(PrimaryButtonStyle())
@@ -99,6 +117,7 @@ struct PaywallView: View {
     }
 
     private var canDismiss: Bool {
+        if preview != nil { return true }
         switch license.state {
         case .trial, .active: return true
         case .checking, .expired, .invalid: return false
@@ -110,10 +129,10 @@ struct PaywallView: View {
         return "Subscribe to Control-V Pro"
     }
 
-    private func ctaDetail(for product: Product) -> String {
+    private func ctaDetail(price: String) -> String {
         trialDays == nil
-            ? "\(product.displayPrice) / month · cancel anytime"
-            : "Then \(product.displayPrice) / month · cancel anytime"
+            ? "\(price) / month · cancel anytime"
+            : "Then \(price) / month · cancel anytime"
     }
 
     // MARK: - Actions

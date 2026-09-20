@@ -85,6 +85,21 @@ final class ExtensionSnapshotTests: XCTestCase {
         try snapshot(TranslationProviderView(context: editable, preview: .done(translated)), size: size, name: "tr-done-dark", dark: true, background: .systemBackground, ignoresSafeArea: true)
     }
 
+    /// The App Review screenshot for the subscription, and a design check of the
+    /// paywall: `preview:` supplies the price StoreKit only serves when the app
+    /// runs from the scheme's StoreKit configuration.
+    @MainActor
+    func test_renderPaywall_forAppReview() throws {
+        let license = LicenseService(openURLHandler: { _ in }, startBackgroundTasks: false)
+        license.applyDebugState(.trial(daysRemaining: 9))
+        let subscriptions = StoreKitSubscriptionManager(licenseService: license)
+        let paywall = PaywallView(preview: .init(priceText: "$4.99", trialDays: 14))
+            .environment(license)
+            .environment(subscriptions)
+        try snapshot(paywall, size: CGSize(width: 402, height: 874), name: "paywall-review", background: .systemBackground)
+        try snapshot(paywall, size: CGSize(width: 402, height: 874), name: "paywall-review-dark", dark: true, background: .systemBackground)
+    }
+
     // MARK: - Rendering
 
     @MainActor
@@ -108,7 +123,12 @@ final class ExtensionSnapshotTests: XCTestCase {
 
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = 3
-        let image = UIGraphicsImageRenderer(bounds: window.bounds, format: format).image { _ in
+        let renderer = UIGraphicsImageRenderer(bounds: window.bounds, format: format)
+        // Warm-up pass: the first draw of a view that uses glass/material samples a
+        // stale backdrop, which leaves a ghost of the content behind the card.
+        _ = renderer.image { _ in window.drawHierarchy(in: window.bounds, afterScreenUpdates: true) }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.3))
+        let image = renderer.image { _ in
             window.drawHierarchy(in: window.bounds, afterScreenUpdates: true)
         }
         try FileManager.default.createDirectory(at: outputDir, withIntermediateDirectories: true)

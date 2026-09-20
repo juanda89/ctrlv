@@ -34,7 +34,7 @@ struct RootTabView: View {
             // override) can silently fail to present. The overlay is
             // deterministic and can't be swiped away when the license is expired.
             if showPaywall {
-                PaywallView(onClose: { paywallRequested = false })
+                PaywallView(preview: DebugLaunch.previewPricing, onClose: { paywallRequested = false })
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .zIndex(1)
             }

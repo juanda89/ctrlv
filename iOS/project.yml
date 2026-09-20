@@ -170,6 +170,9 @@ targets:
     sources:
       - path: Tests/Snapshots
       - path: Sources/ControlViOS/Design
+      - path: Sources/ControlViOS/Views/PaywallView.swift
+      - path: Sources/ControlViOS/Subscription
+      - path: Sources/ControlViOS/App/DebugLaunch.swift
       - path: Shared
       - path: KeyboardExtension
       - path: ShareExtension
