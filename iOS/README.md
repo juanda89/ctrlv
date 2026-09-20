@@ -127,6 +127,12 @@ default `TARGETED_DEVICE_FAMILY = "1,2"` overrides the project-level value (now 
 Store Connect rejects the upload (ITMS-90474). Bump `CURRENT_PROJECT_VERSION` before every
 new upload.
 
+**Version 1.0 (build 1) submitted for review on 2026-09-20.** Screenshots must be
+**6.5"** (1284 x 2778), not 6.9" — generate them with
+`sips -z 2778 1284 in.png --out out.png` (see `iOS/AppStore/screenshots/6.5-inch/`).
+Leave "Sign-in required" unchecked in App Review Information: the app works in trial
+mode with no account, and checking it demands demo credentials.
+
 **Still pending in App Store Connect:** Paid Apps Agreement + banking + tax forms
 (Account Holder only — Diego), EU trader status (Business → Compliance, Admin can do
 it), the IAP review screenshot (paywall PNG) on the subscription, the 6.9" screenshots
