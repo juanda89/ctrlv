@@ -2,15 +2,18 @@ import { json, handlePreflight, methodNotAllowed } from "../_shared/http.ts";
 import { FidelityError, OpenRouterRateLimitError, isUntranslatable, translateWithOpenRouter } from "../_shared/openrouter.ts";
 import { sha256Hex } from "../_shared/security.ts";
 import { createServiceClient } from "../_shared/supabase.ts";
-import { renewSessionExpiry } from "../_shared/session.ts";
+import { sessionLifetimeDays } from "../_shared/session.ts";
+import { type AccessDecision, type AccessLimits, type AccessPlan, decideAccess, parseAccessSnapshot } from "../_shared/access.ts";
 
-const trialDays = Number(Deno.env.get("TRIAL_DAYS") ?? "14");
-const trialDailyLimit = Number(Deno.env.get("TRIAL_DAILY_TRANSLATION_LIMIT") ?? "50");
-const trialMaxCharacters = Number(Deno.env.get("TRIAL_MAX_CHARACTERS") ?? "3000");
-const paidBurstLimit = Number(Deno.env.get("PAID_REQUESTS_PER_10_MIN") ?? "80");
-const paidDailyLimit = Number(Deno.env.get("PAID_REQUESTS_PER_DAY") ?? "1500");
-const paidDailyCharacterLimit = Number(Deno.env.get("PAID_CHARACTERS_PER_DAY") ?? "1200000");
-const paidMaxCharacters = Number(Deno.env.get("PAID_MAX_CHARACTERS") ?? "12000");
+const limits: AccessLimits = {
+  trialDays: Number(Deno.env.get("TRIAL_DAYS") ?? "14"),
+  trialDailyLimit: Number(Deno.env.get("TRIAL_DAILY_TRANSLATION_LIMIT") ?? "50"),
+  trialMaxCharacters: Number(Deno.env.get("TRIAL_MAX_CHARACTERS") ?? "3000"),
+  paidBurstLimit: Number(Deno.env.get("PAID_REQUESTS_PER_10_MIN") ?? "80"),
+  paidDailyLimit: Number(Deno.env.get("PAID_REQUESTS_PER_DAY") ?? "1500"),
+  paidDailyCharacterLimit: Number(Deno.env.get("PAID_CHARACTERS_PER_DAY") ?? "1200000"),
+  paidMaxCharacters: Number(Deno.env.get("PAID_MAX_CHARACTERS") ?? "12000"),
+};
 
 type TranslateRequest = {
   text: string;
@@ -20,59 +23,73 @@ type TranslateRequest = {
   warmupOnly?: boolean;
 };
 
-type AccessPlan = {
-  plan: "trial" | "active";
-  accountHash: string | null;
-  planName: string | null;
-  trialDaysRemaining: number;
-};
+/// Supabase's Edge Runtime keeps the isolate alive for promises handed to
+/// EdgeRuntime.waitUntil after the response has been sent.
+declare const EdgeRuntime: { waitUntil?: (promise: Promise<unknown>) => void } | undefined;
 
+// Request timeline (the whole point is that nothing waits on anything it
+// does not need):
+//   hash ids ─┬─ model call (speculative, abortable) ──────────┐
+//             └─ translate_begin RPC (one DB round trip) ─ verdict ┴─ response
+//                                                   usage insert → after the response
 Deno.serve(async (req) => {
   const preflight = handlePreflight(req);
   if (preflight) return preflight;
   if (req.method !== "POST") return methodNotAllowed(req);
 
+  let abortSpeculative: (() => void) | null = null;
   try {
     const body = await req.json();
     const parsed = parseRequest(body);
     if (!parsed.ok) {
       return json({ error: parsed.error }, 400, req);
     }
+    const request = parsed.value;
 
-    if (parsed.value.warmupOnly) {
-      const result = await translateWithOpenRouter(parsed.value.text, parsed.value.systemPrompt);
+    if (request.warmupOnly) {
+      const result = await translateWithOpenRouter(request.text, request.systemPrompt);
       return json({ warmed: true, model: result.model }, 200, req);
     }
 
     const client = createServiceClient();
-    const identityHash = await sha256Hex(parsed.value.installID);
-    const identity = await upsertIdentity(client, identityHash);
-    const plan = await resolveAccessPlan(client, parsed.value, identity.firstSeenAt);
+    const [identityHash, tokenHash] = await Promise.all([
+      sha256Hex(request.installID),
+      hashSessionToken(request.sessionToken),
+    ]);
 
-    if (plan.plan === "trial" && plan.trialDaysRemaining <= 0) {
-      return json({ error: "Trial expired" }, 403, req);
+    // Nothing to translate (bare URL, bare email, no letters): echoed back
+    // unchanged after the access check. Skips the LLM entirely — free,
+    // unmetered, and immune to the model replying "I can't open that link".
+    const untranslatable = isUntranslatable(request.text);
+
+    // Speculative model call: started before we know whether the request is
+    // allowed, so the DB round trip overlaps the model's latency instead of
+    // preceding it. Rejections abort it. Texts that could only pass on a paid
+    // plan wait for a session token, so an expired trial cannot burn long
+    // completions by hammering the endpoint.
+    const abort = new AbortController();
+    abortSpeculative = () => abort.abort();
+    const mayTranslate = !untranslatable &&
+      (request.text.length <= limits.trialMaxCharacters ||
+        (tokenHash !== null && request.text.length <= limits.paidMaxCharacters));
+    const speculative = mayTranslate
+      ? translateWithOpenRouter(request.text, request.systemPrompt, { signal: abort.signal })
+      : null;
+    speculative?.catch(() => {}); // surfaced on the await below, never as an unhandled rejection
+
+    const decision = await beginAccess(client, identityHash, tokenHash, request.text.length, !untranslatable);
+    if (!decision.ok) {
+      abort.abort();
+      return json(decision.rejection.body, decision.rejection.status, req);
+    }
+    const plan = decision.plan;
+
+    if (untranslatable) {
+      return json({ translatedText: request.text, model: "passthrough", plan: plan.plan }, 200, req);
     }
 
-    await syncIdentity(client, identityHash, plan);
-
-    // Nothing to translate (bare URL, bare email, no letters): echo the input
-    // back unchanged. Skips the LLM entirely — free, unmetered, and immune to
-    // the model replying "I can't access that link" instead of translating.
-    if (isUntranslatable(parsed.value.text)) {
-      return json({
-        translatedText: parsed.value.text,
-        model: "passthrough",
-        plan: plan.plan,
-      }, 200, req);
-    }
-
-    const rateLimit = await enforceLimits(client, identityHash, parsed.value.text.length, plan);
-    if (rateLimit) {
-      return json(rateLimit.body, 429, req);
-    }
-
-    const result = await translateWithOpenRouter(parsed.value.text, parsed.value.systemPrompt);
-    await recordUsage(client, identityHash, plan, parsed.value.text.length, result.model);
+    const result = await (speculative ?? translateWithOpenRouter(request.text, request.systemPrompt));
+    await inBackground(recordUsage(client, identityHash, plan, request.text.length, result.model));
 
     return json({
       translatedText: result.translatedText,
@@ -81,6 +98,8 @@ Deno.serve(async (req) => {
       plan: plan.plan,
     }, 200, req);
   } catch (error) {
+    abortSpeculative?.();
+
     if (error instanceof OpenRouterRateLimitError) {
       return json(
         { error: "Translation service is busy. Please try again shortly.", retry_after_seconds: error.retryAfterSeconds },
@@ -111,6 +130,52 @@ Deno.serve(async (req) => {
   }
 });
 
+/// Session tokens are stored hashed with the magic-code pepper. Without the
+/// pepper no session can validate, which degrades to the trial plan exactly
+/// as before.
+async function hashSessionToken(token: string | null | undefined): Promise<string | null> {
+  const trimmed = token?.trim();
+  if (!trimmed) return null;
+  const pepper = Deno.env.get("MAGIC_CODE_PEPPER");
+  if (!pepper) return null;
+  return await sha256Hex(`${trimmed}:${pepper}`);
+}
+
+/// One round trip: identity upsert + sync, session lookup + sliding renewal,
+/// subscription lookup and usage-window counts (see the translate_begin
+/// migration). The verdict is computed here from the configured limits.
+async function beginAccess(
+  client: ReturnType<typeof createServiceClient>,
+  identityHash: string,
+  tokenHash: string | null,
+  textLength: number,
+  enforceLimits: boolean,
+): Promise<AccessDecision> {
+  const { data, error } = await client.rpc("translate_begin", {
+    p_identity_hash: identityHash,
+    p_token_hash: tokenHash,
+    p_session_lifetime_days: sessionLifetimeDays,
+  });
+  if (error) {
+    throw new Error(error.message);
+  }
+  return decideAccess(parseAccessSnapshot(data), textLength, limits, { enforceLimits });
+}
+
+/// Runs a task after the response is sent when the runtime supports it. A
+/// failed usage insert is logged, never turned into an error for a
+/// translation that already succeeded.
+function inBackground(task: Promise<unknown>): Promise<void> {
+  const guarded = task.then(() => {}, (error: unknown) => {
+    console.error(`[usage] ${error instanceof Error ? error.message : String(error)}`);
+  });
+  if (typeof EdgeRuntime !== "undefined" && typeof EdgeRuntime?.waitUntil === "function") {
+    EdgeRuntime.waitUntil(guarded);
+    return Promise.resolve();
+  }
+  return guarded;
+}
+
 function parseRequest(body: unknown): { ok: true; value: TranslateRequest } | { ok: false; error: string } {
   if (!body || typeof body !== "object") {
     return { ok: false, error: "Invalid request body" };
@@ -139,211 +204,6 @@ function parseRequest(body: unknown): { ok: true; value: TranslateRequest } | { 
   };
 }
 
-async function upsertIdentity(client: ReturnType<typeof createServiceClient>, identityHash: string) {
-  const nowISO = new Date().toISOString();
-  const { data, error } = await client
-    .from("translation_identities")
-    .upsert(
-      {
-        identity_hash: identityHash,
-        last_seen_at: nowISO,
-      },
-      { onConflict: "identity_hash" },
-    )
-    .select("first_seen_at")
-    .single();
-
-  if (error || !data?.first_seen_at) {
-    throw new Error(error?.message ?? "Could not load translation identity");
-  }
-
-  return { firstSeenAt: data.first_seen_at as string };
-}
-
-async function resolveAccessPlan(
-  client: ReturnType<typeof createServiceClient>,
-  request: TranslateRequest,
-  firstSeenAt: string,
-): Promise<AccessPlan> {
-  const trialDaysRemaining = calculateTrialDaysRemaining(firstSeenAt);
-  const sessionToken = request.sessionToken?.trim();
-  if (!sessionToken) {
-    return { plan: "trial", accountHash: null, planName: null, trialDaysRemaining };
-  }
-
-  const subscription = await lookupActiveSubscription(client, sessionToken);
-  if (!subscription) {
-    return { plan: "trial", accountHash: null, planName: null, trialDaysRemaining };
-  }
-
-  const accountHash = await sha256Hex(subscription.accountID);
-  return {
-    plan: "active",
-    accountHash,
-    planName: subscription.planName,
-    trialDaysRemaining,
-  };
-}
-
-type ActiveSubscription = {
-  accountID: string;
-  planName: string | null;
-};
-
-async function lookupActiveSubscription(
-  client: ReturnType<typeof createServiceClient>,
-  sessionToken: string,
-): Promise<ActiveSubscription | null> {
-  const pepper = Deno.env.get("MAGIC_CODE_PEPPER");
-  if (!pepper) return null;
-
-  const tokenHash = await sha256Hex(`${sessionToken}:${pepper}`);
-  const nowISO = new Date().toISOString();
-
-  const { data: session } = await client
-    .from("app_sessions")
-    .select("account_id, expires_at")
-    .eq("token_hash", tokenHash)
-    .gt("expires_at", nowISO)
-    .maybeSingle();
-
-  if (!session?.account_id) return null;
-
-  // Sliding-window renewal so heavy users who translate but rarely open the
-  // popover also stay signed in past the fixed 30-day mark.
-  await renewSessionExpiry(client, tokenHash, session.expires_at as string | null);
-
-  const { data: subscription } = await client
-    .from("account_subscriptions")
-    .select("status, plan_name")
-    .eq("account_id", session.account_id)
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (!subscription || subscription.status !== "active") return null;
-
-  return {
-    accountID: session.account_id as string,
-    planName: (subscription.plan_name as string | null) ?? null,
-  };
-}
-
-function calculateTrialDaysRemaining(firstSeenAt: string): number {
-  const startedAt = new Date(firstSeenAt).getTime();
-  const elapsedDays = Math.floor((Date.now() - startedAt) / (1000 * 60 * 60 * 24));
-  return Math.max(0, trialDays - elapsedDays);
-}
-
-async function syncIdentity(
-  client: ReturnType<typeof createServiceClient>,
-  identityHash: string,
-  plan: AccessPlan,
-) {
-  const { error } = await client
-    .from("translation_identities")
-    .update({
-      last_seen_at: new Date().toISOString(),
-      last_plan: plan.plan,
-      last_license_hash: plan.accountHash,
-    })
-    .eq("identity_hash", identityHash);
-
-  if (error) {
-    throw new Error(error.message);
-  }
-}
-
-async function enforceLimits(
-  client: ReturnType<typeof createServiceClient>,
-  identityHash: string,
-  textLength: number,
-  plan: AccessPlan,
-) {
-  if (plan.plan === "trial") {
-    return await enforceTrialLimits(client, identityHash, textLength);
-  }
-
-  const scopeHash = plan.accountHash ?? identityHash;
-  return await enforcePaidLimits(client, scopeHash, textLength);
-}
-
-async function enforceTrialLimits(
-  client: ReturnType<typeof createServiceClient>,
-  identityHash: string,
-  textLength: number,
-) {
-  if (textLength > trialMaxCharacters) {
-    return {
-      body: { error: `Trial text exceeds ${trialMaxCharacters} characters.` },
-    };
-  }
-
-  const dailyUsage = await loadUsageWindow(client, "identity_hash", identityHash, minutesAgo(24 * 60));
-  if (dailyUsage.count >= trialDailyLimit) {
-    return {
-      body: { error: "Trial daily limit reached.", retry_after_seconds: secondsUntilTomorrowUTC() },
-    };
-  }
-
-  return null;
-}
-
-async function enforcePaidLimits(
-  client: ReturnType<typeof createServiceClient>,
-  accountHash: string,
-  textLength: number,
-) {
-  if (textLength > paidMaxCharacters) {
-    return {
-      body: { error: `Request exceeds ${paidMaxCharacters} characters.` },
-    };
-  }
-
-  const burstUsage = await loadUsageWindow(client, "license_hash", accountHash, minutesAgo(10));
-  if (burstUsage.count >= paidBurstLimit) {
-    return {
-      body: { error: "Too many requests in a short period.", retry_after_seconds: 600 },
-    };
-  }
-
-  const dailyUsage = await loadUsageWindow(client, "license_hash", accountHash, minutesAgo(24 * 60));
-  if (dailyUsage.count >= paidDailyLimit || dailyUsage.characters >= paidDailyCharacterLimit) {
-    return {
-      body: { error: "Daily fair-use limit reached.", retry_after_seconds: secondsUntilTomorrowUTC() },
-    };
-  }
-
-  return null;
-}
-
-async function loadUsageWindow(
-  client: ReturnType<typeof createServiceClient>,
-  column: "identity_hash" | "license_hash",
-  value: string,
-  sinceISO: string,
-) {
-  let query = client
-    .from("translation_usage_events")
-    .select("char_count")
-    .gte("created_at", sinceISO);
-
-  query = column === "identity_hash"
-    ? query.eq("identity_hash", value)
-    : query.eq("license_hash", value);
-
-  const { data, error } = await query;
-  if (error) {
-    throw new Error(error.message);
-  }
-
-  const rows = data ?? [];
-  return {
-    count: rows.length,
-    characters: rows.reduce((sum, row) => sum + Number(row.char_count ?? 0), 0),
-  };
-}
-
 async function recordUsage(
   client: ReturnType<typeof createServiceClient>,
   identityHash: string,
@@ -364,18 +224,8 @@ async function recordUsage(
   }
 }
 
-function minutesAgo(minutes: number): string {
-  return new Date(Date.now() - minutes * 60_000).toISOString();
-}
-
-function secondsUntilTomorrowUTC(): number {
-  const now = new Date();
-  const tomorrow = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
-  return Math.max(60, Math.floor((tomorrow - now.getTime()) / 1000));
-}
-
 function readString(body: object, key: string): string | null {
-  const value = body[key as keyof typeof body];
+  const value = (body as Record<string, unknown>)[key];
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
@@ -384,19 +234,19 @@ function readString(body: object, key: string): string | null {
 /// Like readString but returns the value verbatim (only the emptiness check
 /// uses trim). Use for user content whose whitespace is meaningful.
 function readRawString(body: object, key: string): string | null {
-  const value = body[key as keyof typeof body];
+  const value = (body as Record<string, unknown>)[key];
   if (typeof value !== "string") return null;
-  return (value as string).trim().length > 0 ? (value as string) : null;
+  return value.trim().length > 0 ? value : null;
 }
 
 function readOptionalString(body: object, key: string): string | null {
-  const value = body[key as keyof typeof body];
+  const value = (body as Record<string, unknown>)[key];
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed.length > 0 ? trimmed : null;
 }
 
 function readOptionalBoolean(body: object, key: string): boolean | null {
-  const value = body[key as keyof typeof body];
+  const value = (body as Record<string, unknown>)[key];
   return typeof value === "boolean" ? value : null;
 }

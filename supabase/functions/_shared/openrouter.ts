@@ -45,7 +45,17 @@ export class FidelityError extends Error {
   }
 }
 
-export async function translateWithOpenRouter(text: string, systemPrompt: string): Promise<OpenRouterResult> {
+export type TranslateOptions = {
+  /// Lets the caller cancel a speculative call (started before the access
+  /// check finished) without falling through to the next model in the chain.
+  signal?: AbortSignal;
+};
+
+export async function translateWithOpenRouter(
+  text: string,
+  systemPrompt: string,
+  options: TranslateOptions = {},
+): Promise<OpenRouterResult> {
   const apiKey = Deno.env.get("OPENROUTER_API_KEY");
   if (!apiKey) {
     throw new Error("Missing OPENROUTER_API_KEY");
@@ -60,7 +70,7 @@ export async function translateWithOpenRouter(text: string, systemPrompt: string
   for (let i = 0; i < models.length; i += 1) {
     const model = models[i];
     try {
-      const request = { apiKey, referer, title, model, text, systemPrompt };
+      const request = { apiKey, referer, title, model, text, systemPrompt, signal: options.signal };
       const first = sanitizeTranslation(await callOpenRouter(request), text);
       const firstIssues = fidelityIssues(text, first);
       if (firstIssues.length === 0) {
@@ -84,6 +94,10 @@ export async function translateWithOpenRouter(text: string, systemPrompt: string
       const useSecond = secondIssues.length < firstIssues.length;
       return { translatedText: useSecond ? second : first, model, fallbackUsed: i > 0, retried: useSecond };
     } catch (error) {
+      if (options.signal?.aborted) {
+        // The caller gave up (access rejected): no fallback, no retry.
+        throw error;
+      }
       if (error instanceof OpenRouterRateLimitError) {
         // Rate limits should propagate, not silently mask as a model
         // problem and burn budget on a different model.
@@ -112,9 +126,11 @@ async function callOpenRouter(params: {
   text: string;
   systemPrompt: string;
   strict?: boolean;
+  signal?: AbortSignal;
 }): Promise<string> {
   const response = await fetch(`${defaultBaseURL}/chat/completions`, {
     method: "POST",
+    signal: params.signal,
     headers: {
       "Authorization": `Bearer ${params.apiKey}`,
       "Content-Type": "application/json",
