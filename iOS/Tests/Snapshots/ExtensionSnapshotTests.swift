@@ -1,4 +1,5 @@
 import ControlVCore
+import KeyboardKit
 import SwiftUI
 import TranslationUIProvider
 import UIKit
@@ -25,7 +26,7 @@ final class MockTranslationContext: TranslationUIProviderContext {
 ///
 /// Without SNAPSHOT_DIR the images land in the host app's tmp directory.
 final class ExtensionSnapshotTests: XCTestCase {
-    private static let keyboardSize = CGSize(width: 402, height: KeyboardPanelView.bandHeight + KeyboardLayoutView.height + KeyboardPanelView.bottomPadding)
+    private static let keyboardSize = CGSize(width: 402, height: ControlVKeyboardView.bandHeight + 4 * 54)
     private static let sheetSize = CGSize(width: 402, height: 620)
     // Measured behind the iOS 26 keyboard: (224, 226, 229) light, (27, 27, 29) dark.
     private static let lightKeyboard = UIColor(red: 224/255, green: 226/255, blue: 229/255, alpha: 1)
@@ -36,32 +37,38 @@ final class ExtensionSnapshotTests: XCTestCase {
         return URL(fileURLWithPath: path, isDirectory: true)
     }
 
-    @State private static var previewSettings = ExtensionSettings()
-
-    private var noopActions: KeyboardActions {
-        KeyboardActions(readSelectedText: { nil }, readTypedText: { nil }, replaceSelectedText: { _ in },
-                        replaceTypedText: { _, _ in }, insertText: { _ in }, deleteBackward: {},
-                        contextBeforeInput: { nil }, switchKeyboard: {})
+    /// A KeyboardKit keyboard configured like the extension's, with no controller.
+    @MainActor
+    private func makeKeyboard(language: KeyboardLanguage, dark: Bool) -> (Keyboard.State, Keyboard.Services) {
+        let state = Keyboard.State()
+        state.keyboardContext.colorScheme = dark ? .dark : .light
+        state.keyboardContext.screenSize = CGSize(width: 402, height: 874)
+        state.keyboardContext.setIsLiquidGlassEnabled(state.keyboardContext.isLiquidGlassAvailable)
+        let services = Keyboard.Services(state: state)
+        services.layoutService = ControlVLayoutService(language: language)
+        return (state, services)
     }
 
     @MainActor
     func test_renderKeyboardPanel_allPhases() throws {
-        let typed = "oye, nos vemos mañana en la oficina? llevo el reporte y los cambios del diseño para revisarlos juntos"
-        let states: [(String, KeyboardPanelView.PreviewState)] = [
-            ("kb-idle", .init()),
-            ("kb-confirm", .init(phase: .confirmTyped, detectedText: typed)),
-            ("kb-translating", .init(phase: .translating, usedSelection: true)),
-            ("kb-done", .init(phase: .done, usedSelection: true)),
-            ("kb-copied", .init(phase: .copiedFallback)),
-            ("kb-error", .init(phase: .error, errorMessage: "Nothing to translate. Select text or type something first.")),
+        let states: [(String, TranslateFlow.Phase, String?, Bool)] = [
+            ("kb-idle", .idle, nil, false),
+            ("kb-options", .idle, nil, true),
+            ("kb-translating", .translating, nil, false),
+            ("kb-done", .done, nil, false),
+            ("kb-copied", .copiedFallback, nil, false),
+            ("kb-error", .error, "Nothing to translate. Select text or type something first.", false),
         ]
-        for (name, state) in states {
-            let view = KeyboardPanelView(hasFullAccess: true, actions: noopActions, preview: state)
+        for (name, phase, message, options) in states {
+            let (state, services) = makeKeyboard(language: .english, dark: false)
+            let flow = TranslateFlow(hasFullAccess: true, actions: .noop)
+            flow.applyPreview(phase: phase, errorMessage: message, showsOptions: options)
+            let view = ControlVKeyboardView(services: services, state: state, flow: flow)
             try snapshot(view, size: Self.keyboardSize, name: name, background: Self.lightKeyboard, ignoresSafeArea: true)
         }
-        try snapshot(KeyboardPanelView(hasFullAccess: false, actions: noopActions), size: Self.keyboardSize, name: "kb-noaccess", background: Self.lightKeyboard, ignoresSafeArea: true)
-        try snapshot(KeyboardPanelView(hasFullAccess: true, actions: noopActions), size: Self.keyboardSize, name: "kb-idle-dark", dark: true, background: Self.darkKeyboard, ignoresSafeArea: true)
-        try snapshot(KeyboardPanelView(hasFullAccess: true, actions: noopActions, preview: states[1].1), size: Self.keyboardSize, name: "kb-confirm-dark", dark: true, background: Self.darkKeyboard, ignoresSafeArea: true)
+        let (state, services) = makeKeyboard(language: .english, dark: true)
+        let flow = TranslateFlow(hasFullAccess: true, actions: .noop)
+        try snapshot(ControlVKeyboardView(services: services, state: state, flow: flow), size: Self.keyboardSize, name: "kb-idle-dark", dark: true, background: Self.darkKeyboard, ignoresSafeArea: true)
     }
 
     @MainActor
@@ -108,12 +115,12 @@ final class ExtensionSnapshotTests: XCTestCase {
     /// English, so the language is injected rather than inferred here.
     @MainActor
     func test_renderKeyboardLayout_spanish() throws {
-        var settings = ExtensionSettings()
-        let binding = Binding(get: { settings }, set: { settings = $0 })
-        let view = KeyboardLayoutView(actions: noopActions, settings: binding, onTranslate: {}, language: .spanish)
-            .frame(width: 402)
-        try snapshot(view, size: CGSize(width: 402, height: KeyboardLayoutView.height), name: "kb-spanish", background: Self.lightKeyboard, ignoresSafeArea: true)
-        try snapshot(view, size: CGSize(width: 402, height: KeyboardLayoutView.height), name: "kb-spanish-dark", dark: true, background: Self.darkKeyboard, ignoresSafeArea: true)
+        for dark in [false, true] {
+            let (state, services) = makeKeyboard(language: .spanish, dark: dark)
+            let flow = TranslateFlow(hasFullAccess: true, actions: .noop)
+            let view = ControlVKeyboardView(services: services, state: state, flow: flow)
+            try snapshot(view, size: Self.keyboardSize, name: dark ? "kb-spanish-dark" : "kb-spanish", dark: dark, background: dark ? Self.darkKeyboard : Self.lightKeyboard, ignoresSafeArea: true)
+        }
     }
 
     // MARK: - Rendering

@@ -19,6 +19,7 @@ struct ControlViOSApp: App {
                     switch DebugLaunch.setupState {
                     case "none": SetupState.resetForPreview()
                     case "keyboard": SetupState.resetForPreview(); SetupState.overrideForPreview(keyboard: true, translationProvider: false)
+                    case "keyboardAdded": SetupState.resetForPreview()
                     case "both": SetupState.overrideForPreview(keyboard: true, translationProvider: true)
                     default: break
                     }

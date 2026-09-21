@@ -35,8 +35,9 @@ docs/                            # Static site on Vercel (index, download, succe
 scripts/                         # build-release.sh, generate-appcast.sh, build-docs-css.sh, benchmark-*.sh,
                                  # ios-upload.sh (archive+sign+upload), ios-signing-setup.sh, asc-api.js (App Store Connect API)
 .github/workflows/release.yml    # Tag vX.Y.Z → build, sign, notarize, DMG, GitHub Release, appcast
-iOS/                             # iOS client (XcodeGen: app + share, keyboard and translation extensions, snapshot tests).
-                                 # Reuses ControlVCore; App Store app ID 6814210564. See iOS/README.md.
+iOS/                             # iOS client (XcodeGen: app + share, keyboard and translation extensions, snapshot + UI tests).
+                                 # Keyboard = KeyboardKit 9.9.1 (MIT) + our layout/style/action layer. App Store app ID 6814210564.
+                                 # See iOS/README.md.
 windows/                         # Windows client (.NET 8). ControlV.Core = C# port of ControlVCore (builds/tests on any OS:
                                  # `dotnet test windows/ControlV.sln`); ControlV.App (WPF) lands in Phase 2. CI: windows-ci.yml
 ```

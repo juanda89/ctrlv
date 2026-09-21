@@ -91,6 +91,7 @@ struct TranslateTabView: View {
                         .padding(.leading, 5)
                 }
                 TextEditor(text: $inputText)
+                    .accessibilityIdentifier("translate.editor")
                     .font(.title3)
                     .scrollContentBackground(.hidden)
                     .frame(minHeight: 150)

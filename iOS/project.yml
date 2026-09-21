@@ -21,6 +21,12 @@ settings:
 packages:
   ControlVCore:
     path: ..
+  # Keyboard engine: layout, gestures (no dead spots, several fingers at
+  # once), input/action callouts, feedback. 9.9.1 is the last MIT release with
+  # full sources (10.x is a closed binary); it already carries Liquid Glass.
+  KeyboardKit:
+    url: https://github.com/KeyboardKit/KeyboardKit.git
+    exactVersion: 9.9.1
 targets:
   Control-V:
     type: application
@@ -108,6 +114,8 @@ targets:
     dependencies:
       - package: ControlVCore
         product: ControlVCore
+      - package: KeyboardKit
+        product: KeyboardKit
     info:
       path: Generated/Keyboard-Info.plist
       properties:
@@ -185,6 +193,8 @@ targets:
       - target: Control-V
       - package: ControlVCore
         product: ControlVCore
+      - package: KeyboardKit
+        product: KeyboardKit
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.snapshots

@@ -88,10 +88,10 @@ final class SetupFlowUITests: XCTestCase {
     /// keyboard through the globe key. The keyboard records itself in the App
     /// Group when it appears; the sheet should react.
     func test_app_switchToControlVKeyboard() {
-        app.launchArguments = ["-ui.showSetup", "1"]
+        app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "both"]
         app.launch()
-        let field = app.textViews["setup.testField"]
-        XCTAssertTrue(field.waitForExistence(timeout: 10), "setup sheet with its test field")
+        let field = app.textViews["translate.editor"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "translate editor")
         field.tap()
         ensureSystemKeyboard()
         save("app-system-keyboard", of: app)
@@ -108,11 +108,14 @@ final class SetupFlowUITests: XCTestCase {
     /// Selects the sample text and taps Translate in the edit menu, which
     /// opens Control-V's translation sheet when it is the default app.
     func test_app_useTranslateMenu() {
-        app.launchArguments = ["-ui.showSetup", "1"]
+        // The Translate tab's editor: the sheet's field only shows while the
+        // keyboard is added but unverified.
+        app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "keyboard"]
         app.launch()
-        let field = app.textViews["setup.testField"]
+        let field = app.textViews["translate.editor"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
+        field.typeText("Hola, cómo va todo por allá")
         sleep(1)
         // Long press → Select All → the edit menu for the selection.
         field.press(forDuration: 1.0)
@@ -148,9 +151,9 @@ final class SetupFlowUITests: XCTestCase {
     /// Holds Control-V's own keys: the character preview, then the accent
     /// strip (e), with a slide to the second accent. The Mac side records.
     func test_app_holdControlVKeys() {
-        app.launchArguments = ["-ui.showSetup", "1"]
+        app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "both"]
         app.launch()
-        let field = app.textViews["setup.testField"]
+        let field = app.textViews["translate.editor"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
         switchToControlVKeyboard()
@@ -168,14 +171,82 @@ final class SetupFlowUITests: XCTestCase {
         let target = n.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
         target.press(forDuration: 1.2, thenDragTo: target.withOffset(CGVector(dx: 8, dy: 0)))
         sleep(1)
-        app.descendants(matching: .any)["delete"].firstMatch.press(forDuration: 1.5)
+        app.descendants(matching: .any)["Backspace"].firstMatch.press(forDuration: 1.5)
         sleep(1)
         save("app-controlv-typed", of: app)
     }
 
+    /// Taps in the gaps between keys and between rows: each must type the
+    /// nearest key (no dead spots), and two quick taps must both register.
+    func test_app_typeInGaps() {
+        app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "both"]
+        app.launch()
+        let field = app.textViews["translate.editor"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        switchToControlVKeyboard()
+        // Select all and delete so the field starts empty.
+        field.press(forDuration: 1.0)
+        let selectAll = app.menuItems["Select All"]
+        if selectAll.waitForExistence(timeout: 3) { selectAll.tap() }
+        app.descendants(matching: .any)["Backspace"].firstMatch.tap()
+        sleep(1)
+        let q = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Q' OR label == 'q'")).firstMatch
+        let w = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'W' OR label == 'w'")).firstMatch
+        let a = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'A' OR label == 'a'")).firstMatch
+        XCTAssertTrue(q.waitForExistence(timeout: 5))
+        NSLog("[uitest] frames q=%@ w=%@ a=%@", NSCoder.string(for: q.frame), NSCoder.string(for: w.frame), NSCoder.string(for: a.frame))
+        let gapBetweenQAndW = CGPoint(x: (q.frame.maxX + w.frame.minX) / 2, y: q.frame.midY)
+        let gapBelowQ = CGPoint(x: q.frame.midX, y: (q.frame.maxY + a.frame.minY) / 2)
+        // Cells tile the keyboard with no gap, so the only way to miss is a
+        // touch exactly on a shared edge (a zero-width line no finger hits).
+        // Probe 1 pt to either side of the edges between q, w and a.
+        let probes: [(String, CGPoint)] = [
+            ("1pt left of q|w edge", CGPoint(x: gapBetweenQAndW.x - 1, y: gapBetweenQAndW.y)),
+            ("1pt right of q|w edge", CGPoint(x: gapBetweenQAndW.x + 1, y: gapBetweenQAndW.y)),
+            ("1pt above the row edge", CGPoint(x: q.frame.midX + 6, y: gapBelowQ.y - 1)),
+            ("1pt below the row edge", CGPoint(x: q.frame.midX + 6, y: gapBelowQ.y + 1)),
+        ]
+        var previous = (field.value as? String) ?? ""
+        for (label, point) in probes {
+            app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: point.x, dy: point.y)).tap()
+            usleep(250_000)
+            let now = (field.value as? String) ?? ""
+            NSLog("[uitest] tap %@ at %@ -> '%@'", label, NSCoder.string(for: point), String(now.dropFirst(previous.count)))
+            previous = now
+        }
+        sleep(1)
+        save("app-gap-typing", of: app)
+        let typed = (field.value as? String) ?? ""
+        NSLog("[uitest] typed in gaps: '%@'", typed)
+        XCTAssertEqual(typed.count, 4, "four gap taps should type four letters, got '\(typed)'")
+    }
+
+    /// The acceptance test for detection: with the keyboard added but never
+    /// opened, opening it in the sheet's field must turn the card green and
+    /// close the sheet without any button.
+    func test_app_detectKeyboardInSheet() {
+        app.launchArguments = ["-ui.showSetup", "1", "-ui.setupState", "keyboardAdded"]
+        app.launch()
+        let field = app.textViews["setup.testField"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10), "setup sheet with its test field")
+        XCTAssertTrue(app.staticTexts["Added"].waitForExistence(timeout: 3), "keyboard card says Added")
+        save("detect-before", of: app)
+        field.tap()
+        switchToControlVKeyboard()
+        // The keyboard reported itself the moment it appeared; the sheet turns
+        // green, dismisses the keyboard and goes away on its own.
+        let sheetGone = NSPredicate(format: "exists == false")
+        let done = XCTNSPredicateExpectation(predicate: sheetGone, object: field)
+        XCTAssertEqual(XCTWaiter().wait(for: [done], timeout: 8), .completed, "sheet closes after detection")
+        sleep(1)
+        save("detect-after", of: app)
+        XCTAssertFalse(app.staticTexts["Finish setup"].exists, "account screen no longer asks for setup")
+    }
+
     /// Screenshot of the setup sheet as launched (no keyboard).
     func test_app_setupSheet() {
-        app.launchArguments = ["-ui.showSetup", "1"]
+        app.launchArguments = ["-ui.showSetup", "1", "-ui.setupState", "keyboardAdded"]
         app.launch()
         XCTAssertTrue(app.textViews["setup.testField"].waitForExistence(timeout: 10))
         sleep(1)
@@ -185,9 +256,9 @@ final class SetupFlowUITests: XCTestCase {
     /// The system keyboard with a letter held down, for the character-preview
     /// popup and the accent popup; the Mac side records video meanwhile.
     func test_app_holdSystemKeys() {
-        app.launchArguments = ["-ui.showSetup", "1"]
+        app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "both"]
         app.launch()
-        let field = app.textViews["setup.testField"]
+        let field = app.textViews["translate.editor"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
         ensureSystemKeyboard()

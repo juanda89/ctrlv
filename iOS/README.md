@@ -71,28 +71,30 @@ Verified end to end on the iOS 26.5 simulator with `Tests/UITests/SetupFlowUITes
 - There is no "I already did it" button any more: builds 1–4 had one, labelled "It's on", and
   it read as a status, which is how a wrong status got recorded.
 
-### The keyboard is measured against the system one
+### The keyboard runs on KeyboardKit, dressed as the system one
 
-`KeyboardLayoutView` reproduces the iOS 26 keyboard pixel for pixel on a 402 pt iPhone
-(measured from screenshots of the real one in the same simulator): 43 pt keys, 6 pt between
-keys, 11 pt between rows, 6.5 pt margins, circular 8 pt corners, no shadow, every key the same
-colour (white / `(64,64,65)` in dark mode, glyphs black / white), 22 pt letters (17 pt cap
-height), a blank space bar and a return glyph. Rows land at the same y as the system's
-(591/645/699/753) and the keyboard top edge too (540), because `KeyboardPanelView.bandHeight`
-reserves the 51 pt the system keeps for its predictive bar (35 pt in our view plus the
-16 pt lip iOS draws above a third-party keyboard). Two reasons for that band: apps do not
-reflow when the user switches keyboards, and the key previews of the top row have room to
-rise — an extension's window clips anything outside it, so there is no other way. The band
-also hosts the "Translating / Replaced" strip instead of covering the keys.
+The keyboard engine is [KeyboardKit](https://github.com/KeyboardKit/KeyboardKit) **9.9.1**:
+the last release with full sources under MIT (10.x became a closed binary that needs a
+license key; Pro tiers start at USD 50/month and are what autocomplete/autocorrect would
+cost — no KeyboardKit tier does swipe typing). It provides what a hand-made engine kept
+getting wrong: gestures with no dead spots (cells tile the whole keyboard, verified by tapping
+1 pt either side of every edge), several fingers down at once, Apple-style input callouts and
+accent callouts, repeat on backspace, autocapitalization, double-space period, keyboard clicks.
 
-`KeyView` handles what a `Button` cannot: the character preview on touch down (with the
-keyboard click, which needs `ClickingInputView` to opt in), the accent strip after a 420 ms
-hold with slide-to-pick (Spanish variants first), and commit on touch up. Modifier keys darken
-while pressed; delete repeats after 400 ms. Double space types ". " like the system.
+Our layer on top (`KeyboardExtension/`): `ControlVLayoutService` (Ñ row when the phone speaks
+Spanish, the Control-V key between space and return, rows pinned to the measured system
+metrics: 54 pt rows with 3/5.5 pt insets → 43 pt keys, 6/11 pt gaps), `ControlVKeyboardView`
+(button style measured on the iOS 26 keyboard: every key white / `(64,64,65)` dark, circular
+8 pt corners, no shadow, 22 pt letters, blank space bar, return glyph; Spanish accents through
+`keyboardCalloutActions`; a 27 pt band above the keys that makes the keyboard exactly as tall
+as the system one and hosts the "Translating / Replaced" strip or the language/tone chips),
+`ControlVActionHandler` (tap V → `TranslateFlow.translate()`, long press → chips) and
+`TranslateFlow` (the replace-in-place logic with its TOCTOU guards).
 
-The keys are anchored to the **bottom** of the input view: iOS first lays a keyboard out in a
-taller view (442 pt on the simulator) and shrinks it a frame later, and top-aligned keys showed
-up mid-screen for that frame — the "keyboard jumps into place" glitch of builds 1–4.
+Two KeyboardKit details worth knowing: the toolbar slot is sized by
+`.autocompleteToolbarStyle(.init(height:))`, not by the toolbar style; and the 9.9.1 service
+classes live in a folder called `_Deprecated` but are the supported customization points
+(`iPhoneLayoutService`, `StandardStyleService`, `StandardActionHandler`).
 
 ### Three ways to translate from any app
 

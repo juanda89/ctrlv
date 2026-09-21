@@ -28,9 +28,11 @@ public enum SetupState {
     private static let keyboardSignalKey = "setup.keyboardSignalAt"
     private static let keyboardSignalFullAccessKey = "setup.keyboardSignalFullAccess"
     private static let translationSignalKey = "setup.translationSignalAt"
-    /// Builds 1–4 let the user confirm by hand ("It's on"), which is exactly
-    /// how a wrong status got recorded. Only cleared now, never read.
-    private static let legacyConfirmKeys = ["setup.translationProviderConfirmed", "setup.keyboardConfirmed"]
+    /// Set when the user says a path is on. Being the default translation app
+    /// is invisible until the extension runs, so the user's word counts; a
+    /// report from the extension itself always wins over it.
+    private static let menuConfirmedKey = "setup.translationProviderConfirmed"
+    private static let keyboardConfirmedKey = "setup.keyboardConfirmed"
 
     /// A fresh instance per access: the app and the extensions are separate
     /// processes, and a cached one keeps serving values written before the
@@ -66,6 +68,18 @@ public enum SetupState {
             CFNotificationCenterPostNotification(CFNotificationCenterGetDarwinNotifyCenter(),
                                                  CFNotificationName(signal.rawValue as CFString), nil, nil, true)
         }
+    }
+
+    // MARK: - Confirmed by the user
+
+    public static func confirmTranslationProvider() {
+        defaults.set(true, forKey: menuConfirmedKey)
+        NotificationCenter.default.post(name: .controlVSetupChanged, object: nil)
+    }
+
+    public static func confirmKeyboard() {
+        defaults.set(true, forKey: keyboardConfirmedKey)
+        NotificationCenter.default.post(name: .controlVSetupChanged, object: nil)
     }
 
     // MARK: - Received by the app
@@ -117,6 +131,7 @@ public enum SetupState {
             return .notAdded
         }
         guard let (_, fullAccess) = latestKeyboardReport else {
+            if defaults.bool(forKey: keyboardConfirmedKey) { return .ready }
             return enabled == nil ? .notAdded : .addedNotOpened
         }
         return fullAccess ? .ready : .addedNoFullAccess
@@ -161,6 +176,7 @@ public enum SetupState {
     public static var translationProviderReady: Bool {
         let d = defaults
         return d.object(forKey: translationSeenKey) != nil || d.object(forKey: translationSignalKey) != nil
+            || d.bool(forKey: menuConfirmedKey)
     }
 
     /// At least one path works, so the app is usable outside itself.
@@ -180,8 +196,9 @@ public enum SetupState {
 
     public static func resetForPreview() {
         let d = defaults
-        ([keyboardSeenKey, keyboardFullAccessKey, translationSeenKey, shareSeenKey,
-          keyboardSignalKey, keyboardSignalFullAccessKey, translationSignalKey] + legacyConfirmKeys)
+        [keyboardSeenKey, keyboardFullAccessKey, translationSeenKey, shareSeenKey,
+         keyboardSignalKey, keyboardSignalFullAccessKey, translationSignalKey,
+         menuConfirmedKey, keyboardConfirmedKey]
             .forEach(d.removeObject(forKey:))
     }
 }
