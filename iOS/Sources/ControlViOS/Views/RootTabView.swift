@@ -53,6 +53,7 @@ struct RootTabView: View {
             KeyboardSetupView {
                 UserDefaults(suiteName: iOSSettingsStore.appGroup)?.set(true, forKey: "hasSeenKeyboardSetup")
                 showSetup = false
+                NotificationCenter.default.post(name: .controlVSetupChanged, object: nil)
             }
             .presentationDetents([.large])
         }

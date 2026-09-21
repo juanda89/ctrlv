@@ -36,6 +36,7 @@ struct AccountTabView: View {
             .background(AuroraBackground())
             .navigationTitle("Account")
             .task(id: scenePhase) { isSetUp = SetupState.anyReady }
+            .onReceive(NotificationCenter.default.publisher(for: .controlVSetupChanged)) { _ in isSetUp = SetupState.anyReady }
             .sheet(isPresented: $showSignIn) { SignInScreen().presentationDetents([.large]).presentationDragIndicator(.visible) }
             .sheet(isPresented: $showSetup, onDismiss: { isSetUp = SetupState.anyReady }) {
                 KeyboardSetupView { showSetup = false }

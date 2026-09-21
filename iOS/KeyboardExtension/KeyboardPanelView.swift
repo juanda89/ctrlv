@@ -27,6 +27,17 @@ struct KeyboardPanelView: View {
     @State private var errorMessage: String?
     @State private var settings = ExtensionBridge.loadSettings()
 
+    /// The band above the keys. iOS draws a 16 pt lip above a third-party
+    /// keyboard's view, so 35 pt here shows as the 51 pt the system keyboard
+    /// reserves for its predictive bar: the keyboard is then exactly as tall
+    /// as the system one (apps do not reflow when the user switches keyboards)
+    /// and key previews of the top row have room to rise (an extension's
+    /// window clips anything outside it). While translating, the status strip
+    /// lives here instead of over the keys.
+    static let bandHeight: CGFloat = 35
+    /// Between the last row and the system's globe bar (measured: 3 pt).
+    static let bottomPadding: CGFloat = 3
+
     enum Phase {
         case idle              // waiting for user to tap Translate
         case confirmTyped      // typed-text fallback: show capture, ask to confirm
@@ -58,24 +69,28 @@ struct KeyboardPanelView: View {
     }
 
     var body: some View {
-        ZStack(alignment: .top) {
+        VStack(spacing: 0) {
+            ZStack {
+                // Only while something is happening: at rest this is an
+                // ordinary keyboard, with the Control-V key next to space.
+                if isBusy {
+                    statusBar
+                        .padding(.horizontal, 6)
+                        .transition(.move(edge: .top).combined(with: .opacity))
+                }
+            }
+            .frame(height: Self.bandHeight)
             KeyboardLayoutView(
                 actions: actions,
                 settings: $settings,
                 onTranslate: { Task { await startTranslateFlow() } }
             )
-
-            // Only while something is happening: at rest this is an ordinary
-            // keyboard, with the Control-V key next to space.
-            if isBusy {
-                statusBar
-                    .padding(.horizontal, 6)
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
         }
-        .padding(.top, 5)
-        .padding(.bottom, 4)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(.bottom, Self.bottomPadding)
+        // Anchored to the bottom: while iOS animates the input view from the
+        // previous keyboard's height to ours, top-aligned keys would sit high
+        // up in the taller view for a frame and then drop into place.
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .background(Color.clear)
         .tint(Brand.blue)
         .animation(.smooth(duration: 0.28), value: phaseID)
@@ -163,8 +178,8 @@ struct KeyboardPanelView: View {
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
-        .frame(height: 44)
-        .glassCard(12)
+        .frame(height: 31)
+        .glassCard(10)
         .shadow(color: .black.opacity(0.18), radius: 10, y: 4)
     }
 

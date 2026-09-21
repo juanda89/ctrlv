@@ -13,6 +13,9 @@ struct ControlViOSApp: App {
                 .environment(coordinator.subscriptionManager)
                 .environment(coordinator.settings)
                 .task {
+                    // Extensions announce themselves across processes; the
+                    // app records it so setup status is live.
+                    SetupState.startObservingSignals()
                     switch DebugLaunch.setupState {
                     case "none": SetupState.resetForPreview()
                     case "keyboard": SetupState.resetForPreview(); SetupState.overrideForPreview(keyboard: true, translationProvider: false)

@@ -51,11 +51,48 @@ widths rounded up overflow the row and clip the last key.
 
 ### Setup status is detected, not asked
 
-iOS has no API for "is my keyboard installed?" or "am I the default translation
-app?", so each extension records that it ran in the App Group
-(`Shared/SetupState.swift`) and the app reads those marks. The setup sheet polls
-while it is open, flips each path to **Ready** on its own, and closes once one
-of them works. It never appears when a path is already on.
+Verified end to end on the iOS 26.5 simulator with `Tests/UITests/SetupFlowUITests.swift`
+(it drives the real Settings app and the real keyboard switcher):
+
+- **Keyboard added** — read from the enabled-keyboards list iOS keeps in the global
+  preferences: `UserDefaults.standard["AppleKeyboards"]` contains
+  `info.controlv.ios.keyboard` (that is the exact string Settings writes). No extension
+  needs to run for this, and the status flips as soon as the user comes back from Settings.
+- **Keyboard ready / no Full Access** — only the keyboard knows, so it reports itself when it
+  appears, through two channels: a mark in the App Group (worked without Full Access on the
+  simulator, but Apple documents that unprivileged keyboards may be denied the shared
+  container) and a Darwin notification (`SetupState.Signal`) that the app turns into its own
+  App Group record. The newest report wins.
+- **Translate menu (default translation app)** — invisible to the app (`UIApplication.Category`
+  only covers the web browser), so the translation extension reports itself the same way the
+  first time it runs. The setup sheet has a "Try it here" text field for exactly that: select
+  the sample, tap Translate in the edit menu (second page, behind the chevron), and the sheet
+  turns green and closes itself. The same field is where the keyboard is opened once.
+- There is no "I already did it" button any more: builds 1–4 had one, labelled "It's on", and
+  it read as a status, which is how a wrong status got recorded.
+
+### The keyboard is measured against the system one
+
+`KeyboardLayoutView` reproduces the iOS 26 keyboard pixel for pixel on a 402 pt iPhone
+(measured from screenshots of the real one in the same simulator): 43 pt keys, 6 pt between
+keys, 11 pt between rows, 6.5 pt margins, circular 8 pt corners, no shadow, every key the same
+colour (white / `(64,64,65)` in dark mode, glyphs black / white), 22 pt letters (17 pt cap
+height), a blank space bar and a return glyph. Rows land at the same y as the system's
+(591/645/699/753) and the keyboard top edge too (540), because `KeyboardPanelView.bandHeight`
+reserves the 51 pt the system keeps for its predictive bar (35 pt in our view plus the
+16 pt lip iOS draws above a third-party keyboard). Two reasons for that band: apps do not
+reflow when the user switches keyboards, and the key previews of the top row have room to
+rise — an extension's window clips anything outside it, so there is no other way. The band
+also hosts the "Translating / Replaced" strip instead of covering the keys.
+
+`KeyView` handles what a `Button` cannot: the character preview on touch down (with the
+keyboard click, which needs `ClickingInputView` to opt in), the accent strip after a 420 ms
+hold with slide-to-pick (Spanish variants first), and commit on touch up. Modifier keys darken
+while pressed; delete repeats after 400 ms. Double space types ". " like the system.
+
+The keys are anchored to the **bottom** of the input view: iOS first lays a keyboard out in a
+taller view (442 pt on the simulator) and shrinks it a frame later, and top-aligned keys showed
+up mid-screen for that frame — the "keyboard jumps into place" glitch of builds 1–4.
 
 ### Three ways to translate from any app
 

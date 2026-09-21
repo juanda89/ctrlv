@@ -25,10 +25,11 @@ final class MockTranslationContext: TranslationUIProviderContext {
 ///
 /// Without SNAPSHOT_DIR the images land in the host app's tmp directory.
 final class ExtensionSnapshotTests: XCTestCase {
-    private static let keyboardSize = CGSize(width: 402, height: 224)
+    private static let keyboardSize = CGSize(width: 402, height: KeyboardPanelView.bandHeight + KeyboardLayoutView.height + KeyboardPanelView.bottomPadding)
     private static let sheetSize = CGSize(width: 402, height: 620)
-    private static let lightKeyboard = UIColor(red: 0.82, green: 0.84, blue: 0.86, alpha: 1)
-    private static let darkKeyboard = UIColor(white: 0.17, alpha: 1)
+    // Measured behind the iOS 26 keyboard: (224, 226, 229) light, (27, 27, 29) dark.
+    private static let lightKeyboard = UIColor(red: 224/255, green: 226/255, blue: 229/255, alpha: 1)
+    private static let darkKeyboard = UIColor(red: 27/255, green: 27/255, blue: 29/255, alpha: 1)
 
     private var outputDir: URL {
         let path = ProcessInfo.processInfo.environment["SNAPSHOT_DIR"] ?? NSTemporaryDirectory()
@@ -111,8 +112,8 @@ final class ExtensionSnapshotTests: XCTestCase {
         let binding = Binding(get: { settings }, set: { settings = $0 })
         let view = KeyboardLayoutView(actions: noopActions, settings: binding, onTranslate: {}, language: .spanish)
             .frame(width: 402)
-        try snapshot(view, size: CGSize(width: 402, height: 224), name: "kb-spanish", background: Self.lightKeyboard, ignoresSafeArea: true)
-        try snapshot(view, size: CGSize(width: 402, height: 224), name: "kb-spanish-dark", dark: true, background: Self.darkKeyboard, ignoresSafeArea: true)
+        try snapshot(view, size: CGSize(width: 402, height: KeyboardLayoutView.height), name: "kb-spanish", background: Self.lightKeyboard, ignoresSafeArea: true)
+        try snapshot(view, size: CGSize(width: 402, height: KeyboardLayoutView.height), name: "kb-spanish-dark", dark: true, background: Self.darkKeyboard, ignoresSafeArea: true)
     }
 
     // MARK: - Rendering

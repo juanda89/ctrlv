@@ -190,16 +190,37 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.snapshots
         TARGETED_DEVICE_FAMILY: "1"
         GENERATE_INFOPLIST_FILE: YES
+  # Drives the real Settings app and the real keyboards in the simulator to
+  # verify the setup flow end to end (add the keyboard, allow Full Access,
+  # switch to Control-V, use the Translate menu). One step per test so the
+  # App Group can be inspected between steps:
+  #   xcodebuild test … -only-testing:'Control-V UITests/SetupFlowUITests/test_settings_addKeyboard'
+  Control-V UITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "18.4"
+    sources:
+      - path: Tests/UITests
+    dependencies:
+      - target: Control-V
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.uitests
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_TARGET_NAME: Control-V
 schemes:
   Control-V:
     build:
       targets:
         Control-V: all
         Control-V Snapshots: [test]
+        Control-V UITests: [test]
     test:
       config: Debug
       targets:
         - Control-V Snapshots
+        - Control-V UITests
     run:
       config: Debug
       # Local StoreKit config: the paywall shows the real product/price/trial in

@@ -2,70 +2,51 @@ import SwiftUI
 
 /// Blocking onboarding: Control-V's whole point is translating inside other
 /// apps, and nothing in here works until iOS is told to let it. The screen
-/// shows both ways, what each one costs, and exactly what using it looks like.
+/// shows both ways, the exact Settings path for each, and a text field where
+/// either one can be tried on the spot.
 ///
-/// There is no "skip": the sheet closes by itself the moment either path is
-/// detected. The extensions record that they ran (`SetupState`), so no
-/// confirmation is ever asked of the user.
+/// There is no "skip" and no "I did it" button: the keyboard is looked up in
+/// the enabled-keyboards list, and each extension records when it runs, so
+/// the status shown here is the status observed (`SetupState`). The sheet
+/// closes by itself the moment either path is detected.
 struct KeyboardSetupView: View {
     let onDone: () -> Void
 
     @Environment(\.scenePhase) private var scenePhase
-    @State private var keyboardReady = SetupState.keyboardReady
+    @State private var keyboard = SetupState.keyboardStatus
     @State private var menuReady = SetupState.translationProviderReady
-    @State private var checkedAndMissing = false
+    @State private var sampleText = "Hola, ¿cómo va todo por allá? Escríbeme cuando puedas."
+    @State private var detectedMessage: String?
+    @FocusState private var fieldFocused: Bool
 
-    private var anyReady: Bool { keyboardReady || menuReady }
+    private var anyReady: Bool { keyboard == .ready || menuReady }
     private var supportsDefaultTranslation: Bool {
         if #available(iOS 18.4, *) { return true } else { return false }
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            header
-
-            if supportsDefaultTranslation {
-                option(
-                    title: "From the Translate menu",
-                    symbol: "text.cursor",
-                    isReady: menuReady,
-                    steps: [.init("Select text", symbol: "text.cursor"), .init("Tap Translate", symbol: "globe"), .init("Tap Replace", symbol: "arrow.left.arrow.right")],
-                    path: "Settings › Apps › Default Apps › Translation › Control-V",
-                    confirm: { SetupState.confirmTranslationProvider(); refresh() }
-                )
-            }
-            option(
-                title: "From your keyboard",
-                symbol: "keyboard",
-                isReady: keyboardReady,
-                steps: [.init("Write or select", symbol: "keyboard"), .init("Tap the V key", brandKey: true), .init("It's replaced", symbol: "checkmark.circle")],
-                path: "Settings › General › Keyboard › Keyboards › Control-V › Allow Full Access",
-                confirm: { SetupState.confirmKeyboard(); refresh() }
-            )
-
-            Label("Full Access only sends the text you pick. Nothing you type is logged or stored.", systemImage: "lock.shield")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-
-            if checkedAndMissing {
-                Label("Not detected yet. Open the Control-V keyboard once in any app, or translate something with the Translate menu.", systemImage: "info.circle")
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                header
+                if supportsDefaultTranslation { menuCard }
+                keyboardCard
+                checkCard
+                Label("Full Access only sends the text you pick. Nothing you type is logged or stored.", systemImage: "lock.shield")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
-
-            Spacer(minLength: 0)
+            .padding(22)
         }
-        .padding(22)
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .scrollDismissesKeyboard(.interactively)
         .background(AuroraBackground())
-        .safeAreaInset(edge: .bottom) { footer }
+        .safeAreaInset(edge: .bottom) { if anyReady { footer } }
         .interactiveDismissDisabled(!anyReady)
         .task(id: scenePhase) { await watchForChanges() }
+        .onReceive(NotificationCenter.default.publisher(for: .controlVSetupChanged)) { _ in refresh() }
     }
 
-    // MARK: - Pieces
+    // MARK: - Header
 
     private var header: some View {
         HStack(spacing: 12) {
@@ -75,11 +56,113 @@ struct KeyboardSetupView: View {
                     .font(.title2.weight(.bold))
                 Text(anyReady
                      ? "Control-V now works inside your other apps."
-                     : "Control-V works inside other apps. Turn on either one, or both.")
+                     : "Turn on one or both. Control-V checks them by itself.")
                     .font(.subheadline).foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+
+    // MARK: - Translate menu
+
+    private var menuCard: some View {
+        card(
+            title: "From the Translate menu",
+            symbol: "text.cursor",
+            pill: menuReady ? .on : .init(text: "Not yet", color: .secondary),
+            steps: [.init("Select text", symbol: "text.cursor"), .init("Tap Translate", symbol: "globe"), .init("Tap Replace", symbol: "arrow.left.arrow.right")],
+            detail: menuReady
+                ? "Works. Select text in any app, tap Translate, then Replace."
+                : "Choose Control-V under Settings › Apps › Default Apps › Translation. Then select the text below and tap Translate to check it."
+        ) {
+            if !menuReady {
+                Button {
+                    if #available(iOS 18.3, *) {
+                        open(UIApplication.openDefaultApplicationsSettingsURLString)
+                    } else {
+                        open(UIApplication.openSettingsURLString)
+                    }
+                } label: { Label("Open Default Apps", systemImage: "gear") }
+                .buttonStyle(GlassButtonStyle())
+            }
+        }
+    }
+
+    // MARK: - Keyboard
+
+    private var keyboardCard: some View {
+        card(
+            title: "From your keyboard",
+            symbol: "keyboard",
+            pill: keyboardPill,
+            steps: [.init("Write or select", symbol: "keyboard"), .init("Tap the V key", brandKey: true), .init("It's replaced", symbol: "checkmark.circle")],
+            detail: keyboardDetail
+        ) {
+            if keyboard != .ready {
+                Button {
+                    open(UIApplication.openSettingsURLString)
+                } label: { Label(keyboard == .notAdded ? "Add it in Settings" : "Open Settings", systemImage: "gear") }
+                .buttonStyle(GlassButtonStyle())
+            }
+        }
+    }
+
+    private var keyboardPill: Pill {
+        switch keyboard {
+        case .notAdded: return .init(text: "Not added", color: .secondary)
+        case .addedNotOpened: return .init(text: "Added", color: .orange)
+        case .addedNoFullAccess: return .init(text: "No Full Access", color: .orange)
+        case .ready: return .on
+        }
+    }
+
+    private var keyboardDetail: String {
+        switch keyboard {
+        case .notAdded:
+            return "Settings › General › Keyboard › Keyboards › Add New Keyboard › Control-V, then turn on Allow Full Access."
+        case .addedNotOpened:
+            return "Added. Now open it once below: tap the text, hold the globe key and pick Control-V."
+        case .addedNoFullAccess:
+            return "Full Access is off, so it can type but not translate. Turn it on under Keyboards › Control-V, then open the keyboard again below."
+        case .ready:
+            return "Works. Tap the V key next to the space bar to translate what you typed."
+        }
+    }
+
+    // MARK: - Try it here
+
+    private var checkCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            SectionLabel(text: "Try it here")
+            TextEditor(text: $sampleText)
+                .font(.body)
+                .frame(minHeight: 64, maxHeight: 96)
+                .padding(8)
+                .background(Color(.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .focused($fieldFocused)
+                .accessibilityIdentifier("setup.testField")
+            if let detectedMessage {
+                Label(detectedMessage, systemImage: "checkmark.circle.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(Color.green)
+            } else {
+                Text("Keyboard: tap the text, hold the globe key and pick Control-V. Translate menu: select the text and tap Translate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(18)
+    }
+
+    // MARK: - Card pieces
+
+    struct Pill {
+        let text: String
+        let color: Color
+        static let on = Pill(text: "On", color: .green)
     }
 
     struct Step {
@@ -92,39 +175,28 @@ struct KeyboardSetupView: View {
         init(_ caption: String, brandKey: Bool) { self.caption = caption; self.brandKey = brandKey }
     }
 
-    private func option(title: String, symbol: String, isReady: Bool, steps: [Step], path: String, confirm: @escaping () -> Void) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
+    private func card<Action: View>(title: String, symbol: String, pill: Pill, steps: [Step], detail: String, @ViewBuilder action: () -> Action) -> some View {
+        let isOn = pill.text == Pill.on.text
+        return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
-                Image(systemName: isReady ? "checkmark.circle.fill" : symbol)
+                Image(systemName: isOn ? "checkmark.circle.fill" : symbol)
                     .font(.title3)
-                    .foregroundStyle(isReady ? Color.green : Brand.blue)
+                    .foregroundStyle(isOn ? Color.green : Brand.blue)
                 Text(title).font(.body.weight(.semibold))
                 Spacer(minLength: 0)
-                if isReady {
-                    Text("On")
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(Color.green)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Color.green.opacity(0.15), in: Capsule())
-                } else {
-                    // Being the default translation app is invisible to us, so
-                    // the user can just say so.
-                    Button("It's on", action: confirm)
-                        .font(.caption2.weight(.bold))
-                        .buttonStyle(.plain)
-                        .foregroundStyle(Brand.blue)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Brand.blue.opacity(0.12), in: Capsule())
-                }
+                Text(pill.text)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(pill.color)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(pill.color.opacity(0.15), in: Capsule())
             }
-
             stepStrip(steps)
-
-            Text(path)
-                .font(.caption).foregroundStyle(.tertiary)
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(isOn ? Color.secondary : Color.primary.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)
+            action()
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -171,54 +243,47 @@ struct KeyboardSetupView: View {
     }
 
     private var footer: some View {
-        VStack(spacing: 10) {
-            Button {
-                if let url = URL(string: UIApplication.openSettingsURLString) { UIApplication.shared.open(url) }
-            } label: { Label("Open Settings", systemImage: "gear") }
+        Button("Start translating", action: onDone)
             .buttonStyle(PrimaryButtonStyle())
+            .padding(.horizontal, 22)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+            .frame(maxWidth: .infinity)
+            .background(.bar)
+    }
 
-            if anyReady {
-                Button("Start translating", action: onDone)
-                    .font(.subheadline.weight(.semibold))
-            } else {
-                Button("I already turned it on") {
-                    refresh()
-                    checkedAndMissing = !anyReady
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
-            }
-        }
-        .padding(.horizontal, 22)
-        .padding(.top, 12)
-        .padding(.bottom, 8)
-        .background(.bar)
+    private func open(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        UIApplication.shared.open(url)
     }
 
     // MARK: - Live status
 
     /// Polls while the sheet is on screen. iOS offers no notification for
-    /// "the user enabled your keyboard", and the extensions can only record it
-    /// the next time they run, so a short poll is the only way to react.
+    /// "the user enabled your keyboard" or "your extension just ran", so a
+    /// short poll is the only way to react; it restarts on every scene change
+    /// so coming back from Settings refreshes at once.
     private func watchForChanges() async {
         refresh()
         while !Task.isCancelled {
-            try? await Task.sleep(for: .seconds(1.5))
+            try? await Task.sleep(for: .seconds(1))
             let wasReady = anyReady
+            let keyboardWas = keyboard
+            let menuWas = menuReady
             refresh()
-            if anyReady {
-                checkedAndMissing = false
-                if !wasReady {
-                    try? await Task.sleep(for: .seconds(1.4))
-                    onDone()
-                    return
-                }
+            if anyReady, !wasReady {
+                if keyboard == .ready, keyboardWas != .ready { detectedMessage = "Keyboard detected with Full Access" }
+                if menuReady, !menuWas { detectedMessage = "Translate menu detected" }
+                fieldFocused = false
+                try? await Task.sleep(for: .seconds(1.6))
+                onDone()
+                return
             }
         }
     }
 
     private func refresh() {
-        keyboardReady = SetupState.keyboardReady
+        keyboard = SetupState.keyboardStatus
         menuReady = SetupState.translationProviderReady
     }
 }
