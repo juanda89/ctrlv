@@ -5,21 +5,22 @@ import SwiftUI
 /// shows both ways, the exact Settings path for each, and closes by itself
 /// the moment either one is detected.
 ///
-/// What is detected and what is taken on the user's word (`SetupState`): the
-/// keyboard's presence in Settings is read directly; Full Access and the
-/// Translate menu are reported by the extensions when they run; and both
-/// cards keep an "It's on" button, because being the default translation app
-/// is invisible to us until it is used.
+/// Every status here is something observed, never something claimed: the
+/// keyboard's presence in Settings is read from iOS, and Full Access and the
+/// Translate menu are reported by the extensions the first time they run. The
+/// Translate card can be re-checked, because iOS never says that another app
+/// has become the default translation app.
 struct KeyboardSetupView: View {
     let onDone: () -> Void
 
     @Environment(\.scenePhase) private var scenePhase
     @State private var keyboard = SetupState.keyboardStatus
-    @State private var menuReady = SetupState.translationProviderReady
+    @State private var menuLastUsed = SetupState.translationProviderLastUsed
     @State private var checkedAndMissing = false
     @State private var sampleText = "Hola, ¿cómo va todo por allá? Escríbeme cuando puedas."
     @FocusState private var fieldFocused: Bool
 
+    private var menuReady: Bool { menuLastUsed != nil }
     private var anyReady: Bool { keyboard == .ready || menuReady }
     private var supportsDefaultTranslation: Bool {
         if #available(iOS 18.4, *) { return true } else { return false }
@@ -81,10 +82,18 @@ struct KeyboardSetupView: View {
             symbol: "text.cursor",
             pill: menuReady ? .on : .init(text: "Not yet", color: .secondary),
             steps: [.init("Select text", symbol: "text.cursor"), .init("Tap Translate", symbol: "globe"), .init("Tap Replace", symbol: "arrow.left.arrow.right")],
-            detail: "Settings › Apps › Default Apps › Translation › Control-V",
-            confirm: menuReady ? nil : { SetupState.confirmTranslationProvider(); refresh() }
+            detail: menuDetail
         ) {
-            if !menuReady {
+            if menuReady {
+                // iOS never says that another app took over as the default
+                // translation app, so the only honest correction is to forget
+                // what we saw and wait to see it again.
+                Button {
+                    SetupState.forgetTranslationProvider()
+                    refresh()
+                } label: { Label("Re-check", systemImage: "arrow.clockwise") }
+                .buttonStyle(GlassButtonStyle())
+            } else {
                 Button {
                     if #available(iOS 18.3, *) {
                         open(UIApplication.openDefaultApplicationsSettingsURLString)
@@ -97,14 +106,21 @@ struct KeyboardSetupView: View {
         }
     }
 
+    private var menuDetail: String {
+        guard let menuLastUsed else {
+            return "Settings › Apps › Default Apps › Translation › Control-V. This turns green by itself the first time you translate from the menu."
+        }
+        let when = menuLastUsed.formatted(.relative(presentation: .named))
+        return "Last translated from the menu \(when). If you have since picked another translation app, tap Re-check."
+    }
+
     private var keyboardCard: some View {
         card(
             title: "From your keyboard",
             symbol: "keyboard",
             pill: keyboardPill,
             steps: [.init("Write or select", symbol: "keyboard"), .init("Tap the V key", brandKey: true), .init("It's replaced", symbol: "checkmark.circle")],
-            detail: keyboardDetail,
-            confirm: keyboard == .ready ? nil : { SetupState.confirmKeyboard(); refresh() }
+            detail: keyboardDetail
         ) {
             if keyboard != .ready {
                 Button {
@@ -175,7 +191,7 @@ struct KeyboardSetupView: View {
         init(_ caption: String, brandKey: Bool) { self.caption = caption; self.brandKey = brandKey }
     }
 
-    private func card<Action: View>(title: String, symbol: String, pill: Pill, steps: [Step], detail: String, confirm: (() -> Void)?, @ViewBuilder action: () -> Action) -> some View {
+    private func card<Action: View>(title: String, symbol: String, pill: Pill, steps: [Step], detail: String, @ViewBuilder action: () -> Action) -> some View {
         let isOn = pill.text == Pill.on.text
         return VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 10) {
@@ -196,15 +212,7 @@ struct KeyboardSetupView: View {
                 .font(.caption)
                 .foregroundStyle(isOn ? Color.secondary : Color.primary.opacity(0.75))
                 .fixedSize(horizontal: false, vertical: true)
-            HStack(spacing: 8) {
-                action()
-                if let confirm {
-                    // The status above is what was observed; this is the
-                    // user's word, for what cannot be observed.
-                    Button(action: confirm) { Label("It's on", systemImage: "checkmark") }
-                        .buttonStyle(GlassButtonStyle())
-                }
-            }
+            action()
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -267,6 +275,7 @@ struct KeyboardSetupView: View {
                 }
                 .font(.subheadline.weight(.semibold))
                 .foregroundStyle(.secondary)
+                .accessibilityIdentifier("setup.recheck")
             }
         }
         .padding(.horizontal, 22)
@@ -304,7 +313,7 @@ struct KeyboardSetupView: View {
 
     private func refresh() {
         keyboard = SetupState.keyboardStatus
-        menuReady = SetupState.translationProviderReady
+        menuLastUsed = SetupState.translationProviderLastUsed
         if anyReady { checkedAndMissing = false }
     }
 }

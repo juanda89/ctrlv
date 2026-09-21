@@ -68,8 +68,14 @@ Verified end to end on the iOS 26.5 simulator with `Tests/UITests/SetupFlowUITes
   first time it runs. The setup sheet has a "Try it here" text field for exactly that: select
   the sample, tap Translate in the edit menu (second page, behind the chevron), and the sheet
   turns green and closes itself. The same field is where the keyboard is opened once.
-- There is no "I already did it" button any more: builds 1–4 had one, labelled "It's on", and
-  it read as a status, which is how a wrong status got recorded.
+- **Nothing here is taken on the user's word.** Builds 1–6 had an "It's on" button per card; it
+  read as a status and recorded wrong ones (someone who had since picked another translation
+  app still saw "On"). It is gone, and `SetupState.migrateLegacyConfirmations()` deletes what
+  it wrote. The Translate card instead shows *when* it last ran and offers **Re-check**, which
+  forgets the sighting — the only honest correction, since iOS never says that another app
+  became the default translation app.
+- The Account tab always lists "Translating in other apps", so the sheet is reachable after
+  setup too.
 
 ### The keyboard runs on KeyboardKit, dressed as the system one
 
@@ -86,10 +92,18 @@ Spanish, the Control-V key between space and return, rows pinned to the measured
 metrics: 54 pt rows with 3/5.5 pt insets → 43 pt keys, 6/11 pt gaps), `ControlVKeyboardView`
 (button style measured on the iOS 26 keyboard: every key white / `(64,64,65)` dark, circular
 8 pt corners, no shadow, 22 pt letters, blank space bar, return glyph; Spanish accents through
-`keyboardCalloutActions`; a 27 pt band above the keys that makes the keyboard exactly as tall
-as the system one and hosts the "Translating / Replaced" strip or the language/tone chips),
+`keyboardCalloutActions`; a 40 pt band above the keys that hosts the "Translating / Replaced"
+strip or the language/tone chips), the Control-V key to the **left** of the space bar,
 `ControlVActionHandler` (tap V → `TranslateFlow.translate()`, long press → chips) and
 `TranslateFlow` (the replace-in-place logic with its TOCTOU guards).
+
+**The band's height is what keeps callouts whole.** A keyboard extension is clipped to its own
+view, so a character callout can only rise as far as the band plus the row inset. Measured on
+this phone: Apple's own top-row callout rises 59 pt above the key, which means it draws
+*outside* its keyboard — only the system may do that. Ours rises 44 pt and needs 45.5 pt of
+room, so the band is 40 pt and the keyboard ends up 13 pt taller than the system's (272 vs
+259). With the previous 27 pt band the top row's callout was cut off; the lower rows were
+fine, which is exactly how the bug showed up.
 
 Two KeyboardKit details worth knowing: the toolbar slot is sized by
 `.autocompleteToolbarStyle(.init(height:))`, not by the toolbar style; and the 9.9.1 service

@@ -24,12 +24,15 @@ struct ControlVKeyboardView: View {
         self._keyboardContext = ObservedObject(wrappedValue: state.keyboardContext)
     }
 
-    /// The system keyboard is 259 pt tall on this phone (51 pt of predictive
-    /// bar above 43 pt keys). iOS draws a 16 pt lip above a third-party
-    /// keyboard and KeyboardKit's four rows take 216 pt, so 27 pt here makes
-    /// the keyboard exactly as tall as the system one: apps do not reflow when
-    /// the user switches keyboards, and callouts have room above the top row.
-    static let bandHeight: CGFloat = 27
+    /// The band above the keys. It is empty at rest, and it is what gives the
+    /// top row's callout room to rise: a keyboard extension is clipped to its
+    /// own view, so anything drawn higher is cut off. Apple's own top-row
+    /// callout rises 59 pt above the key — it draws outside its keyboard, which
+    /// only the system may do. 40 pt here fits our 44 pt callout with the 5.5 pt
+    /// row inset, and leaves the keyboard 13 pt taller than the system's.
+    static let bandHeight: CGFloat = 40
+    /// How far a character callout rises above the key it belongs to.
+    static let calloutRise: CGFloat = 44
 
     var body: some View {
         KeyboardView(
@@ -97,14 +100,21 @@ struct ControlVKeyboardView: View {
         return style
     }
 
+    /// Measured on the iOS 26 keyboard: the balloon is 55 pt wide over a 40 pt
+    /// key. Its height is what decides how far it rises, so it is pinned to the
+    /// room the band leaves (`calloutRise`), and the curve is narrow enough
+    /// that the width stays close to Apple's.
     private var calloutStyle: Callouts.CalloutStyle {
         .init(
+            actionItemFont: .init(.title2, .regular),
+            actionItemMaxSize: .init(width: 44, height: 44),
             backgroundColor: dark ? Color(red: 92/255, green: 92/255, blue: 94/255) : .white,
             borderColor: .clear,
             cornerRadius: 10,
+            curveSize: .init(width: 4, height: 12),
             foregroundColor: dark ? .white : .black,
-            inputItemFont: .init(.title, .regular),
-            inputItemMinSize: .init(width: 0, height: 44),
+            inputItemFont: .init(.largeTitle, .regular),
+            inputItemMinSize: .init(width: 55, height: Self.calloutRise),
             selectedBackgroundColor: Brand.blue,
             shadowColor: .black.opacity(0.22),
             shadowRadius: 6
@@ -217,8 +227,8 @@ struct StatusBand: View {
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
-        .frame(height: 26)
-        .glassCard(9)
+        .frame(height: 32)
+        .glassCard(10)
         .shadow(color: .black.opacity(0.18), radius: 8, y: 3)
     }
 }

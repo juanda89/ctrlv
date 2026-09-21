@@ -148,6 +148,45 @@ final class SetupFlowUITests: XCTestCase {
         save("app-translate-sheet", of: app)
     }
 
+    /// Screenshots taken WHILE a key is held: `press(forDuration:)` blocks, so
+    /// the capture is scheduled on another queue first. Saves `<name>-idle` and
+    /// `<name>-held` so the balloon can be isolated by differencing them.
+    private func pressAndCapture(_ element: XCUIElement, name: String) {
+        save("\(name)-idle", of: app)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 1.3) { [self] in
+            save("\(name)-held", of: app)
+        }
+        element.press(forDuration: 2.6)
+        sleep(1)
+    }
+
+    /// The system keyboard's top-row preview, for comparison with ours.
+    func test_app_captureSystemTopRowPreview() {
+        app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "both"]
+        app.launch()
+        let field = app.textViews["translate.editor"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        ensureSystemKeyboard()
+        sleep(1)
+        let q = app.keyboards.keys.matching(NSPredicate(format: "label == 'Q' OR label == 'q'")).firstMatch
+        XCTAssertTrue(q.waitForExistence(timeout: 5))
+        pressAndCapture(q, name: "sys-top")
+    }
+
+    /// Our top-row preview, which must not be cut off at the top.
+    func test_app_captureOurTopRowPreview() {
+        app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "both"]
+        app.launch()
+        let field = app.textViews["translate.editor"]
+        XCTAssertTrue(field.waitForExistence(timeout: 10))
+        field.tap()
+        switchToControlVKeyboard()
+        let q = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Q' OR label == 'q'")).firstMatch
+        XCTAssertTrue(q.waitForExistence(timeout: 5))
+        pressAndCapture(q, name: "ours-top")
+    }
+
     /// Holds Control-V's own keys: the character preview, then the accent
     /// strip (e), with a slide to the second accent. The Mac side records.
     func test_app_holdControlVKeys() {
@@ -244,6 +283,19 @@ final class SetupFlowUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Finish setup"].exists, "account screen no longer asks for setup")
     }
 
+    /// The Account tab must always offer a way back into the setup sheet.
+    func test_app_accountOpensSetup() {
+        app.launchArguments = ["-ui.tab", "account", "-ui.setupState", "both"]
+        app.launch()
+        let row = app.buttons["account.setupRow"]
+        XCTAssertTrue(row.waitForExistence(timeout: 10), "Account lists the setup row")
+        row.tap()
+        XCTAssertTrue(app.staticTexts["From the Translate menu"].waitForExistence(timeout: 5), "setup sheet opens")
+        sleep(1)
+        save("account-setup-sheet", of: app)
+        XCTAssertFalse(app.buttons["It's on"].exists, "no hand-made confirmation buttons")
+    }
+
     /// Screenshot of the setup sheet as launched (no keyboard).
     func test_app_setupSheet() {
         app.launchArguments = ["-ui.showSetup", "1", "-ui.setupState", "keyboardAdded"]
@@ -263,7 +315,7 @@ final class SetupFlowUITests: XCTestCase {
         field.tap()
         ensureSystemKeyboard()
         sleep(1)
-        for key in ["x", "e", "n"] {
+        for key in ["q", "e", "n"] {
             let k = app.keyboards.keys[key]
             guard k.waitForExistence(timeout: 3) else { continue }
             k.press(forDuration: 1.2)

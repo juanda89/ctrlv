@@ -124,13 +124,14 @@ struct AccountTabView: View {
             }
             .buttonStyle(.plain)
             Divider().padding(.leading, 48)
-            if isSetUp, !(SetupState.keyboardReady && SetupState.translationProviderReady) {
-                Button { showSetup = true } label: {
-                    row(title: "Set up the other way to translate", symbol: "slider.horizontal.3", trailing: "chevron.right")
-                }
-                .buttonStyle(.plain)
-                Divider().padding(.leading, 48)
+            // Always reachable: this is where the user checks or fixes how
+            // Control-V translates in other apps, set up or not.
+            Button { showSetup = true } label: {
+                row(title: "Translating in other apps", symbol: "slider.horizontal.3", trailing: "chevron.right")
             }
+            .buttonStyle(.plain)
+            .accessibilityIdentifier("account.setupRow")
+            Divider().padding(.leading, 48)
             linkRow("Website", "globe", "https://control-v.info")
             Divider().padding(.leading, 48)
             linkRow("Privacy Policy", "hand.raised", "https://control-v.info/privacy")

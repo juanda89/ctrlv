@@ -3,8 +3,8 @@ import KeyboardKit
 import SwiftUI
 
 /// KeyboardKit's iPhone layout with two changes: the middle row carries Ñ
-/// when the phone speaks Spanish, and the Control-V key sits between space
-/// and return, sized like the other bottom-row system keys.
+/// when the phone speaks Spanish, and the Control-V key sits to the left of
+/// the space bar, sized like the other bottom-row system keys.
 final class ControlVLayoutService: KeyboardLayout.iPhoneLayoutService {
     static let translateAction = KeyboardAction.custom(named: "Translate and replace")
 
@@ -40,7 +40,7 @@ final class ControlVLayoutService: KeyboardLayout.iPhoneLayoutService {
         var key = space
         key.action = Self.translateAction
         key.size.width = bottomSystemButtonWidth(for: context)
-        layout.itemRows.insert(key, after: .space, inRow: rowIndex)
+        layout.itemRows.insert(key, before: .space, inRow: rowIndex)
         return layout
     }
 }
