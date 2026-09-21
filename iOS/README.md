@@ -129,24 +129,45 @@ review contact and review notes are filled; release is set to manual. Supabase s
 `APPSTORE_APP_APPLE_ID=6814210564` is set. The four App IDs and the App Group were
 registered by Xcode automatic signing (team `5ZFYF422LX`).
 
-**Build 1.0 (1) uploaded on 2026-09-20** from the command line (no Xcode GUI):
+### Uploading a build
+
+One command, no Xcode window, no Apple ID prompt:
 
 ```
-xcodebuild -project iOS/ControlV.xcodeproj -scheme Control-V -configuration Release \
-  -destination 'generic/platform=iOS' -archivePath /tmp/ControlV.xcarchive \
-  -allowProvisioningUpdates -allowProvisioningDeviceRegistration archive
-xcodebuild -exportArchive -archivePath /tmp/ControlV.xcarchive \
-  -exportOptionsPlist iOS/ExportOptions.plist -exportPath /tmp/export -allowProvisioningUpdates
+bash scripts/ios-upload.sh --bump
 ```
 
-`ExportOptions.plist` = app-store-connect + destination upload + automatic signing, so the
-second command uploads straight to App Store Connect using the Apple Account signed into
-Xcode. Three things bit on the first attempts: automatic signing needs at least one
-registered device on the team (the archive is dev-signed first), XcodeGen's per-target
-default `TARGETED_DEVICE_FAMILY = "1,2"` overrides the project-level value (now pinned to
-`"1"` on every target), and a portrait-only app must set `UIRequiresFullScreen` or App
-Store Connect rejects the upload (ITMS-90474). Bump `CURRENT_PROJECT_VERSION` before every
-new upload.
+It bumps `CURRENT_PROJECT_VERSION` in `project.yml`, regenerates the project, archives,
+re-signs and uploads. Processing on App Store Connect takes a few minutes; the internal
+TestFlight group "Control-V team" has *access to all builds*, so a processed build reaches
+the testers' phones with no further action. Check state without opening the browser:
+
+```
+node scripts/asc-api.js GET "/v1/builds?filter[app]=6814210564&limit=3&fields[builds]=version,processingState"
+```
+
+**Signing is manual on purpose.** The team's App Store Connect API key (`7325UTJ2UZ`, App
+Manager, issuer `425dc43b-2d68-4902-8a14-6935a90efa9a`, private key in
+`~/.appstoreconnect/private_keys/`) authenticates fine but Apple refuses *cloud signing*
+for it, so `-allowProvisioningUpdates` cannot mint App Store profiles. Instead:
+
+- the Apple Distribution certificate is created through the API and its private key lives
+  in a dedicated keychain, `controlv-signing.keychain-db` (password in
+  `~/.config/ctrlv/signing-keychain-password`), so no login-keychain prompt can block an
+  unattended upload;
+- the four `ControlV AppStore <target>` profiles are created through the API and pinned by
+  name in `ExportOptions.plist`;
+- `bash scripts/ios-signing-setup.sh` reissues the profiles (add `--cert` on a new Mac, or
+  when the certificate expires — the current one runs to 2027-09-21).
+
+Signing into Xcode with an Apple Account is no longer needed. It used to be, and it broke:
+`xcodebuild` reads accounts from disk, and the GUI's account list was empty on disk
+("Failed to find an account with App Store Connect access for team 5ZFYF422LX").
+
+Two things bit on the first uploads and are now fixed in `project.yml`: XcodeGen's
+per-target default `TARGETED_DEVICE_FAMILY = "1,2"` overrides the project-level value (now
+pinned to `"1"` on every target), and a portrait-only app must set `UIRequiresFullScreen`
+or App Store Connect rejects the upload (ITMS-90474).
 
 **Version 1.0 (build 1) submitted for review on 2026-09-20.** Screenshots must be
 **6.5"** (1284 x 2778), not 6.9" — generate them with

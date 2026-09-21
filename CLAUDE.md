@@ -32,8 +32,11 @@ supabase/functions/              # translate, request-magic-code, verify-magic-c
                                  # create-portal-session, stripe-webhook, submit-feedback, _shared/ (openrouter, session, email, stripe, http)
 supabase/migrations/             # Schema history (apply via Management API or CLI)
 docs/                            # Static site on Vercel (index, download, success, cancel, privacy). CSS is precompiled Tailwind.
-scripts/                         # build-release.sh, generate-appcast.sh, build-docs-css.sh, benchmark-*.sh
+scripts/                         # build-release.sh, generate-appcast.sh, build-docs-css.sh, benchmark-*.sh,
+                                 # ios-upload.sh (archive+sign+upload), ios-signing-setup.sh, asc-api.js (App Store Connect API)
 .github/workflows/release.yml    # Tag vX.Y.Z → build, sign, notarize, DMG, GitHub Release, appcast
+iOS/                             # iOS client (XcodeGen: app + share, keyboard and translation extensions, snapshot tests).
+                                 # Reuses ControlVCore; App Store app ID 6814210564. See iOS/README.md.
 windows/                         # Windows client (.NET 8). ControlV.Core = C# port of ControlVCore (builds/tests on any OS:
                                  # `dotnet test windows/ControlV.sln`); ControlV.App (WPF) lands in Phase 2. CI: windows-ci.yml
 ```
@@ -53,6 +56,10 @@ windows/                         # Windows client (.NET 8). ControlV.Core = C# p
 - **Whitespace-only is "no text"** at every stage (AX selection, clipboard fallback trigger, local guard). The server trims and rejects.
 - **Deploy Edge Functions with `--no-verify-jwt`** (they validate the app's own session token). No CI deploys functions; pushing to main changes nothing server-side. Both local Supabase CLIs hang: use `scripts/deploy-function.sh <slug>` and `scripts/apply-migration.sh <file>` (Management API, need `SUPABASE_ACCESS_TOKEN`).
 - **Abuse controls live server-side and fail closed** (security review 2026-09-19): magic codes burn after 5 wrong attempts (`consume_magic_code`), per-network caps on issued codes and on new trial identities (`translate_begin`), `warmupOnly` never reaches the model, all POST endpoints require `Content-Type: application/json`, `anon`/`authenticated` have no table grants (RLS is the second barrier), pg_cron purges usage events (7d), magic codes (24h), expired sessions (7d) and webhook payloads (30d). `APPSTORE_ALLOW_SANDBOX=true` is the private-beta switch: set it to anything else before the iOS launch.
+- **iOS builds upload with manual signing** (`bash scripts/ios-upload.sh --bump`). Apple refuses cloud signing for our App
+  Store Connect API key, so the Apple Distribution certificate lives in the `controlv-signing` keychain and the four
+  `ControlV AppStore *` profiles are minted through the API by `scripts/ios-signing-setup.sh`. Never go back to Xcode's
+  account UI: `xcodebuild` reads accounts from disk and the GUI list was empty there.
 - **Validate behavior empirically**: probe the live endpoint (curl), query the DB (Management API), read the app's Debug panel. Prompt instructions are not guarantees; put invariants in the server sanitizer.
 - Existing users' settings must survive every migration (`AppSettings` decodes the legacy flat shape and mirrors profile 0 back for downgrades).
 

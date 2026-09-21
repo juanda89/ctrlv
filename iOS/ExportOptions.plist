@@ -6,10 +6,27 @@
 	<string>app-store-connect</string>
 	<key>destination</key>
 	<string>upload</string>
+	<!-- Manual signing: cloud signing is refused for our App Store Connect API
+	     key, so the profiles below are created/renewed with scripts/ios-upload.sh
+	     (App Store Connect API) and re-signed with the team's Apple Distribution
+	     certificate held in the controlv-signing keychain. -->
 	<key>signingStyle</key>
-	<string>automatic</string>
+	<string>manual</string>
 	<key>teamID</key>
 	<string>5ZFYF422LX</string>
+	<key>signingCertificate</key>
+	<string>Apple Distribution</string>
+	<key>provisioningProfiles</key>
+	<dict>
+		<key>info.controlv.ios</key>
+		<string>ControlV AppStore app</string>
+		<key>info.controlv.ios.share</key>
+		<string>ControlV AppStore share</string>
+		<key>info.controlv.ios.keyboard</key>
+		<string>ControlV AppStore keyboard</string>
+		<key>info.controlv.ios.translation</key>
+		<string>ControlV AppStore translation</string>
+	</dict>
 	<key>uploadSymbols</key>
 	<true/>
 	<key>manageAppVersionAndBuildNumber</key>
