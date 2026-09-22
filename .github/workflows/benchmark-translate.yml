@@ -1,0 +1,29 @@
+name: benchmark-translate
+
+# Measures production /translate from a cloud runner, so the numbers do not
+# depend on anyone's home network. Run it from the Actions tab or with:
+#   gh workflow run benchmark-translate -f iterations=6
+# Then: gh run view --log | grep -E "^(short|medium|long)"
+on:
+  workflow_dispatch:
+    inputs:
+      iterations:
+        description: "Runs per text size"
+        default: "6"
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Where is this runner?
+        run: curl -s https://ipinfo.io/json | tr -d '\n' | head -c 300; echo
+      - name: Benchmark production /translate
+        env:
+          CTRLV_DEBUG_TOKEN: ${{ secrets.CTRLV_DEBUG_TOKEN }}
+        run: bash scripts/benchmark-translate-debug.sh "${{ inputs.iterations }}" gha | tee benchmark.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark
+          path: benchmark.txt
