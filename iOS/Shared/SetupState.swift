@@ -48,8 +48,21 @@ public enum SetupState {
     }
 
     public static func markTranslationProviderActive() {
+        #if DEBUG
+        // QA: `-ui.muteTranslationReport 1` makes the extension keep quiet, so
+        // the app's "Control-V did not open" path can be tested on a simulator
+        // that has no other translation app to pick.
+        if defaults.bool(forKey: muteTranslationReportKey) { return }
+        #endif
         defaults.set(Date(), forKey: translationSeenKey)
         Signal.post(.translation)
+    }
+
+    static let muteTranslationReportKey = "debug.muteTranslationReport"
+
+    /// Debug/QA: silence or restore the translation extension's report.
+    public static func setTranslationReportMuted(_ muted: Bool) {
+        if muted { defaults.set(true, forKey: muteTranslationReportKey) } else { defaults.removeObject(forKey: muteTranslationReportKey) }
     }
 
     public static func markShareActive() {

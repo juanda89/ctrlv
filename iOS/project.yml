@@ -68,6 +68,9 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios
+        # The Verify button uses the Translation framework (iOS 17.4+) behind
+        # an availability check; weak-link it so iOS 17.0-17.3 still launches.
+        OTHER_LDFLAGS: "$(inherited) -weak_framework Translation -weak_framework _Translation_SwiftUI"
         TARGETED_DEVICE_FAMILY: "1"
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         PRODUCT_NAME: Control-V

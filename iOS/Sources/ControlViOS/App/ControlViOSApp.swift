@@ -17,6 +17,9 @@ struct ControlViOSApp: App {
                     // app records it so setup status is live.
                     SetupState.startObservingSignals()
                     SetupState.migrateLegacyConfirmations()
+                    #if DEBUG
+                    SetupState.setTranslationReportMuted(DebugLaunch.muteTranslationReport)
+                    #endif
                     switch DebugLaunch.setupState {
                     case "none": SetupState.resetForPreview()
                     case "keyboard": SetupState.resetForPreview(); SetupState.overrideForPreview(keyboard: true, translationProvider: false)

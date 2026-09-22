@@ -1,4 +1,5 @@
 import SwiftUI
+import Translation
 
 /// Blocking onboarding: Control-V's whole point is translating inside other
 /// apps, and nothing in here works until iOS is told to let it. The screen
@@ -7,9 +8,14 @@ import SwiftUI
 ///
 /// Every status here is something observed, never something claimed: the
 /// keyboard's presence in Settings is read from iOS, and Full Access and the
-/// Translate menu are reported by the extensions the first time they run. The
-/// Translate card can be re-checked, because iOS never says that another app
-/// has become the default translation app.
+/// Translate menu are reported by the extensions when they run.
+///
+/// "Verify" on the Translate card is a real check: it asks iOS to present its
+/// translation UI for a sample text, which is exactly what the Translate item
+/// in any app's edit menu does. If Control-V is the default translation app,
+/// Control-V's own sheet opens and reports itself; if Apple's translator opens
+/// instead, nothing reports, and the card says so. iOS offers no API to ask
+/// the question directly (`UIApplication.Category` only covers the browser).
 struct KeyboardSetupView: View {
     let onDone: () -> Void
 
@@ -19,6 +25,11 @@ struct KeyboardSetupView: View {
     @State private var checkedAndMissing = false
     @State private var sampleText = "Hola, ¿cómo va todo por allá? Escríbeme cuando puedas."
     @FocusState private var fieldFocused: Bool
+    /// The Translate-menu check in flight: iOS presents its translation UI
+    /// for the sample text; whether Control-V reports itself decides.
+    @State private var verifyingMenu = false
+    @State private var menuVerifyStartedAt: Date?
+    @State private var menuVerifyFailed = false
 
     private var menuReady: Bool { menuLastUsed != nil }
     private var anyReady: Bool { keyboard == .ready || menuReady }
@@ -55,6 +66,9 @@ struct KeyboardSetupView: View {
         .interactiveDismissDisabled(!anyReady)
         .task(id: scenePhase) { await watchForChanges() }
         .onReceive(NotificationCenter.default.publisher(for: .controlVSetupChanged)) { _ in refresh() }
+        .onChange(of: verifyingMenu) { wasPresented, isPresented in
+            if wasPresented, !isPresented { Task { await concludeMenuVerification() } }
+        }
     }
 
     // MARK: - Header
@@ -84,34 +98,65 @@ struct KeyboardSetupView: View {
             steps: [.init("Select text", symbol: "text.cursor"), .init("Tap Translate", symbol: "globe"), .init("Tap Replace", symbol: "arrow.left.arrow.right")],
             detail: menuDetail
         ) {
-            if menuReady {
-                // iOS never says that another app took over as the default
-                // translation app, so the only honest correction is to forget
-                // what we saw and wait to see it again.
-                Button {
-                    SetupState.forgetTranslationProvider()
-                    refresh()
-                } label: { Label("Re-check", systemImage: "arrow.clockwise") }
-                .buttonStyle(GlassButtonStyle())
-            } else {
-                Button {
-                    if #available(iOS 18.3, *) {
-                        open(UIApplication.openDefaultApplicationsSettingsURLString)
-                    } else {
-                        open(UIApplication.openSettingsURLString)
-                    }
-                } label: { Label("Open Default Apps", systemImage: "gear") }
-                .buttonStyle(GlassButtonStyle())
+            HStack(spacing: 8) {
+                if #available(iOS 18.4, *) {
+                    Button(action: startMenuVerification) { Label("Verify", systemImage: "checkmark.seal") }
+                        .buttonStyle(GlassButtonStyle())
+                        .accessibilityIdentifier("setup.verifyMenu")
+                        .translationPresentation(isPresented: $verifyingMenu, text: sampleText)
+                }
+                if !menuReady {
+                    Button {
+                        if #available(iOS 18.3, *) {
+                            open(UIApplication.openDefaultApplicationsSettingsURLString)
+                        } else {
+                            open(UIApplication.openSettingsURLString)
+                        }
+                    } label: { Label("Open Default Apps", systemImage: "gear") }
+                    .buttonStyle(GlassButtonStyle())
+                }
             }
         }
     }
 
     private var menuDetail: String {
+        if menuVerifyFailed {
+            return "Apple's translator opened instead of Control-V, so Control-V is not the default translation app yet. Choose it under Settings › Apps › Default Apps › Translation, then tap Verify again."
+        }
         guard let menuLastUsed else {
-            return "Settings › Apps › Default Apps › Translation › Control-V. This turns green by itself the first time you translate from the menu."
+            return "Settings › Apps › Default Apps › Translation › Control-V. Then tap Verify: if Control-V's sheet opens, it is on."
         }
         let when = menuLastUsed.formatted(.relative(presentation: .named))
-        return "Last translated from the menu \(when). If you have since picked another translation app, tap Re-check."
+        return "Verified \(when): Control-V opened as the translation app. Tap Verify any time to check again."
+    }
+
+    private func startMenuVerification() {
+        menuVerifyFailed = false
+        menuVerifyStartedAt = Date()
+        fieldFocused = false
+        verifyingMenu = true
+        if DebugLaunch.autoDismissVerify {
+            Task {
+                try? await Task.sleep(for: .seconds(4))
+                verifyingMenu = false
+            }
+        }
+    }
+
+    /// Runs when the translation UI goes away. Control-V's sheet reports
+    /// itself the moment it appears (mark + signal), so a report newer than
+    /// the tap means it was Control-V; none means it was Apple's translator.
+    private func concludeMenuVerification() async {
+        guard let startedAt = menuVerifyStartedAt else { return }
+        try? await Task.sleep(for: .seconds(1.2))
+        refresh()
+        let reported = (SetupState.translationProviderLastUsed ?? .distantPast) > startedAt
+        if !reported {
+            SetupState.forgetTranslationProvider()
+            menuVerifyFailed = true
+            refresh()
+        }
+        menuVerifyStartedAt = nil
     }
 
     private var keyboardCard: some View {
@@ -122,11 +167,19 @@ struct KeyboardSetupView: View {
             steps: [.init("Write or select", symbol: "keyboard"), .init("Tap the V key", brandKey: true), .init("It's replaced", symbol: "checkmark.circle")],
             detail: keyboardDetail
         ) {
-            if keyboard != .ready {
-                Button {
-                    open(UIApplication.openSettingsURLString)
-                } label: { Label(keyboard == .notAdded ? "Add it in Settings" : "Open Settings", systemImage: "gear") }
-                .buttonStyle(GlassButtonStyle())
+            HStack(spacing: 8) {
+                if showsTryField {
+                    // Added but not seen running: the check is opening it here.
+                    Button { refresh(); fieldFocused = true } label: { Label("Verify", systemImage: "checkmark.seal") }
+                        .buttonStyle(GlassButtonStyle())
+                        .accessibilityIdentifier("setup.verifyKeyboard")
+                }
+                if keyboard != .ready {
+                    Button {
+                        open(UIApplication.openSettingsURLString)
+                    } label: { Label(keyboard == .notAdded ? "Add it in Settings" : "Open Settings", systemImage: "gear") }
+                    .buttonStyle(GlassButtonStyle())
+                }
             }
         }
     }

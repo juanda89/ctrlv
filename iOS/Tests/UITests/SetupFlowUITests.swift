@@ -296,6 +296,70 @@ final class SetupFlowUITests: XCTestCase {
         XCTAssertFalse(app.buttons["It's on"].exists, "no hand-made confirmation buttons")
     }
 
+    /// Verify on the Translate card with Control-V as the default translation
+    /// app: Control-V's own sheet opens (its buttons live in another process,
+    /// so only the card's wording is asserted) and the card turns On.
+    func test_app_verifyTranslateMenu_positive() {
+        app.launchArguments = ["-ui.showSetup", "1", "-ui.setupState", "keyboard"]
+        app.launch()
+        let verify = app.buttons["setup.verifyMenu"]
+        XCTAssertTrue(verify.waitForExistence(timeout: 10), "Verify button on the Translate card")
+        XCTAssertTrue(app.staticTexts["Not yet"].waitForExistence(timeout: 3), "starts as Not yet")
+        verify.tap()
+        sleep(5)
+        save("verify-positive-sheet", of: app)
+        // One snapshot of the hierarchy (per-element access can race the
+        // sheet's animation): which buttons the system chrome exposes.
+        let tree = app.debugDescription
+        NSLog("[uitest] buttons while the sheet is up: %@", tree.split(separator: "\n").filter { $0.contains("Button") }.prefix(12).joined(separator: " | "))
+        dismissTranslationUI()
+        XCTAssertTrue(app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Verified'")).firstMatch.waitForExistence(timeout: 8), "card says Verified …")
+        save("verify-positive-after", of: app)
+    }
+
+    /// Verify when Control-V does not open (here: the extension is muted; on a
+    /// phone: Apple's translator opened instead). The card must say so and
+    /// stay Not yet.
+    func test_app_verifyTranslateMenu_negative() {
+        // The sheet is hosted by another process, out of XCUITest's reach, so
+        // the app closes it itself after 4 s (same binding the user's X uses).
+        app.launchArguments = ["-ui.showSetup", "1", "-ui.setupState", "keyboard", "-ui.muteTranslationReport", "1", "-ui.autoDismissVerify", "1"]
+        app.launch()
+        let verify = app.buttons["setup.verifyMenu"]
+        XCTAssertTrue(verify.waitForExistence(timeout: 10))
+        verify.tap()
+        sleep(2)
+        save("verify-negative-sheet", of: app)
+        let explained = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'not the default'")).firstMatch.waitForExistence(timeout: 12)
+        save("verify-negative-after", of: app)
+        XCTAssertTrue(explained, "card explains Control-V did not open")
+        XCTAssertTrue(app.staticTexts["Not yet"].exists)
+        save("verify-negative-after", of: app)
+    }
+
+    /// The translation UI is a system sheet: close it through its own chrome
+    /// when that is exposed, otherwise drag it down.
+    private func dismissTranslationUI() {
+        let close = app.buttons.matching(NSPredicate(format: "label IN {'Close', 'Cerrar', 'Done', 'Listo', 'Dismiss'}")).firstMatch
+        if close.waitForExistence(timeout: 3) {
+            close.tap()
+        } else {
+            // The sheet's chrome lives in another process, so its X is not an
+            // element here; it sits at the top-right of the medium sheet.
+            let frame = app.frame
+            app.coordinate(withNormalizedOffset: .zero)
+                .withOffset(CGVector(dx: frame.width - 40, dy: frame.height * 0.52))
+                .tap()
+            sleep(1)
+            if app.staticTexts["Not yet"].exists || app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH 'Verified'")).firstMatch.exists {
+                return
+            }
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+            start.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.99)))
+        }
+        sleep(2)
+    }
+
     /// Screenshot of the setup sheet as launched (no keyboard).
     func test_app_setupSheet() {
         app.launchArguments = ["-ui.showSetup", "1", "-ui.setupState", "keyboardAdded"]

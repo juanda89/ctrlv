@@ -71,9 +71,18 @@ Verified end to end on the iOS 26.5 simulator with `Tests/UITests/SetupFlowUITes
 - **Nothing here is taken on the user's word.** Builds 1–6 had an "It's on" button per card; it
   read as a status and recorded wrong ones (someone who had since picked another translation
   app still saw "On"). It is gone, and `SetupState.migrateLegacyConfirmations()` deletes what
-  it wrote. The Translate card instead shows *when* it last ran and offers **Re-check**, which
-  forgets the sighting — the only honest correction, since iOS never says that another app
-  became the default translation app.
+  it wrote.
+- **Verify on the Translate card is a real check.** It calls SwiftUI's
+  `translationPresentation(isPresented:text:)` (Translation framework, iOS 17.4+, weak-linked
+  because the app still runs on 17.0) for the sample text. That is the same entry point as the
+  Translate item in any app's edit menu, so iOS presents *the default translation app*:
+  Control-V's own sheet when it is the default (verified in the simulator: the sheet opens
+  and the extension reports itself, the card says "Verified now"), Apple's translator
+  otherwise. When the sheet closes, the app compares the newest report with the tap: none
+  newer → it forgets the old sighting and the card says Control-V is not the default yet
+  (verified with `-ui.muteTranslationReport 1 -ui.autoDismissVerify 1`, since a sheet hosted by
+  another process is out of XCUITest's reach and the simulator has no other translation app
+  to pick). The keyboard card's Verify re-reads Settings and focuses the field.
 - The Account tab always lists "Translating in other apps", so the sheet is reachable after
   setup too.
 
