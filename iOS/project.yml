@@ -214,6 +214,9 @@ targets:
     deploymentTarget: "18.4"
     sources:
       - path: Tests/UITests
+      # DemoRecordingUITests starts a local StoreKit session from this file.
+      - path: Configuration.storekit
+        buildPhase: resources
     dependencies:
       - target: Control-V
     settings:

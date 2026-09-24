@@ -1,5 +1,6 @@
 import ControlVCore
 import Foundation
+import Observation
 import XCTest
 @testable import InstantTranslator
 
@@ -280,6 +281,29 @@ final class LicenseServiceTests: XCTestCase {
         XCTAssertNil(store.read())
         XCTAssertNil(service.pendingMagicCodeEmail)
         XCTAssertFalse(service.isSignedIn)
+    }
+
+    // MARK: - Observation
+
+    /// A sign-in that keeps the trial state must still redraw the email:
+    /// @Observable skips equal values, so `state` alone notifies nothing.
+    func test_verifyMagicCode_notifiesEmailObservers_whenStateIsUnchanged() async {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let (defaults, suiteName) = makeUserDefaults(installDate: now)
+        defer { cleanup(defaults, suiteName: suiteName) }
+        let service = LicenseService(
+            client: MockAuthClient(), store: InMemoryAccountStore(), userDefaults: defaults,
+            now: { now }, openURLHandler: { _ in }, startBackgroundTasks: false
+        )
+        _ = await service.requestMagicCode(email: "user@example.com")
+        var notified = false
+        withObservationTracking { _ = service.storedEmail } onChange: { notified = true }
+
+        _ = await service.verifyMagicCode("123456")
+
+        XCTAssertTrue(notified)
+        XCTAssertEqual(service.storedEmail, "user@example.com")
+        XCTAssertEqual(service.state, .trial(daysRemaining: 14))
     }
 
     // MARK: - Delete account

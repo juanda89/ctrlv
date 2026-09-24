@@ -22,11 +22,30 @@ public final class LicenseService {
     public private(set) var lastSignInEmail: String?
 
     public var storedSessionToken: String? {
-        store.read()?.sessionToken
+        _ = accountRevision
+        return store.read()?.sessionToken
     }
 
     public var storedEmail: String? {
-        store.read()?.email
+        _ = accountRevision
+        return store.read()?.email
+    }
+
+    /// The account store is a file, invisible to Observation. Every write
+    /// bumps this, and the accessors above read it, so views that show the
+    /// signed-in email re-render on sign-in and sign-out. Without it a sign-in
+    /// that leaves `state` unchanged (trial before, trial after) redraws
+    /// nothing: @Observable skips notifications for equal values.
+    private var accountRevision = 0
+
+    private func saveAccount(_ record: StoredAccountRecord) {
+        store.save(record)
+        accountRevision += 1
+    }
+
+    private func deleteAccountRecord() {
+        store.delete()
+        accountRevision += 1
     }
 
     /// iOS: StoreKit reports an active App Store subscription on this device.
@@ -36,6 +55,7 @@ public final class LicenseService {
     public private(set) var hasStoreEntitlement = false
 
     public var isSignedIn: Bool {
+        _ = accountRevision
         guard let record = store.read() else { return false }
         return !record.sessionToken.isEmpty
     }
@@ -161,7 +181,7 @@ public final class LicenseService {
                 planName: nil,
                 lastValidatedAt: nil
             )
-            store.save(record)
+            saveAccount(record)
             pendingMagicCodeEmail = nil
             lastError = nil
 
@@ -220,7 +240,7 @@ public final class LicenseService {
             record.subscriptionStatus = status.status.rawValue
             record.planName = status.planName ?? record.planName
             record.lastValidatedAt = now()
-            store.save(record)
+            saveAccount(record)
 
             switch status.status {
             case .active:
@@ -242,7 +262,7 @@ public final class LicenseService {
         } catch let error as AuthError {
             // 401 invalid session → clear stored token and fall back to trial.
             if case .server(let status, _) = error, status == 401 {
-                store.delete()
+                deleteAccountRecord()
                 state = unpaidState()
                 lastError = "Session expired. Please sign in again."
                 return
@@ -339,7 +359,7 @@ public final class LicenseService {
 
     /// Sign out: delete session and revert to trial/expired.
     public func signOut() {
-        store.delete()
+        deleteAccountRecord()
         pendingMagicCodeEmail = nil
         lastError = nil
         loadState()
