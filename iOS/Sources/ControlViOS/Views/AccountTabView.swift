@@ -10,6 +10,7 @@ struct AccountTabView: View {
     @State private var showFeedback = DebugLaunch.showFeedback
     @State private var isSetUp = SetupState.anyReady
     @State private var confirmingDeletion = false
+    @State private var isDeleting = false
     @State private var deletionOutcome: DeletionOutcome?
 
     private enum DeletionOutcome: Identifiable {
@@ -142,12 +143,14 @@ struct AccountTabView: View {
                         .buttonStyle(GlassButtonStyle())
                         .fixedSize()
                 }
+                // Its own flag: `license.isLoading` is also true during every
+                // background status refresh, which would flash a spinner here.
                 Button(role: .destructive) { confirmingDeletion = true } label: {
-                    if license.isLoading { ProgressView() } else { Label("Delete account", systemImage: "trash") }
+                    if isDeleting { ProgressView() } else { Label("Delete account", systemImage: "trash") }
                 }
                 .font(.subheadline)
                 .foregroundStyle(.red)
-                .disabled(license.isLoading)
+                .disabled(isDeleting)
                 .accessibilityIdentifier("account.delete")
             } else {
                 Text("One subscription covers all your devices. Sign in with the email you use on the Mac app.")
@@ -205,6 +208,8 @@ struct AccountTabView: View {
     }
 
     private func deleteAccount() async {
+        isDeleting = true
+        defer { isDeleting = false }
         if await license.deleteAccount() {
             AppGroupBridge.syncSessionToken(from: license)
             // An App Store subscription outlives the account: re-link it to
