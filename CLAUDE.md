@@ -29,7 +29,8 @@ Sources/InstantTranslator/       # macOS shell
   Views/       MenuBarView (composes sections; inline swaps for SignIn/Debug/Feedback), StatusSection, ProfileTabsSection, PreferencesSection,
                BehaviorSection, FeedbackSection, FeedbackInviteBanner, FeedbackView, ShortcutSettingsView, SignInView, FooterSection, Components/
 supabase/functions/              # translate, request-magic-code, verify-magic-code, subscription-status, create-checkout-session,
-                                 # create-portal-session, stripe-webhook, submit-feedback, _shared/ (openrouter, session, email, stripe, http)
+                                 # create-portal-session, stripe-webhook, submit-feedback, delete-account, validate-appstore-receipt,
+                                 # appstore-webhook, _shared/ (openrouter, session, email, stripe, appstore, http)
 supabase/migrations/             # Schema history (apply via Management API or CLI)
 docs/                            # Static site on Vercel (index, download, success, cancel, privacy). CSS is precompiled Tailwind.
 scripts/                         # build-release.sh, generate-appcast.sh, build-docs-css.sh, benchmark-*.sh,
@@ -82,6 +83,10 @@ windows/                         # Windows client (.NET 8). ControlV.Core = C# p
 - Paid: rate limits per account (burst/daily) from Edge Function secrets. One subscription covers all the user's devices.
 - Sessions renew on use; the client keeps a 30-day offline grace after the last successful validation.
 - Feedback: in-app ratings/comments → `app_feedback` table + email to `info@control-v.info` (Resend).
+- iOS: App Store purchases need no account (App Review 5.1.1). `validate-appstore-receipt` links the verified purchase to
+  the install (`appstore_install_links`, max 10 per purchase) and `translate_begin` grants linked installs the paid plan.
+  Account deletion is in-app (`delete-account`: cancels Stripe first, then deletes). `REVIEW_DEMO_EMAIL`/`REVIEW_DEMO_CODE`
+  secrets give App Review a demo sign-in (code never emailed).
 
 ## Roadmap pointer
 Windows client planned (.NET 8 + WPF, Velopack, Azure Trusted Signing) reusing the backend as-is; ControlVCore is the port scope.
