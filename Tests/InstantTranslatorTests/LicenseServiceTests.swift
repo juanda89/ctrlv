@@ -282,6 +282,122 @@ final class LicenseServiceTests: XCTestCase {
         XCTAssertFalse(service.isSignedIn)
     }
 
+    // MARK: - Delete account
+
+    func test_deleteAccount_signsOut_whenServerConfirms() async {
+        let store = InMemoryAccountStore()
+        store.save(StoredAccountRecord(
+            email: "user@example.com", sessionToken: "token", subscriptionStatus: "active",
+            planName: "Pro", lastValidatedAt: Date()
+        ))
+        let client = MockAuthClient()
+        let (defaults, suiteName) = makeUserDefaults()
+        defer { cleanup(defaults, suiteName: suiteName) }
+        let service = LicenseService(
+            client: client, store: store, userDefaults: defaults,
+            openURLHandler: { _ in }, startBackgroundTasks: false
+        )
+
+        let deleted = await service.deleteAccount()
+
+        XCTAssertTrue(deleted)
+        XCTAssertEqual(client.deletedTokens, ["token"])
+        XCTAssertNil(store.read())
+        XCTAssertFalse(service.isSignedIn)
+        XCTAssertNil(service.lastError)
+    }
+
+    func test_deleteAccount_keepsSession_whenServerFails() async {
+        let store = InMemoryAccountStore()
+        store.save(StoredAccountRecord(
+            email: "user@example.com", sessionToken: "token", subscriptionStatus: nil,
+            planName: nil, lastValidatedAt: nil
+        ))
+        let client = MockAuthClient()
+        client.deleteResult = .failure(AuthError.server(statusCode: 502, message: "Your subscription could not be cancelled"))
+        let (defaults, suiteName) = makeUserDefaults()
+        defer { cleanup(defaults, suiteName: suiteName) }
+        let service = LicenseService(
+            client: client, store: store, userDefaults: defaults,
+            openURLHandler: { _ in }, startBackgroundTasks: false
+        )
+
+        let deleted = await service.deleteAccount()
+
+        XCTAssertFalse(deleted)
+        XCTAssertTrue(service.isSignedIn)
+        XCTAssertEqual(service.lastError, "Your subscription could not be cancelled")
+    }
+
+    func test_deleteAccount_asksToSignIn_whenNotSignedIn() async {
+        let client = MockAuthClient()
+        let (defaults, suiteName) = makeUserDefaults()
+        defer { cleanup(defaults, suiteName: suiteName) }
+        let service = LicenseService(
+            client: client, store: InMemoryAccountStore(), userDefaults: defaults,
+            openURLHandler: { _ in }, startBackgroundTasks: false
+        )
+
+        let deleted = await service.deleteAccount()
+
+        XCTAssertFalse(deleted)
+        XCTAssertTrue(client.deletedTokens.isEmpty)
+        XCTAssertEqual(service.lastError, "Sign in to delete your account")
+    }
+
+    // MARK: - App Store entitlement (iOS)
+
+    func test_setStoreEntitlement_makesStateActive_whenNotSignedIn() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let (defaults, suiteName) = makeUserDefaults(installDate: now.addingTimeInterval(-30 * 24 * 60 * 60))
+        defer { cleanup(defaults, suiteName: suiteName) }
+        let service = LicenseService(
+            client: MockAuthClient(), store: InMemoryAccountStore(), userDefaults: defaults,
+            now: { now }, openURLHandler: { _ in }, startBackgroundTasks: false
+        )
+        XCTAssertEqual(service.state, .expired)
+
+        service.setStoreEntitlement(true)
+
+        XCTAssertEqual(service.state, .active(planName: nil, validatedAt: now, isOfflineGrace: false))
+        XCTAssertTrue(service.state.canTranslate)
+    }
+
+    func test_setStoreEntitlement_false_returnsToTrial() {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let (defaults, suiteName) = makeUserDefaults(installDate: now)
+        defer { cleanup(defaults, suiteName: suiteName) }
+        let service = LicenseService(
+            client: MockAuthClient(), store: InMemoryAccountStore(), userDefaults: defaults,
+            now: { now }, openURLHandler: { _ in }, startBackgroundTasks: false
+        )
+        service.setStoreEntitlement(true)
+
+        service.setStoreEntitlement(false)
+
+        XCTAssertEqual(service.state, .trial(daysRemaining: 14))
+    }
+
+    func test_refreshSubscriptionStatus_keepsStoreEntitlement_whenServerSaysTrial() async {
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let store = InMemoryAccountStore()
+        store.save(StoredAccountRecord(
+            email: "user@example.com", sessionToken: "token", subscriptionStatus: nil,
+            planName: nil, lastValidatedAt: nil
+        ))
+        let (defaults, suiteName) = makeUserDefaults(installDate: now.addingTimeInterval(-30 * 24 * 60 * 60))
+        defer { cleanup(defaults, suiteName: suiteName) }
+        let service = LicenseService(
+            client: MockAuthClient(), store: store, userDefaults: defaults,
+            now: { now }, openURLHandler: { _ in }, startBackgroundTasks: false
+        )
+        service.setStoreEntitlement(true)
+
+        await service.refreshSubscriptionStatus(forceNetwork: true)
+
+        XCTAssertEqual(service.state, .active(planName: nil, validatedAt: now, isOfflineGrace: false))
+    }
+
     // MARK: - openUpgrade / openManageSubscription
 
     func test_openUpgrade_callsCheckoutAndOpensURL() async {
@@ -382,5 +498,13 @@ final class MockAuthClient: MagicCodeAuthClientProtocol {
 
     func createPortalSession(token: String) async throws -> URL {
         portalURL
+    }
+
+    var deleteResult: Result<Void, Error> = .success(())
+    var deletedTokens: [String] = []
+
+    func deleteAccount(token: String) async throws {
+        deletedTokens.append(token)
+        try deleteResult.get()
     }
 }

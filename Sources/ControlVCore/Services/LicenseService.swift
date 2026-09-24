@@ -29,6 +29,12 @@ public final class LicenseService {
         store.read()?.email
     }
 
+    /// iOS: StoreKit reports an active App Store subscription on this device.
+    /// It counts as the paid plan whenever the server has none for the
+    /// session, so a purchase works without an account (App Review 5.1.1);
+    /// the server grants the same through the install link. Never set on macOS.
+    public private(set) var hasStoreEntitlement = false
+
     public var isSignedIn: Bool {
         guard let record = store.read() else { return false }
         return !record.sessionToken.isEmpty
@@ -96,7 +102,7 @@ public final class LicenseService {
         }
 
         guard let record = store.read(), !record.sessionToken.isEmpty else {
-            state = localTrialOrExpiredState()
+            state = unpaidState()
             return
         }
 
@@ -108,7 +114,7 @@ public final class LicenseService {
         }
 
         // Signed in but no active subscription cached → fall back to trial calc.
-        state = localTrialOrExpiredState()
+        state = unpaidState()
     }
 
     /// Step 1 of sign-in: request a magic code be emailed.
@@ -186,7 +192,7 @@ public final class LicenseService {
             return
         }
         guard var record = store.read(), !record.sessionToken.isEmpty else {
-            state = localTrialOrExpiredState()
+            state = unpaidState()
             return
         }
 
@@ -225,19 +231,19 @@ public final class LicenseService {
                 )
                 lastError = nil
             case .trial:
-                state = localTrialOrExpiredState()
+                state = unpaidState()
             case .pastDue:
                 state = .invalid(reason: "Payment past due. Please update your card.")
             case .canceled, .expired:
-                state = localTrialOrExpiredState()
+                state = unpaidState()
             case .unknown:
-                state = localTrialOrExpiredState()
+                state = unpaidState()
             }
         } catch let error as AuthError {
             // 401 invalid session → clear stored token and fall back to trial.
             if case .server(let status, _) = error, status == 401 {
                 store.delete()
-                state = localTrialOrExpiredState()
+                state = unpaidState()
                 lastError = "Session expired. Please sign in again."
                 return
             }
@@ -294,6 +300,41 @@ public final class LicenseService {
         } catch {
             lastError = error.localizedDescription
         }
+    }
+
+    /// Permanently deletes the signed-in account on the server, then signs
+    /// out locally. Returns false (with `lastError` set) when the server did
+    /// not confirm; the session is kept so the user can retry.
+    public func deleteAccount() async -> Bool {
+        guard let token = storedSessionToken else {
+            lastError = "Sign in to delete your account"
+            return false
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        do {
+            try await client.deleteAccount(token: token)
+            signOut()
+            return true
+        } catch let error as AuthError {
+            if case .server(let status, _) = error, status == 401 {
+                lastError = "Your session expired. Sign in again, then delete the account."
+            } else {
+                lastError = error.localizedDescription
+            }
+            return false
+        } catch {
+            lastError = error.localizedDescription
+            return false
+        }
+    }
+
+    public func setStoreEntitlement(_ active: Bool) {
+        guard active != hasStoreEntitlement else { return }
+        hasStoreEntitlement = active
+        loadState()
     }
 
     /// Sign out: delete session and revert to trial/expired.
@@ -353,6 +394,14 @@ public final class LicenseService {
         return now().timeIntervalSince(date) < translationRevalidationSeconds
     }
 
+    /// State when the server confirmed no paid plan (or cannot be reached).
+    private func unpaidState() -> LicenseState {
+        if hasStoreEntitlement {
+            return .active(planName: nil, validatedAt: now(), isOfflineGrace: false)
+        }
+        return localTrialOrExpiredState()
+    }
+
     private func localTrialOrExpiredState() -> LicenseState {
         let installDate = storedInstallDate()
         let daysSinceInstall = Calendar.current.dateComponents([.day], from: installDate, to: now()).day ?? 0
@@ -384,6 +433,6 @@ public final class LicenseService {
             return
         }
 
-        state = localTrialOrExpiredState()
+        state = unpaidState()
     }
 }

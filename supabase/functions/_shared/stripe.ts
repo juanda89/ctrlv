@@ -18,7 +18,7 @@ function getSecretKey(): string {
 async function stripeFetch(
   path: string,
   body: Record<string, string>,
-  method: "POST" | "GET" = "POST",
+  method: "POST" | "GET" | "DELETE" = "POST",
 ): Promise<Record<string, unknown>> {
   const params = new URLSearchParams();
   for (const [key, value] of Object.entries(body)) {
@@ -78,6 +78,18 @@ export async function createCheckoutSession(
     id: result.id as string,
     url: result.url as string,
   };
+}
+
+/// Cancels a subscription immediately (no further invoices). A subscription
+/// Stripe no longer has counts as cancelled: deleting an account must be
+/// retryable after a partial failure.
+export async function cancelStripeSubscription(subscriptionID: string): Promise<void> {
+  try {
+    await stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionID)}`, {}, "DELETE");
+  } catch (error) {
+    if (error instanceof StripeError && error.statusCode === 404) return;
+    throw error;
+  }
 }
 
 export type PortalSessionParams = {

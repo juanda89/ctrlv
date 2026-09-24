@@ -6,7 +6,7 @@ import UIKit
 
 /// StoreKit 2 subscription manager for Control-V Pro.
 /// - Product: `info.controlv.pro.monthly` configured in App Store Connect
-///   with a 14-day Introductory Offer (free trial), then $8.99/month recurring.
+///   with a 14-day Introductory Offer (free trial), then USD 4.99/month.
 /// - On purchase, the transaction is verified locally and forwarded to the
 ///   backend via `validate-appstore-receipt` so the same `account_subscriptions`
 ///   row is shared across Mac (Stripe) and iOS (App Store).
@@ -21,6 +21,13 @@ final class StoreKitSubscriptionManager {
     private(set) var loadError: String?
 
     private var transactionObserver: Task<Void, Never>?
+    /// Same App Group install ID the app and the extensions send to translate.
+    private let installID = DeviceIdentityStore(
+        userDefaults: UserDefaults(suiteName: SetupState.appGroup) ?? .standard
+    ).currentInstallID()
+    /// Last (transaction, session) pair the backend accepted; launch, paywall
+    /// and restore all refresh entitlements, one POST per change is enough.
+    private var lastForwarded: String?
 
     init(licenseService: LicenseService) {
         self.licenseService = licenseService
@@ -95,16 +102,22 @@ final class StoreKitSubscriptionManager {
     }
 
     private func refreshEntitlements() async {
-        var hasActive = false
+        var active: VerificationResult<Transaction>?
         for await result in Transaction.currentEntitlements {
             guard let transaction = try? checkVerified(result) else { continue }
             if transaction.productID == Self.productID,
                transaction.revocationDate == nil,
                (transaction.expirationDate ?? .distantFuture) > Date() {
-                hasActive = true
+                active = result
             }
         }
-        self.isSubscribed = hasActive
+        self.isSubscribed = active != nil
+        licenseService.setStoreEntitlement(isSubscribed)
+
+        // Keep the backend's copy current (renewals, a new session, a deleted
+        // account): it links this install, and the account when signed in, so
+        // the extensions translate on the paid plan too.
+        if let active { await forwardToBackend(signedTransaction: active.jwsRepresentation) }
 
         // Sync down from backend so cached subscription state matches.
         await licenseService.refreshSubscriptionStatus(forceNetwork: true)
@@ -118,21 +131,26 @@ final class StoreKitSubscriptionManager {
     }
 
     /// Forward the SIGNED StoreKit transaction (JWS) to the backend, which
-    /// verifies Apple's signature chain server-side before updating
-    /// `account_subscriptions` with provider="appstore". Best-effort: without a
-    /// signed-in account there is nothing to link yet; StoreKit remains the
-    /// source of truth on this device and the user can sign in later to sync.
+    /// verifies Apple's signature chain server-side, links the purchase to this
+    /// install (no account needed: App Review forbids requiring one to buy)
+    /// and, when signed in, to the account so the Mac shares the subscription.
+    /// Best-effort: StoreKit stays the source of truth on this device.
     private func forwardToBackend(signedTransaction: String) async {
-        guard let token = licenseService.storedSessionToken,
-              let baseURL = Constants.authAPIBaseURL else {
-            return
-        }
+        guard let baseURL = Constants.authAPIBaseURL else { return }
+        let token = licenseService.storedSessionToken
+        let key = signedTransaction + "|" + (token ?? "")
+        guard key != lastForwarded else { return }
 
         var request = URLRequest(url: baseURL.appendingPathComponent("validate-appstore-receipt"))
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.httpBody = try? JSONSerialization.data(withJSONObject: ["signedTransaction": signedTransaction])
-        _ = try? await URLSession.shared.data(for: request)
+        if let token { request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization") }
+        request.httpBody = try? JSONSerialization.data(withJSONObject: [
+            "signedTransaction": signedTransaction,
+            "installID": installID,
+        ])
+        guard let (_, response) = try? await URLSession.shared.data(for: request),
+              (response as? HTTPURLResponse)?.statusCode == 200 else { return }
+        lastForwarded = key
     }
 }

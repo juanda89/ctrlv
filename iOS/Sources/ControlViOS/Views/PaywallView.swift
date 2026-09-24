@@ -84,6 +84,7 @@ struct PaywallView: View {
     private var pricing: some View {
         VStack(spacing: 10) {
             if let priceText = preview?.priceText ?? subscriptions.product?.displayPrice {
+                planSummary(price: priceText)
                 Button { Task { if let product = subscriptions.product { await purchase(product) } } } label: {
                     VStack(spacing: 2) {
                         Text(ctaTitle).font(.headline)
@@ -106,14 +107,31 @@ struct PaywallView: View {
             Button("Restore purchase") { Task { await restore() } }
                 .font(.subheadline).foregroundStyle(.secondary).disabled(isWorking)
             HStack(spacing: 16) {
+                Link("Terms of Use (EULA)", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
                 Link("Privacy Policy", destination: URL(string: "https://control-v.info/privacy")!)
-                Link("Terms of Use", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
             }
-            .font(.caption2).foregroundStyle(.tertiary)
+            .font(.footnote).foregroundStyle(.secondary)
             if let errorMessage {
                 Text(errorMessage).font(.caption).foregroundStyle(.orange).multilineTextAlignment(.center)
             }
         }
+    }
+
+    /// Title, length and price of the subscription plus the renewal terms,
+    /// stated before the buy button (App Review guideline 3.1.2).
+    private func planSummary(price: String) -> some View {
+        VStack(spacing: 4) {
+            Text("Control-V Pro · Monthly").font(.headline)
+            Text(renewalTerms(price: price))
+                .font(.caption).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 8)
+    }
+
+    private func renewalTerms(price: String) -> String {
+        let billing = trialDays.map { "Free for \($0) days, then \(price) per month." } ?? "\(price) per month."
+        return billing + " Renews automatically every month until you cancel. Cancel anytime in Settings › your name › Subscriptions, at least 24 hours before renewal."
     }
 
     private var canDismiss: Bool {

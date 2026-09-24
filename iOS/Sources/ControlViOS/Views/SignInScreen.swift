@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SignInScreen: View {
     @Environment(LicenseService.self) private var license
+    @Environment(StoreKitSubscriptionManager.self) private var subscriptions
     @Environment(\.dismiss) private var dismiss
     @State private var email: String = ""
     @State private var code: String = ""
@@ -79,6 +80,8 @@ struct SignInScreen: View {
         if await license.verifyMagicCode(code) {
             AppGroupBridge.syncSessionToken(from: license)
             dismiss()
+            // Link an App Store purchase made before signing in to the account.
+            await subscriptions.refreshOnLaunch()
         }
     }
 }

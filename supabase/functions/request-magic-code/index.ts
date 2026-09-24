@@ -63,7 +63,8 @@ Deno.serve(async (req) => {
     }
   }
 
-  const code = randomDigits(6);
+  const demoCode = reviewDemoCode(email);
+  const code = demoCode ?? randomDigits(6);
   const codeHash = await sha256Hex(`${code}:${pepper}`);
   const expiresAt = new Date(Date.now() + codeLifetimeMinutes * 60_000).toISOString();
 
@@ -76,7 +77,7 @@ Deno.serve(async (req) => {
     return json({ error: "Failed to generate code" }, 500, req);
   }
 
-  const sent = await maybeSendByResend(email, code);
+  const sent = demoCode !== null || await maybeSendByResend(email, code);
   if (!sent) {
     // Only expose dev code on local Supabase instances
     const supabaseURL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -90,6 +91,15 @@ Deno.serve(async (req) => {
 
   return json({ ok: true }, 200, req);
 });
+
+/// App Review signs in with a demo address that has no inbox. Its code is
+/// fixed by two secrets and never emailed; the caps, expiry and the burn after
+/// five wrong attempts still apply. Unset secrets disable it.
+function reviewDemoCode(email: string): string | null {
+  const demoEmail = normalizeEmail(Deno.env.get("REVIEW_DEMO_EMAIL") ?? undefined);
+  const demoCode = Deno.env.get("REVIEW_DEMO_CODE")?.trim() ?? "";
+  return demoEmail !== null && email === demoEmail && /^\d{6}$/.test(demoCode) ? demoCode : null;
+}
 
 async function maybeSendByResend(email: string, code: string): Promise<boolean> {
   const resendAPIKey = Deno.env.get("RESEND_API_KEY");

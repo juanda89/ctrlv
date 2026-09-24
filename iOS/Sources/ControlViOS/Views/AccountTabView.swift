@@ -9,6 +9,18 @@ struct AccountTabView: View {
     @State private var showSetup = false
     @State private var showFeedback = DebugLaunch.showFeedback
     @State private var isSetUp = SetupState.anyReady
+    @State private var confirmingDeletion = false
+    @State private var deletionOutcome: DeletionOutcome?
+
+    private enum DeletionOutcome: Identifiable {
+        case deleted, failed(String)
+        var id: String {
+            switch self {
+            case .deleted: "deleted"
+            case .failed(let message): message
+            }
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -43,6 +55,31 @@ struct AccountTabView: View {
                     .presentationDetents([.large])
             }
             .sheet(isPresented: $showFeedback) { FeedbackSheet(initialRating: nil).presentationDetents([.large]).presentationDragIndicator(.visible) }
+            .alert("Delete your account?", isPresented: $confirmingDeletion) {
+                Button("Delete account", role: .destructive) { Task { await deleteAccount() } }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("This permanently deletes the Control-V account \(signedInEmail ?? "") and signs you out on all your devices. A subscription paid on control-v.info is cancelled now. A subscription bought in the App Store is billed by Apple until you cancel it in Settings › your name › Subscriptions.")
+            }
+            .alert(item: $deletionOutcome) { outcome in
+                switch outcome {
+                case .deleted where subscriptions.isSubscribed:
+                    return Alert(
+                        title: Text("Account deleted"),
+                        message: Text("Your Control-V account and its data were deleted. Your App Store subscription is still active: cancel it there if you no longer want it."),
+                        primaryButton: .default(Text("Manage subscription")) { Task { await subscriptions.openManageSubscription() } },
+                        secondaryButton: .cancel(Text("OK"))
+                    )
+                case .deleted:
+                    return Alert(
+                        title: Text("Account deleted"),
+                        message: Text("Your Control-V account and its data were deleted."),
+                        dismissButton: .default(Text("OK"))
+                    )
+                case .failed(let message):
+                    return Alert(title: Text("Account not deleted"), message: Text(message), dismissButton: .default(Text("OK")))
+                }
+            }
         }
     }
 
@@ -105,6 +142,13 @@ struct AccountTabView: View {
                         .buttonStyle(GlassButtonStyle())
                         .fixedSize()
                 }
+                Button(role: .destructive) { confirmingDeletion = true } label: {
+                    if license.isLoading { ProgressView() } else { Label("Delete account", systemImage: "trash") }
+                }
+                .font(.subheadline)
+                .foregroundStyle(.red)
+                .disabled(license.isLoading)
+                .accessibilityIdentifier("account.delete")
             } else {
                 Text("One subscription covers all your devices. Sign in with the email you use on the Mac app.")
                     .font(.subheadline).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -160,6 +204,18 @@ struct AccountTabView: View {
         }
     }
 
+    private func deleteAccount() async {
+        if await license.deleteAccount() {
+            AppGroupBridge.syncSessionToken(from: license)
+            // An App Store subscription outlives the account: re-link it to
+            // this install so translation stays on the paid plan.
+            await subscriptions.refreshOnLaunch()
+            deletionOutcome = .deleted
+        } else {
+            deletionOutcome = .failed(license.lastError ?? "Try again in a minute.")
+        }
+    }
+
     private var signedInEmail: String? {
         if DebugLaunch.fakeSignedIn { return "you@example.com" }
         return license.isSignedIn ? license.storedEmail : nil
@@ -171,7 +227,7 @@ struct AccountTabView: View {
         switch license.state {
         case .checking: return "Checking…"
         case .trial: return "Free trial"
-        case .active(let plan, _, _): return (plan?.isEmpty == false ? plan! : "Pro")
+        case .active: return "Control-V Pro"
         case .expired: return "Trial ended"
         case .invalid: return "Attention needed"
         }
@@ -184,7 +240,9 @@ struct AccountTabView: View {
             let base = "\(days) day\(days == 1 ? "" : "s") left"
             guard let price = subscriptions.product?.displayPrice else { return base }
             return "\(base) · then \(price)/month"
-        case .active(_, _, let offline): return offline ? "Active · offline mode" : "Active on all your devices"
+        case .active(_, _, let offline):
+            if offline { return "Active · offline mode" }
+            return license.isSignedIn ? "Active on all your devices" : "Active · App Store subscription"
         case .expired: return "Subscribe to keep translating"
         case .invalid(let reason): return reason
         }

@@ -6,6 +6,7 @@ public protocol MagicCodeAuthClientProtocol {
     func refreshSubscriptionStatus(token: String) async throws -> SubscriptionStatus
     func createCheckoutSession(token: String) async throws -> URL
     func createPortalSession(token: String) async throws -> URL
+    func deleteAccount(token: String) async throws
 }
 
 public enum AuthError: LocalizedError {
@@ -77,6 +78,13 @@ public final class MagicCodeAuthClient: MagicCodeAuthClientProtocol {
             throw AuthError.invalidResponse
         }
         return result
+    }
+
+    /// Deletes the signed-in account on the server (sessions, subscription
+    /// links, sign-in codes) and cancels subscriptions billed through Stripe.
+    public func deleteAccount(token: String) async throws {
+        let url = try endpoint("/delete-account")
+        let _: EmptyResponse = try await postJSON(url: url, payload: EmptyPayload(), bearerToken: token)
     }
 
     /// Hosts the app is willing to hand to the system browser from a server
