@@ -38,6 +38,9 @@ extension View {
     }
 
     @ViewBuilder
+    /// `interactive` glass handles touches itself: use it only where the
+    /// ButtonStyle applies it (GlassButtonStyle); inside a Button or Menu
+    /// label it swallows the tap and the control never fires.
     func glassPill(interactive: Bool = true) -> some View {
         if #available(iOS 26.0, *) {
             self.glassEffect(interactive ? .regular.interactive() : .regular, in: Capsule())

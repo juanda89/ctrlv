@@ -96,7 +96,7 @@ struct TranslationProviderView: View {
             .foregroundStyle(.primary)
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
-            .glassPill()
+            .glassPill(interactive: false)
         }
         .menuOrder(.fixed)
     }

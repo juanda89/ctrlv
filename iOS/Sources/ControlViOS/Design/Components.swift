@@ -34,7 +34,7 @@ struct LanguagePairRow: View {
                 .foregroundStyle(.primary)
                 .padding(.horizontal, 13)
                 .padding(.vertical, 9)
-                .glassPill()
+                .glassPill(interactive: false)
             }
             .menuOrder(.fixed)
 

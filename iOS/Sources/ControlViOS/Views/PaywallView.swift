@@ -67,7 +67,10 @@ struct PaywallView: View {
                         .font(.subheadline.weight(.bold))
                         .foregroundStyle(.secondary)
                         .frame(width: 36, height: 36)
-                        .glassPill()
+                        .contentShape(Circle())
+                        // Interactive glass inside a Button label keeps the
+                        // touch for its own effect and the tap never closes.
+                        .glassPill(interactive: false)
                 }
                 .buttonStyle(.plain)
                 .padding(.trailing, 20)

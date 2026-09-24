@@ -211,7 +211,7 @@ struct StatusBand: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .glassPill()
+        .glassPill(interactive: false)
     }
 
     private func strip<Trailing: View>(symbol: String?, tint: Color, text: String, @ViewBuilder trailing: () -> Trailing) -> some View {
