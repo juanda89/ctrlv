@@ -8,7 +8,7 @@ struct TranslationProviderView: View {
     let context: any TranslationUIProviderContext
 
     /// Fixed state for previews and snapshot tests; production passes nil.
-    enum Preview { case translating, done(String), failed(String) }
+    enum Preview { case translating, done(String), failed(String), replaceIgnored(String) }
     private let preview: Preview?
 
     @State private var settings = ExtensionBridge.loadSettings()
@@ -16,6 +16,10 @@ struct TranslationProviderView: View {
     @State private var translated = ""
     @State private var errorMessage: String?
     @State private var showCopied = false
+    @State private var isOnScreen = false
+    /// The host ignored Replace (the sheet stayed up), so the translation
+    /// went to the clipboard instead.
+    @State private var replaceIgnored = false
 
     enum Phase { case translating, done, failed }
 
@@ -26,6 +30,8 @@ struct TranslationProviderView: View {
         case .none, .translating: break
         case .done(let text): _phase = State(initialValue: .done); _translated = State(initialValue: text)
         case .failed(let message): _phase = State(initialValue: .failed); _errorMessage = State(initialValue: message)
+        case .replaceIgnored(let text):
+            _phase = State(initialValue: .done); _translated = State(initialValue: text); _replaceIgnored = State(initialValue: true)
         }
     }
 
@@ -45,6 +51,8 @@ struct TranslationProviderView: View {
         .background(AuroraBackground())
         .tint(Brand.blue)
         .toast("Copied", isPresented: $showCopied)
+        .onAppear { isOnScreen = true }
+        .onDisappear { isOnScreen = false }
         .task {
             if preview == nil {
                 // Only reachable when Control-V is the default translation app.
@@ -153,9 +161,22 @@ struct TranslationProviderView: View {
     }
 
     private var actions: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if replaceIgnored {
+                Label("This app didn't accept the replacement, so the translation is copied. Close this and paste it.",
+                      systemImage: "doc.on.clipboard")
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            actionButtons
+        }
+    }
+
+    private var actionButtons: some View {
         HStack(spacing: 8) {
             if context.allowsReplacement {
-                Button { context.finish(translation: AttributedString(translated)) } label: {
+                Button { replace() } label: {
                     Label("Replace", systemImage: "arrow.left.arrow.right")
                 }
                 .buttonStyle(PrimaryButtonStyle(compact: true))
@@ -172,6 +193,21 @@ struct TranslationProviderView: View {
     }
 
     // MARK: - Actions
+
+    /// Some hosts take `finish(translation:)` and do nothing: seen in
+    /// WhatsApp on a tester's iPhone, where the sheet stayed up and the text
+    /// was unchanged although `allowsReplacement` was true. A sheet still on
+    /// screen a moment later means the replacement did not happen, so the
+    /// translation goes to the clipboard and the sheet says so.
+    private func replace() {
+        context.finish(translation: AttributedString(translated))
+        Task {
+            try? await Task.sleep(for: .seconds(1.2))
+            guard isOnScreen, !replaceIgnored else { return }
+            UIPasteboard.general.string = translated
+            withAnimation { replaceIgnored = true }
+        }
+    }
 
     private func copy() {
         UIPasteboard.general.string = translated

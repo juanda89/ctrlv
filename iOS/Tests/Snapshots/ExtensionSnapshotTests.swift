@@ -94,6 +94,7 @@ final class ExtensionSnapshotTests: XCTestCase {
         try snapshot(TranslationProviderView(context: readOnly, preview: .done(translated)), size: size, name: "tr-done-readonly", background: .systemBackground, ignoresSafeArea: true)
         try snapshot(TranslationProviderView(context: editable, preview: .failed("Your free trial has ended. Open Control-V to subscribe.")), size: size, name: "tr-error", background: .systemBackground, ignoresSafeArea: true)
         try snapshot(TranslationProviderView(context: editable, preview: .done(translated)), size: size, name: "tr-done-dark", dark: true, background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: editable, preview: .replaceIgnored(translated)), size: CGSize(width: 402, height: 460), name: "tr-replace-ignored", background: .systemBackground, ignoresSafeArea: true)
     }
 
     /// The App Review screenshot for the subscription, and a design check of the
