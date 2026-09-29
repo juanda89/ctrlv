@@ -163,7 +163,9 @@ struct TranslationProviderView: View {
     private var actions: some View {
         VStack(alignment: .leading, spacing: 10) {
             if replaceIgnored {
-                Label("This app didn't accept the replacement, so the translation is copied. Close this and paste it.",
+                // Not "this app": the same host replaces fine on other
+                // iPhones, so the cause can be the device's iOS version.
+                Label("The replacement didn't go through, so the translation is copied. Close this and paste it.",
                       systemImage: "doc.on.clipboard")
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.secondary)
@@ -194,9 +196,9 @@ struct TranslationProviderView: View {
 
     // MARK: - Actions
 
-    /// Some hosts take `finish(translation:)` and do nothing: seen in
-    /// WhatsApp on a tester's iPhone, where the sheet stayed up and the text
-    /// was unchanged although `allowsReplacement` was true. A sheet still on
+    /// Some devices take `finish(translation:)` and do nothing: seen on one
+    /// tester's iPhone in WhatsApp and Slack (the same Slack replaces fine on
+    /// another iPhone), with `allowsReplacement` true. A sheet still on
     /// screen a moment later means the replacement did not happen, so the
     /// translation goes to the clipboard and the sheet says so.
     private func replace() {

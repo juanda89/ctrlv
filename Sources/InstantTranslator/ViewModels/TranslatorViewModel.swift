@@ -424,6 +424,7 @@ final class TranslatorViewModel {
         }
 
         // Try to also replace inline via Accessibility API.
+        let selectionBeforeWrite = isTrusted ? accessibilityService.focusedSelectedRange() : nil
         if isTrusted, accessibilityService.replaceSelectedText(with: translatedText, replaceWholeValue: isWholeFieldValue) {
             try? await Task.sleep(nanoseconds: Constants.axVerificationDelay)
 
@@ -435,13 +436,30 @@ final class TranslatorViewModel {
                 return
             }
 
-            let current = accessibilityService.getSelectedText()?.trimmingCharacters(in: .whitespacesAndNewlines)
-            let original = originalText.trimmingCharacters(in: .whitespacesAndNewlines)
-
-            if current != original {
+            switch await confirmReplacement(original: originalText, translated: translatedText) {
+            case .applied:
                 debugLastStage = "Output: replaced via AX + clipboard"
                 notifyAppDelegate { $0.flashMenuBarIcon() }
                 return
+            case .notApplied:
+                // Chromium/Electron editors (Slack) can answer OK and keep the
+                // old text. Put the selection back so the paste replaces it.
+                log.info("AX write reported success but the field kept the original text; pasting")
+                appendDebugEvent("AX write ignored by the app, pasting instead")
+                if let selectionBeforeWrite,
+                   accessibilityService.getSelectedText()?.trimmingCharacters(in: .whitespacesAndNewlines)
+                    != originalText.trimmingCharacters(in: .whitespacesAndNewlines) {
+                    accessibilityService.restoreSelectedRange(selectionBeforeWrite)
+                }
+            case .unknown:
+                // The app doesn't expose the field's text: judge by the selection.
+                let current = accessibilityService.getSelectedText()?.trimmingCharacters(in: .whitespacesAndNewlines)
+                let original = originalText.trimmingCharacters(in: .whitespacesAndNewlines)
+                if current != original {
+                    debugLastStage = "Output: replaced via AX + clipboard"
+                    notifyAppDelegate { $0.flashMenuBarIcon() }
+                    return
+                }
             }
         }
 
@@ -450,6 +468,52 @@ final class TranslatorViewModel {
         clipboardService.simulatePaste()
         debugLastStage = "Output: pasted via clipboard"
         notifyAppDelegate { $0.flashMenuBarIcon() }
+    }
+
+    /// What the focused field says about an AX write that reported success.
+    enum ReplacementCheck: Equatable { case applied, notApplied, unknown }
+
+    /// Reads the field until it settles: Chromium's AX tree updates
+    /// asynchronously, and editors that re-render (Slack's Quill) can put the
+    /// old text back right after accepting the new one.
+    private func confirmReplacement(original: String, translated: String) async -> ReplacementCheck {
+        func read() -> ReplacementCheck {
+            Self.replacementCheck(fieldValue: accessibilityService.focusedFieldValue(), original: original, translated: translated)
+        }
+        var check = read()
+        var waitedMs = 0
+        while check == .notApplied, waitedMs < 300 {
+            try? await Task.sleep(nanoseconds: 60_000_000)
+            waitedMs += 60
+            check = read()
+        }
+        guard check == .applied else { return check }
+        try? await Task.sleep(nanoseconds: 150_000_000)
+        return read() == .notApplied ? .notApplied : .applied
+    }
+
+    /// Ground truth for an AX write when the app exposes the field's text.
+    /// Whitespace is collapsed (editors reflow it). When one text contains the
+    /// other (a correction that only adds or drops characters), the longer one
+    /// is looked for first so the shorter can't match inside it.
+    nonisolated static func replacementCheck(fieldValue: String?, original: String, translated: String) -> ReplacementCheck {
+        guard let fieldValue else { return .unknown }
+        let field = collapsedWhitespace(fieldValue)
+        let new = collapsedWhitespace(translated)
+        let old = collapsedWhitespace(original)
+        if new == old { return .applied }
+        let hasNew = !new.isEmpty && field.contains(new)
+        let hasOld = !old.isEmpty && field.contains(old)
+        if old.contains(new) {
+            if hasOld { return .notApplied }
+            return hasNew ? .applied : .unknown
+        }
+        if hasNew { return .applied }
+        return hasOld ? .notApplied : .unknown
+    }
+
+    nonisolated static func collapsedWhitespace(_ text: String) -> String {
+        text.split(whereSeparator: \.isWhitespace).joined(separator: " ")
     }
 
     private func outputMethod(autoPaste: Bool, isTrusted: Bool) -> String {

@@ -92,7 +92,7 @@ final class AccessibilityService {
         }
 
         let axElement = element as! AXUIElement
-        let isEditable = Self.isTextInputElement(axElement)
+        let isEditable = Self.isEditableElement(axElement)
 
         // 1. Try selection first (preferred — preserves user intent)
         var selectedText: AnyObject?
@@ -114,8 +114,9 @@ final class AccessibilityService {
         // 2. Fallback: if the focused element is an input field and contains
         // typed content, read the whole value. This covers Chrome's URL bar,
         // single-line text inputs, and search fields when the user typed
-        // something and pressed the shortcut without selecting.
-        if isEditable {
+        // something and pressed the shortcut without selecting. Gated on the
+        // role alone: a merely settable web element could be a whole document.
+        if Self.isTextInputElement(axElement) {
             var value: AnyObject?
             let valueResult = AXUIElementCopyAttributeValue(
                 axElement,
@@ -140,6 +141,28 @@ final class AccessibilityService {
     /// "isWholeFieldValue" signal — callers that need it should use capture().
     func getSelectedText() -> String? {
         capture()?.text
+    }
+
+    /// Where the output may be written back. Web editors (Slack, Discord and
+    /// other Electron/Chromium apps) often expose their composer under a
+    /// generic role; a settable selection still marks it as editable, so the
+    /// result is replaced instead of silently only copied.
+    private static func isEditableElement(_ element: AXUIElement) -> Bool {
+        if isTextInputElement(element) { return true }
+        var settable = DarwinBoolean(false)
+        let result = AXUIElementIsAttributeSettable(element, kAXSelectedTextAttribute as CFString, &settable)
+        return result == .success && settable.boolValue
+    }
+
+    /// Full text of the focused element, used to confirm that an AX write
+    /// really changed the field (nil when the app does not expose it).
+    func focusedFieldValue() -> String? {
+        guard let element = focusedElement() else { return nil }
+        var value: AnyObject?
+        guard AXUIElementCopyAttributeValue(element, kAXValueAttribute as CFString, &value) == .success else {
+            return nil
+        }
+        return value as? String
     }
 
     /// Returns true if the element is a text-input-like role where reading its
@@ -208,6 +231,29 @@ final class AccessibilityService {
         let success = result == .success
         log.info("replaceSelectedText[\(attribute)]: \(success ? "OK" : "FAILED (AXError: \(result.rawValue))")")
         return success
+    }
+
+    /// Selection range of the focused element, to put the selection back if
+    /// an app answered an AX write by collapsing it without taking the text.
+    func focusedSelectedRange() -> CFRange? {
+        focusedElement().flatMap(Self.selectedTextRange(for:))
+    }
+
+    @discardableResult
+    func restoreSelectedRange(_ range: CFRange) -> Bool {
+        guard let element = focusedElement() else { return false }
+        var mutableRange = range
+        guard let value = AXValueCreate(.cfRange, &mutableRange) else { return false }
+        return AXUIElementSetAttributeValue(element, kAXSelectedTextRangeAttribute as CFString, value) == .success
+    }
+
+    private func focusedElement() -> AXUIElement? {
+        guard let app = NSWorkspace.shared.frontmostApplication else { return nil }
+        let axApp = AXUIElementCreateApplication(app.processIdentifier)
+        var focused: AnyObject?
+        guard AXUIElementCopyAttributeValue(axApp, kAXFocusedUIElementAttribute as CFString, &focused) == .success,
+              let focused else { return nil }
+        return (focused as! AXUIElement)
     }
 
     func beginProgressiveInsertionSession() -> ProgressiveInsertionSession? {
