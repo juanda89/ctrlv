@@ -177,6 +177,18 @@ struct StatusBand: View {
             strip(symbol: "exclamationmark.triangle.fill", tint: .orange, text: flow.errorMessage ?? "Something went wrong.") {
                 Button("OK") { flow.dismissStatus() }.font(.caption.weight(.semibold)).buttonStyle(.plain)
             }
+        case .fixed:
+            strip(symbol: "checkmark.circle.fill", tint: .green,
+                  text: "Fixed \(flow.fixedCount) \(flow.fixedCount == 1 ? "typo" : "typos"). Translating needs Full Access.") {
+                Button("Undo") { flow.undoReplacement() }
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+            }
+        case .info:
+            strip(symbol: "info.circle.fill", tint: Brand.blue, text: flow.infoMessage ?? "") {
+                Button("OK") { flow.dismissStatus() }.font(.caption.weight(.semibold)).buttonStyle(.plain)
+            }
         }
     }
 

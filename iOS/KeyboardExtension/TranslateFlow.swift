@@ -31,10 +31,16 @@ final class TranslateFlow: ObservableObject {
         case done
         case copiedFallback
         case error
+        /// Without Full Access: typos fixed on the device (`fixedCount`).
+        case fixed
+        /// A neutral note (`infoMessage`), e.g. nothing to fix.
+        case info
     }
 
     @Published var phase: Phase = .idle
     @Published var errorMessage: String?
+    @Published var infoMessage: String?
+    @Published private(set) var fixedCount = 0
     @Published var settings = ExtensionBridge.loadSettings()
     /// Language and tone chips in the band above the keys (long press on V).
     @Published var showsOptions = false
@@ -52,9 +58,11 @@ final class TranslateFlow: ObservableObject {
     }
 
     /// Fixed state for previews and snapshot tests.
-    func applyPreview(phase: Phase, errorMessage: String? = nil, showsOptions: Bool = false) {
+    func applyPreview(phase: Phase, errorMessage: String? = nil, showsOptions: Bool = false, fixedCount: Int = 0) {
         self.phase = phase
         self.errorMessage = errorMessage
+        self.infoMessage = errorMessage
+        self.fixedCount = fixedCount
         self.showsOptions = showsOptions
     }
 
@@ -87,15 +95,16 @@ final class TranslateFlow: ObservableObject {
     private func startTranslateFlow() async {
         settings = ExtensionBridge.loadSettings()
         errorMessage = nil
+        infoMessage = nil
         showsOptions = false
 
-        // Without Full Access the key still translates, on the device
-        // (`fetchTranslation`), so the keyboard works either way.
+        // Without Full Access (no network) the key fixes typos on the device
+        // instead, so it does something either way.
         let selection = actions.readSelectedText()
         if let selection, !selection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             detectedText = selection
             usedSelection = true
-            await translateSelection()
+            if hasFullAccess { await translateSelection() } else { fixTyposOffline() }
             return
         }
 
@@ -103,12 +112,41 @@ final class TranslateFlow: ObservableObject {
         if let typed, !typed.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             detectedText = typed
             usedSelection = false
-            await translateTypedText()
+            if hasFullAccess { await translateTypedText() } else { fixTyposOffline() }
             return
         }
 
-        errorMessage = "Nothing to translate. Select text or type something first."
-        phase = .error
+        if hasFullAccess {
+            errorMessage = "Nothing to translate. Select text or type something first."
+            phase = .error
+        } else {
+            infoMessage = "Type or select text, then tap V to fix typos. Translating needs Full Access."
+            phase = .info
+        }
+    }
+
+    /// iOS's spell checker, on the device: the one thing the key can do with
+    /// no network. Replaces like a translation, so Undo works the same way.
+    private func fixTyposOffline() {
+        let preferred = [Locale.current.language.languageCode?.identifier, settings.targetLanguage.bcp47].compactMap { $0 }
+        let result = OfflineSpelling.correct(detectedText, preferred: preferred)
+        guard result.fixes > 0 else {
+            infoMessage = "No typos found. Translating needs Full Access."
+            phase = .info
+            return
+        }
+        translatedText = result.text
+        if usedSelection {
+            actions.replaceSelectedText(result.text)
+        } else {
+            actions.replaceTypedText(detectedText, result.text)
+        }
+        fixedCount = result.fixes
+        phase = .fixed
+        Task {
+            try? await Task.sleep(for: .seconds(3.5))
+            if phase == .fixed { phase = .idle }
+        }
     }
 
     private func translateSelection() async {
@@ -157,15 +195,6 @@ final class TranslateFlow: ObservableObject {
     }
 
     private func fetchTranslation(for text: String) async -> String? {
-        guard hasFullAccess else {
-            do {
-                return try await OnDeviceTranslator.translate(text, to: settings.targetLanguage)
-            } catch {
-                errorMessage = error.localizedDescription
-                phase = .error
-                return nil
-            }
-        }
         guard let service = ExtensionBridge.makeTranslationService() else {
             errorMessage = "Translation service not configured."
             phase = .error

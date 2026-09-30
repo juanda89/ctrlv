@@ -49,6 +49,22 @@ final class ExtensionSnapshotTests: XCTestCase {
         return (state, services)
     }
 
+    /// Without Full Access the V key fixes typos with iOS's spell checker.
+    func test_offlineSpelling_fixesTypos_keepsNamesAndCase() {
+        let english = OfflineSpelling.correct("I wnat to see the documnet", preferred: ["en"])
+        XCTAssertEqual(english.fixes, 2)
+        XCTAssertEqual(english.text, "I want to see the document")
+        let spanish = OfflineSpelling.correct("Hola, nos vemos mañnaa en la ofcina", preferred: ["es"])
+        XCTAssertGreaterThanOrEqual(spanish.fixes, 1)
+        XCTAssertTrue(spanish.text.contains("oficina"), spanish.text)
+        // A capitalized word mid-sentence is taken for a name and left alone.
+        XCTAssertFalse(OfflineSpelling.shouldCorrect("Marta", at: 5, in: "Hola Marta" as NSString))
+        XCTAssertTrue(OfflineSpelling.shouldCorrect("Hloa", at: 0, in: "Hloa amigo" as NSString))
+        XCTAssertEqual(OfflineSpelling.matchingCase(of: "Helo", "hello"), "Hello")
+        XCTAssertEqual(OfflineSpelling.matchingCase(of: "HELO", "hello"), "HELLO")
+        XCTAssertEqual(OfflineSpelling.correct("All good here", preferred: ["en"]).fixes, 0)
+    }
+
     @MainActor
     func test_renderKeyboardPanel_allPhases() throws {
         let states: [(String, TranslateFlow.Phase, String?, Bool)] = [
@@ -57,12 +73,14 @@ final class ExtensionSnapshotTests: XCTestCase {
             ("kb-translating", .translating, nil, false),
             ("kb-done", .done, nil, false),
             ("kb-copied", .copiedFallback, nil, false),
+            ("kb-fixed-offline", .fixed, nil, false),
+            ("kb-info-offline", .info, "No typos found. Translating needs Full Access.", false),
             ("kb-error", .error, "Nothing to translate. Select text or type something first.", false),
         ]
         for (name, phase, message, options) in states {
             let (state, services) = makeKeyboard(language: .english, dark: false)
             let flow = TranslateFlow(hasFullAccess: true, actions: .noop)
-            flow.applyPreview(phase: phase, errorMessage: message, showsOptions: options)
+            flow.applyPreview(phase: phase, errorMessage: message, showsOptions: options, fixedCount: phase == .fixed ? 2 : 0)
             let view = ControlVKeyboardView(services: services, state: state, flow: flow)
             try snapshot(view, size: Self.keyboardSize, name: name, background: Self.lightKeyboard, ignoresSafeArea: true)
         }
