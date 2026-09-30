@@ -89,12 +89,8 @@ final class TranslateFlow: ObservableObject {
         errorMessage = nil
         showsOptions = false
 
-        guard hasFullAccess else {
-            errorMessage = "Turn on Allow Full Access in Settings to translate."
-            phase = .error
-            return
-        }
-
+        // Without Full Access the key still translates, on the device
+        // (`fetchTranslation`), so the keyboard works either way.
         let selection = actions.readSelectedText()
         if let selection, !selection.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             detectedText = selection
@@ -161,6 +157,15 @@ final class TranslateFlow: ObservableObject {
     }
 
     private func fetchTranslation(for text: String) async -> String? {
+        guard hasFullAccess else {
+            do {
+                return try await OnDeviceTranslator.translate(text, to: settings.targetLanguage)
+            } catch {
+                errorMessage = error.localizedDescription
+                phase = .error
+                return nil
+            }
+        }
         guard let service = ExtensionBridge.makeTranslationService() else {
             errorMessage = "Translation service not configured."
             phase = .error

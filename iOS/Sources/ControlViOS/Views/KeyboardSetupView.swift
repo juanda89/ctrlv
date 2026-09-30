@@ -20,6 +20,7 @@ struct KeyboardSetupView: View {
     let onDone: () -> Void
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(iOSSettingsStore.self) private var settings
     @State private var keyboard = SetupState.keyboardStatus
     @State private var menuLastUsed = SetupState.translationProviderLastUsed
     @State private var checkedAndMissing = false
@@ -46,6 +47,9 @@ struct KeyboardSetupView: View {
                 header
                 if supportsDefaultTranslation { menuCard }
                 keyboardCard
+                if #available(iOS 26.0, *), keyboard != .notAdded {
+                    OfflineLanguagesCard(target: settings.targetLanguage)
+                }
                 if showsTryField { tryCard }
                 Label("Full Access only sends the text you pick. Nothing you type is logged or stored.", systemImage: "lock.shield")
                     .font(.caption)
@@ -200,7 +204,7 @@ struct KeyboardSetupView: View {
         case .addedNotOpened:
             return "Added. Open it once below to check Full Access: tap the text, hold the globe key and pick Control-V."
         case .addedNoFullAccess:
-            return "Full Access is off, so it can type but not translate. Turn it on under Keyboards › Control-V, then open the keyboard again below."
+            return "Full Access is off: it types, and the V key translates on the device only (see below). Turn it on under Keyboards › Control-V for every language and tone, then open the keyboard again below."
         case .ready:
             return "Works. Tap the V key next to the space bar to translate what you typed."
         }

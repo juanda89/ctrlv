@@ -36,6 +36,8 @@ targets:
       - path: Resources/App
       # Permission marks the extensions write and the app reads.
       - path: Shared/SetupState.swift
+      # Language pair the keyboard translates offline; the app downloads it.
+      - path: Shared/OfflineLanguagePair.swift
     dependencies:
       - package: ControlVCore
         product: ControlVCore
@@ -139,6 +141,9 @@ targets:
         com.apple.security.application-groups: [group.info.controlv.shared]
     settings:
       base:
+        # On-device translation without Full Access (iOS 26+); the extension
+        # still loads on older systems.
+        OTHER_LDFLAGS: "$(inherited) -weak_framework Translation"
         PRODUCT_BUNDLE_IDENTIFIER: info.controlv.ios.keyboard
         TARGETED_DEVICE_FAMILY: "1"
   # Default translation app (iOS 18.4+): ExtensionKit extension the system
