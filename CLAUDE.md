@@ -62,8 +62,9 @@ windows/                         # Windows client (.NET 8). ControlV.Core = C# p
   Store Connect API key, so the Apple Distribution certificate lives in the `controlv-signing` keychain and the four
   `ControlV AppStore *` profiles are minted through the API by `scripts/ios-signing-setup.sh`. Never go back to Xcode's
   account UI: `xcodebuild` reads accounts from disk and the GUI list was empty there. `iOS/ExportOptions.plist` pins that
-  certificate by SHA-1: other projects on this Mac add their own "Apple Distribution: Viko Holdings LLC" identity to the
-  login keychain, and by name the export picks the wrong one.
+  certificate (`TPWX6878K9`) by SHA-1: other apps of the team (Good Problem, YaPago, uyqueheavy) have their own
+  same-named certificates, one in the login keychain. Never revoke `TPWX6878K9`; the team's certificate map and the
+  rules for other apps are in iOS/README.md ("Certificates on the Viko Holdings team").
 - **Validate behavior empirically**: probe the live endpoint (curl), query the DB (Management API), read the app's Debug panel. Prompt instructions are not guarantees; put invariants in the server sanitizer.
 - Existing users' settings must survive every migration (`AppSettings` decodes the legacy flat shape and mirrors profile 0 back for downgrades).
 

@@ -220,7 +220,44 @@ for it, so `-allowProvisioningUpdates` cannot mint App Store profiles. Instead:
 - the four `ControlV AppStore <target>` profiles are created through the API and pinned by
   name in `ExportOptions.plist`;
 - `bash scripts/ios-signing-setup.sh` reissues the profiles (add `--cert` on a new Mac, or
-  when the certificate expires — the current one runs to 2027-09-21).
+  when the certificate expires — the current one runs to 2027-09-21);
+- `ExportOptions.plist` names the certificate by its SHA-1, not by name (see below).
+
+#### Certificates on the Viko Holdings team (shared with other apps)
+
+The team `5ZFYF422LX` signs several apps, and every distribution certificate Apple issues
+has the same name, "Apple Distribution: Viko Holdings LLC" or "iOS Distribution: Viko
+Holdings LLC". They are told apart by their App Store Connect ID and SHA-1, never by name.
+State on 2026-10-09:
+
+| ID | Type | Created → expires | Private key | Used by |
+|---|---|---|---|---|
+| `TPWX6878K9` | Apple Distribution | 2026-09-21 → 2027-09-21 | `controlv-signing` keychain, SHA-1 `DD38AB086924AAAE2851F674A91BACA4604A306E` | **Control-V** (profiles `ControlV AppStore app/share/keyboard/translation`); also the older `Good Problem Beta App Store` profile |
+| `BL34MH5X7M` | Apple Distribution | 2026-10-01 → 2027-10-01 | login keychain, SHA-1 `28F33097420EF5E7E4EBF4CFCA119F4FBC665C6A` | Good Problem (`Good Problem Beta App Store 2026-10`) |
+| `G2MV299943` | iOS Distribution | 2026-10-02 → 2027-10-02 | Expo (EAS credentials), not on this Mac | YaPago (`*[expo] com.appyapago.app` / `.beta`) |
+| `T4XGX4AV2C` | iOS Distribution | 2026-09-08 → 2027-09-08 | Expo (EAS credentials) | uyqueheavy (`*[expo] com.uyqueheavy.app`) |
+| `AJ9KWQLJ84` | Developer ID Application | → 2027-02-01 | CI secret + login keychain | ctrl+v for Mac (notarized DMG) |
+
+Rules, for this repo and for any agent working on another app of the team:
+
+- Never revoke `TPWX6878K9`, and never delete the `controlv-signing` keychain or the
+  `ControlV AppStore *` profiles: revoking the certificate invalidates every Control-V
+  profile and stops all Control-V uploads until `ios-signing-setup.sh --cert` reissues them.
+- Do not create new distribution certificates "to be safe": Apple caps them per team and
+  EAS/Xcode then offer to revoke an existing one to make room, which may be another app's.
+  Reuse your app's own certificate; if a tool asks which certificate to revoke, stop and ask.
+- Two identities named "Apple Distribution: Viko Holdings LLC" live on this Mac. Any local
+  export must pin its certificate by SHA-1 (as `ExportOptions.plist` does here), or Xcode
+  picks one of them at random and the export fails with "Provisioning profile … doesn't
+  include signing certificate".
+- Prefix profile names with the app (`ControlV AppStore …`, `Good Problem …`).
+
+List the current certificates and profiles:
+
+```
+node scripts/asc-api.js GET "/v1/certificates?fields[certificates]=name,certificateType,expirationDate"
+node scripts/asc-api.js GET "/v1/profiles?include=bundleId,certificates&fields[profiles]=name,profileType,bundleId,certificates"
+```
 
 Signing into Xcode with an Apple Account is no longer needed. It used to be, and it broke:
 `xcodebuild` reads accounts from disk, and the GUI's account list was empty on disk
