@@ -15,7 +15,10 @@
 	<key>teamID</key>
 	<string>5ZFYF422LX</string>
 	<key>signingCertificate</key>
-	<string>Apple Distribution</string>
+	<!-- SHA-1 of the Apple Distribution cert in the controlv-signing keychain (TPWX6878K9).
+	     By name it is ambiguous: other projects on this Mac add their own
+	     "Apple Distribution: Viko Holdings LLC" identity to the login keychain. -->
+	<string>DD38AB086924AAAE2851F674A91BACA4604A306E</string>
 	<key>provisioningProfiles</key>
 	<dict>
 		<key>info.controlv.ios</key>
