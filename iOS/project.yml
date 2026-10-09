@@ -184,6 +184,9 @@ targets:
       - path: Tests/Snapshots
       - path: Sources/ControlViOS/Design
       - path: Sources/ControlViOS/Views/PaywallView.swift
+      # The paywall's "Already subscribed? Sign in" opens the sign-in screen.
+      - path: Sources/ControlViOS/Views/SignInScreen.swift
+      - path: Sources/ControlViOS/Services/AppGroupBridge.swift
       - path: Sources/ControlViOS/Subscription
       - path: Sources/ControlViOS/App/DebugLaunch.swift
       - path: Shared

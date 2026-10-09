@@ -114,9 +114,12 @@ struct AccountTabView: View {
                 Spacer(minLength: 0)
             }
             HStack(spacing: 8) {
-                if case .active = license.state {
+                if subscriptions.isSubscribed {
                     Button { Task { await subscriptions.openManageSubscription() } } label: { Label("Manage", systemImage: "creditcard") }
                         .buttonStyle(GlassButtonStyle())
+                } else if case .active = license.state {
+                    // Paid through the account (Mac): nothing to manage in the App Store.
+                    EmptyView()
                 } else {
                     Button { NotificationCenter.default.post(name: .controlVShowPaywall, object: nil) } label: { Label("Go Pro", systemImage: "sparkles") }
                         .buttonStyle(PrimaryButtonStyle())

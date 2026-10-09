@@ -34,14 +34,43 @@ final class StoreKitSubscriptionManager {
         observeTransactions()
     }
 
+    /// Delays between attempts to fetch the product. The App Store's sandbox
+    /// (TestFlight, App Review) intermittently answers with no products or an
+    /// error; App Review rejected 1.0 (14) under 2.1(b) for "unavailable"
+    /// products while the same product sold fine in TestFlight. A few quick
+    /// retries ride out those blips before the paywall shows "Try again".
+    static let productRetryDelays: [Duration] = [.seconds(1), .seconds(2), .seconds(3)]
+
     func loadProducts() async {
-        do {
-            let products = try await Product.products(for: [Self.productID])
-            self.product = products.first
-            self.loadError = products.isEmpty ? "Pricing isn't available right now." : nil
-            await refreshEntitlements()
-        } catch {
-            self.loadError = error.localizedDescription
+        if product == nil {
+            product = await fetchProduct()
+        }
+        loadError = product == nil ? "Pricing isn't available right now. Check your connection and tap Try again." : nil
+        await refreshEntitlements()
+    }
+
+    private func fetchProduct() async -> Product? {
+        for delay in [Duration.zero] + Self.productRetryDelays {
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            if let product = await fetchProductOnce(timeout: .seconds(5)) {
+                return product
+            }
+        }
+        return nil
+    }
+
+    /// One request, abandoned after `timeout`: a request that never answers
+    /// would otherwise leave the paywall spinning with no way to retry.
+    private func fetchProductOnce(timeout: Duration) async -> Product? {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Product?, Never>) in
+            let once = ResumeOnce(continuation)
+            Task { @MainActor in
+                once.resume(with: try? await Product.products(for: [Self.productID]).first)
+            }
+            Task { @MainActor in
+                try? await Task.sleep(for: timeout)
+                once.resume(with: nil)
+            }
         }
     }
 
@@ -73,11 +102,29 @@ final class StoreKitSubscriptionManager {
         await refreshEntitlements()
     }
 
+    /// The subscription group in App Store Connect ("Control-V Pro").
+    static let subscriptionGroupID = "22399702"
+
+    /// StoreKit's own manage sheet: unlike the App Store's account page it
+    /// also lists TestFlight and sandbox subscriptions, and it opens on ours.
     func openManageSubscription() async {
-        guard let url = URL(string: "itms-apps://apps.apple.com/account/subscriptions") else {
-            return
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        if let scene = scenes.first(where: { $0.activationState == .foregroundActive }) ?? scenes.first {
+            do {
+                if #available(iOS 17.0, *) {
+                    try await AppStore.showManageSubscriptions(in: scene, subscriptionGroupID: Self.subscriptionGroupID)
+                } else {
+                    try await AppStore.showManageSubscriptions(in: scene)
+                }
+                await refreshEntitlements()
+                return
+            } catch {
+                // Fall through to the App Store's account page.
+            }
         }
-        await UIApplication.shared.open(url)
+        if let url = URL(string: "itms-apps://apps.apple.com/account/subscriptions") {
+            await UIApplication.shared.open(url)
+        }
     }
 
     // MARK: - Internals
@@ -152,5 +199,20 @@ final class StoreKitSubscriptionManager {
         guard let (_, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return }
         lastForwarded = key
+    }
+}
+
+/// Resumes a continuation from whichever of two racing tasks finishes first.
+@MainActor
+private final class ResumeOnce {
+    private var continuation: CheckedContinuation<Product?, Never>?
+
+    init(_ continuation: CheckedContinuation<Product?, Never>) {
+        self.continuation = continuation
+    }
+
+    func resume(with product: Product?) {
+        continuation?.resume(returning: product)
+        continuation = nil
     }
 }

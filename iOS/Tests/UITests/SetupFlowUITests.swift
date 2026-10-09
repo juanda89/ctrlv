@@ -391,6 +391,19 @@ final class SetupFlowUITests: XCTestCase {
         sleep(1)
     }
 
+    /// The paywall never spins forever: within the retries it shows either the
+    /// price (here from the scheme's StoreKit configuration) or Try again.
+    func test_app_paywallSettles_onPriceOrRetry() {
+        app.launchArguments = ["-ui.setupState", "both", "-ui.showPaywall", "1"]
+        app.launch()
+        let done = app.buttons["Done"]
+        if done.waitForExistence(timeout: 5) { done.tap() }
+        let settled = app.buttons.matching(NSPredicate(format: "label CONTAINS 'free trial' OR label CONTAINS 'Subscribe' OR label CONTAINS 'Try again'")).firstMatch
+        XCTAssertTrue(settled.waitForExistence(timeout: 40), "paywall shows a price or Try again")
+        XCTAssertTrue(app.buttons["paywall.signIn"].exists, "existing subscribers can sign in from the paywall")
+        save("paywall-settled", of: app)
+    }
+
     // MARK: - Helpers
 
     /// Holds the globe key and picks Control-V from the input-mode list. On

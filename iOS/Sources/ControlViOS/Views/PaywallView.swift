@@ -24,6 +24,7 @@ struct PaywallView: View {
     @State private var hasLoaded = false
     @State private var trialDays: Int?
     @State private var errorMessage: String?
+    @State private var showSignIn = false
 
     init(preview: Preview? = nil, onClose: @escaping () -> Void = {}) {
         self.preview = preview
@@ -79,6 +80,11 @@ struct PaywallView: View {
             }
         }
         .task { if preview == nil { await load() } }
+        .sheet(isPresented: $showSignIn) {
+            SignInScreen().presentationDetents([.large]).presentationDragIndicator(.visible)
+        }
+        // A sign-in or a purchase that made the plan active ends the paywall.
+        .onChange(of: isActive) { _, active in if active, preview == nil { onClose() } }
     }
 
     // MARK: - Pricing
@@ -109,6 +115,12 @@ struct PaywallView: View {
             }
             Button("Restore purchase") { Task { await restore() } }
                 .font(.subheadline).foregroundStyle(.secondary).disabled(isWorking)
+            // People who already pay on the Mac sign in instead of buying again.
+            if !license.isSignedIn {
+                Button { showSignIn = true } label: { Text("Already subscribed? Sign in with email") }
+                    .font(.subheadline).foregroundStyle(Brand.blue)
+                    .accessibilityIdentifier("paywall.signIn")
+            }
             HStack(spacing: 16) {
                 Link("Terms of Use (EULA)", destination: URL(string: "https://www.apple.com/legal/internet-services/itunes/dev/stdeula/")!)
                 Link("Privacy Policy", destination: URL(string: "https://control-v.info/privacy")!)
@@ -135,6 +147,11 @@ struct PaywallView: View {
     private func renewalTerms(price: String) -> String {
         let billing = trialDays.map { "Free for \($0) days, then \(price) per month." } ?? "\(price) per month."
         return billing + " Renews automatically every month until you cancel. Cancel anytime in Settings › your name › Subscriptions, at least 24 hours before renewal."
+    }
+
+    private var isActive: Bool {
+        if case .active = license.state { return true }
+        return false
     }
 
     private var canDismiss: Bool {
