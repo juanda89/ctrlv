@@ -199,6 +199,9 @@ final class StoreKitSubscriptionManager {
         guard let (_, response) = try? await URLSession.shared.data(for: request),
               (response as? HTTPURLResponse)?.statusCode == 200 else { return }
         lastForwarded = key
+        // The server now grants this install the paid plan: a translation
+        // sheet still showing "trial ended" can retry.
+        AccessSignal.stamp()
     }
 }
 

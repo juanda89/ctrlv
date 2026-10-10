@@ -32,6 +32,9 @@ enum DebugLaunch {
     /// Closes the translation sheet 4 s after Verify: XCUITest cannot touch a
     /// sheet hosted by another process, and the user's close uses this binding.
     static var autoDismissVerify: Bool { d.bool(forKey: "ui.autoDismissVerify") }
+    /// Makes the extensions fail like a trial that ran out (`trialExpired`,
+    /// `trialQuota`, `trialTooLong`), mirrored to them through the App Group.
+    static var forceTranslateError: String? { d.string(forKey: "ui.forceTranslateError") }
     static var licenseState: LicenseState? {
         switch d.string(forKey: "ui.licenseState") {
         case "trial": return .trial(daysRemaining: 9)
@@ -56,6 +59,7 @@ enum DebugLaunch {
     static var fakeSignedIn: Bool { false }
     static var muteTranslationReport: Bool { false }
     static var autoDismissVerify: Bool { false }
+    static var forceTranslateError: String? { nil }
     static var licenseState: LicenseState? { nil }
 #endif
 }

@@ -112,10 +112,120 @@ final class SetupFlowUITests: XCTestCase {
         // keyboard is added but unverified.
         app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "keyboard"]
         app.launch()
+        openTranslateSheet(typing: "Hola, cómo va todo por allá")
+        save("app-translate-sheet", of: app)
+    }
+
+    /// A trial that ran out (forced through the App Group): Control-V's sheet
+    /// shows the upgrade card, and its Subscribe opens the app's paywall via
+    /// controlv://subscribe. The sheet lives in another process, so Subscribe
+    /// is tapped by position: the bottom of the card, under the medium sheet's
+    /// header, language row, one-line source and two-line message.
+    func test_app_translateSheet_subscribeOpensPaywall() {
+        app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "keyboard", "-ui.forceTranslateError", "trialExpired"]
+        app.launch()
+        openTranslateSheet(typing: "Hola, cómo va todo")
+        save("upgrade-sheet", of: app)
+        tapPoint(x: 201, y: 676)  // the system's one-time "Continue" consent, if shown
+        sleep(3)
+        save("upgrade-sheet-after-continue", of: app)
+        let paywall = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'like a native'")).firstMatch
+        XCTAssertFalse(paywall.exists, "no paywall before Subscribe")
+        tapPoint(x: 201, y: 738)  // Subscribe
+        let opened = paywall.waitForExistence(timeout: 8)
+        sleep(2)
+        save("upgrade-after-subscribe", of: app)
+        NSLog("[uitest] app state after Subscribe: %d", app.state.rawValue)
+        XCTAssertTrue(opened, "Subscribe opens the paywall")
+    }
+
+    /// Subscribe from another app's Translate sheet (Safari here): Control-V
+    /// opens on its paywall, and the sheet, which iOS keeps up meanwhile,
+    /// translates by itself once the plan is active. Taps go by position: the
+    /// sheet is out of process (201,676 is the one-time consent's Continue,
+    /// 201,738 the card's Subscribe, on an iPhone 17 Pro).
+    func test_safari_translateSheet_subscribeThenReturn() {
+        app.launchArguments = ["-ui.setupState", "both", "-ui.forceTranslateError", "trialExpired"]
+        app.launch()
+        sleep(2)
+        let safari = XCUIApplication(bundleIdentifier: "com.apple.mobilesafari")
+        safari.open(URL(string: "https://control-v.info")!)
+        sleep(6)
+        save("safari-page", of: safari)
+        // "Slack" in the hero paragraph of control-v.info.
+        safari.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 160, dy: 425)).press(forDuration: 1.2)
+        sleep(1)
+        save("safari-edit-menu", of: safari)
+        NSLog("[uitest] safari menu items: %@", safari.menuItems.allElementsBoundByIndex.map(\.label).joined(separator: " | "))
+        let translate = safari.menuItems["Translate"]
+        var pages = 0
+        while !translate.exists, pages < 4 {
+            guard let last = safari.menuItems.allElementsBoundByIndex.last, last.exists else { break }
+            let frame = last.frame
+            safari.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: frame.maxX + 22, dy: frame.midY)).tap()
+            pages += 1; sleep(1)
+        }
+        let translateAny = safari.descendants(matching: .any).matching(NSPredicate(format: "label == 'Translate'")).firstMatch
+        XCTAssertTrue(translate.exists || translateAny.waitForExistence(timeout: 3), "Translate in Safari's edit menu")
+        (translate.exists ? translate : translateAny).tap()
+        sleep(4)
+        save("safari-sheet", of: safari)
+        safari.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 201, dy: 676)).tap()  // one-time consent
+        sleep(3)
+        save("safari-sheet-card", of: safari)
+        safari.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: 201, dy: 738)).tap()  // Subscribe
+        XCTAssertTrue(app.wait(for: .runningForeground, timeout: 8), "Control-V comes to the front")
+        let paywall = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'like a native'")).firstMatch
+        XCTAssertTrue(paywall.waitForExistence(timeout: 8), "on its paywall")
+        save("safari-subscribe-app", of: app)
+        // Subscribing, simulated: Control-V relaunched on an active plan stamps
+        // the App Group like a purchase would (and drops the forced error).
+        app.terminate()
+        app.launchArguments = ["-ui.setupState", "both", "-ui.licenseState", "active"]
+        app.launch()
+        sleep(3)
+        safari.activate()
+        sleep(8)
+        save("safari-after-return", of: safari)
+    }
+
+    /// Same through the share sheet: Share… → Control-V → Subscribe opens the
+    /// paywall and closes the share sheet. Taps go by position (out of process).
+    func test_app_shareSheet_subscribeOpensPaywall() {
+        app.launchArguments = ["-ui.tab", "translate", "-ui.setupState", "keyboard", "-ui.forceTranslateError", "trialExpired"]
+        app.launch()
+        pickFromEditMenu("Share", typing: "Hola, cómo va todo")
+        sleep(2)
+        save("share-activity-sheet", of: app)
+        tapPoint(x: 156, y: 651)  // Control-V in the share sheet's app row
+        sleep(5)
+        save("share-extension", of: app)
+        let paywall = app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'like a native'")).firstMatch
+        XCTAssertFalse(paywall.exists, "no paywall before Subscribe")
+        tapPoint(x: 201, y: 304)  // Subscribe
+        let opened = paywall.waitForExistence(timeout: 8)
+        sleep(2)
+        save("share-after-subscribe", of: app)
+        XCTAssertTrue(opened, "Subscribe opens the paywall")
+    }
+
+    private func tapPoint(x: CGFloat, y: CGFloat) {
+        app.coordinate(withNormalizedOffset: .zero).withOffset(CGVector(dx: x, dy: y)).tap()
+    }
+
+    /// Selects everything in the Translate tab's editor and taps Translate in
+    /// the edit menu, which opens Control-V's sheet when it is the default app.
+    private func openTranslateSheet(typing text: String) {
+        pickFromEditMenu("Translate", typing: text)
+    }
+
+    /// Types into the Translate tab's editor, selects it all and taps the
+    /// edit-menu item whose label starts with `item`, paging the menu.
+    private func pickFromEditMenu(_ item: String, typing text: String) {
         let field = app.textViews["translate.editor"]
         XCTAssertTrue(field.waitForExistence(timeout: 10))
         field.tap()
-        field.typeText("Hola, cómo va todo por allá")
+        field.typeText(text)
         sleep(1)
         // Long press → Select All → the edit menu for the selection.
         field.press(forDuration: 1.0)
@@ -124,7 +234,7 @@ final class SetupFlowUITests: XCTestCase {
         sleep(1)
         save("app-edit-menu", of: app)
         NSLog("[uitest] menu items: %@", app.menuItems.allElementsBoundByIndex.map(\.label).joined(separator: " | "))
-        let translate = app.menuItems["Translate"]
+        let translate = app.menuItems.matching(NSPredicate(format: "label BEGINSWITH %@", item)).firstMatch
         var pages = 0
         while !translate.exists, pages < 4 {
             // The edit menu pages its items behind a chevron drawn right
@@ -141,11 +251,10 @@ final class SetupFlowUITests: XCTestCase {
             NSLog("[uitest] menu items page %d: %@", pages, app.menuItems.allElementsBoundByIndex.map(\.label).joined(separator: " | "))
         }
         // The expanded menu lists its items as plain elements, not menuItems.
-        let translateAny = app.descendants(matching: .any).matching(NSPredicate(format: "label == 'Translate'")).firstMatch
-        XCTAssertTrue(translate.exists || translateAny.waitForExistence(timeout: 3), "Translate item in the edit menu")
+        let translateAny = app.descendants(matching: .any).matching(NSPredicate(format: "label BEGINSWITH %@", item)).firstMatch
+        XCTAssertTrue(translate.exists || translateAny.waitForExistence(timeout: 3), "\(item) item in the edit menu")
         (translate.exists ? translate : translateAny).tap()
         sleep(4)
-        save("app-translate-sheet", of: app)
     }
 
     /// Screenshots taken WHILE a key is held: `press(forDuration:)` blocks, so

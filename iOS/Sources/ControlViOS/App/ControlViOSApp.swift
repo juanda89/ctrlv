@@ -19,6 +19,7 @@ struct ControlViOSApp: App {
                     SetupState.migrateLegacyConfirmations()
                     #if DEBUG
                     SetupState.setTranslationReportMuted(DebugLaunch.muteTranslationReport)
+                    SetupState.setForcedTranslateError(DebugLaunch.forceTranslateError)
                     #endif
                     switch DebugLaunch.setupState {
                     case "none": SetupState.resetForPreview()
@@ -64,7 +65,7 @@ final class AppCoordinator: ObservableObject {
         let license = LicenseService(
             openURLHandler: urlOpener,
             startBackgroundTasks: true,
-            onStateChange: { _ in
+            onStateChange: { state in
                 // Keep the App Group token mirror fresh on EVERY state change —
                 // this catches the automatic sign-out on 401 (session expired),
                 // not just the manual sync points.
@@ -72,6 +73,9 @@ final class AppCoordinator: ObservableObject {
                 // LicenseService is @MainActor and invokes this on the main actor.
                 MainActor.assumeIsolated {
                     AppGroupBridge.syncSessionToken(from: service)
+                    // After the token: a sheet waiting on its trial-ended card
+                    // retries on this stamp, and must find the session there.
+                    if case .active = state { AccessSignal.stamp() }
                 }
             }
         )

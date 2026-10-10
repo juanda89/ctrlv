@@ -65,6 +65,22 @@ public enum SetupState {
         if muted { defaults.set(true, forKey: muteTranslationReportKey) } else { defaults.removeObject(forKey: muteTranslationReportKey) }
     }
 
+    static let forcedTranslateErrorKey = "debug.forceTranslateError"
+
+    /// Debug/QA: makes every extension fail as the server would for a trial
+    /// that ran out (`trialExpired`, `trialQuota`, `trialTooLong`); nil restores.
+    public static func setForcedTranslateError(_ name: String?) {
+        if let name { defaults.set(name, forKey: forcedTranslateErrorKey) } else { defaults.removeObject(forKey: forcedTranslateErrorKey) }
+    }
+
+    public static var forcedTranslateError: String? {
+        #if DEBUG
+        return defaults.string(forKey: forcedTranslateErrorKey)
+        #else
+        return nil
+        #endif
+    }
+
     public static func markShareActive() {
         defaults.set(Date(), forKey: shareSeenKey)
     }

@@ -409,6 +409,7 @@ xcrun simctl launch booted info.controlv.ios -ui.tab account -ui.licenseState ex
 | `-ui.showSignIn 1` / `-ui.showSetup 1` / `-ui.showFeedback 1` | | Opens that sheet |
 | `-ui.sourceText "…"` + `-ui.autoTranslate 1` | | Prefills the editor and translates on launch (real backend) |
 | `-ui.seedHistory 1` | | Adds three sample history entries |
+| `-ui.forceTranslateError` | `trialExpired` `trialQuota` `trialTooLong` | The extensions fail like a trial that ran out (upgrade card); launching without it clears it |
 
 Then `xcrun simctl io booted screenshot out.png`. Note: when launched this way the StoreKit configuration is not attached, so the paywall shows its "Pricing isn't available" state; run from Xcode (scheme has `Configuration.storekit`) to see the real price and trial.
 

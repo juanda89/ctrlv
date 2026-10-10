@@ -28,13 +28,40 @@ public enum TranslationError: LocalizedError {
             if let retry { "\(provider.rawValue) rate limited. Retry in \(retry)s." }
             else { "\(provider.rawValue) rate limited. Try again shortly." }
         case .trialExpired:
-            "Trial expired. Enter a valid license key to continue."
+            "Your free trial has ended. Subscribe to keep translating."
         case .trialQuotaExceeded:
-            "Daily trial limit reached (50 translations). Upgrade to continue translating."
+            "You've used today's \(TrialTranslationService.dailyLimit) free translations. Subscribe to keep translating."
         case .trialTextTooLong(let maxWords):
-            "Text exceeds trial limit of \(maxWords) words. Upgrade to translate longer selections."
+            "The free trial translates up to \(maxWords) words at a time. Subscribe to translate longer texts."
         case .replacementFailed:
             "Could not replace selected text"
+        }
+    }
+
+    /// Only a subscription gets past these: retrying cannot, so clients
+    /// offer the upgrade instead of "Try again".
+    public var requiresSubscription: Bool {
+        switch self {
+        case .trialExpired, .trialQuotaExceeded, .trialTextTooLong: true
+        default: false
+        }
+    }
+
+    /// The server's trial rejections (`supabase/functions/_shared/access.ts`),
+    /// matched on their exact wording so every client shows the upgrade
+    /// instead of a raw status. Anything else stays a generic error.
+    public static func trialRejection(statusCode: Int, message: String?) -> TranslationError? {
+        guard let message else { return nil }
+        switch statusCode {
+        case 403 where message == "Trial expired":
+            return .trialExpired
+        case 429 where message.hasPrefix("Trial daily limit"):
+            return .trialQuotaExceeded(remaining: 0)
+        case 429 where message.hasPrefix("Trial text exceeds"):
+            let characters = Int(message.filter(\.isNumber)) ?? TrialTranslationService.maxCharacters
+            return .trialTextTooLong(maxWords: characters / 6)
+        default:
+            return nil
         }
     }
 }

@@ -90,6 +90,12 @@ windows/                         # Windows client (.NET 8). ControlV.Core = C# p
   the install (`appstore_install_links`, max 10 per purchase) and `translate_begin` grants linked installs the paid plan.
   Account deletion is in-app (`delete-account`: cancels Stripe first, then deletes). `REVIEW_DEMO_EMAIL`/`REVIEW_DEMO_CODE`
   secrets give App Review a demo sign-in (code never emailed).
+- Trial rejections (403 `Trial expired`, 429 trial daily limit / text length) become typed `TranslationError`s
+  (`requiresSubscription`, matched on the exact strings in `_shared/access.ts`: change both together). iOS shows an
+  upgrade card instead of an error: Subscribe opens `controlv://subscribe` (paywall) from the Translate and Share
+  sheets, verified in the simulator; the keyboard only says where to subscribe (4.4.1: keyboards open nothing but
+  Settings). iOS keeps the Translate sheet up meanwhile, so it retries on `AccessSignal` (App Group stamp the app
+  writes when the plan turns active or a purchase is linked).
 
 ## Roadmap pointer
 Windows client planned (.NET 8 + WPF, Velopack, Azure Trusted Signing) reusing the backend as-is; ControlVCore is the port scope.

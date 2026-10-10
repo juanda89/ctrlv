@@ -57,19 +57,18 @@ public struct CtrlVCloudProvider: TranslationProvider {
             throw TranslationError.networkError(underlying: URLError(.badServerResponse))
         }
 
+        guard !(200...299).contains(httpResponse.statusCode) else { return data }
+        let body = try? JSONDecoder().decode(GatewayErrorResponse.self, from: data)
+        if let trialError = TranslationError.trialRejection(statusCode: httpResponse.statusCode, message: body?.error) {
+            throw trialError
+        }
         if httpResponse.statusCode == 429 {
-            let body = try? JSONDecoder().decode(GatewayErrorResponse.self, from: data)
             throw TranslationError.rateLimited(provider: .ctrlVCloud, retryAfter: body?.retryAfterSeconds)
         }
-
-        guard (200...299).contains(httpResponse.statusCode) else {
-            let body = try? JSONDecoder().decode(GatewayErrorResponse.self, from: data)
-            throw TranslationError.apiError(
-                statusCode: httpResponse.statusCode,
-                message: body?.error ?? "Translation service unavailable"
-            )
-        }
-        return data
+        throw TranslationError.apiError(
+            statusCode: httpResponse.statusCode,
+            message: body?.error ?? "Translation service unavailable"
+        )
     }
 
     private func normalized(_ value: String?) -> String? {

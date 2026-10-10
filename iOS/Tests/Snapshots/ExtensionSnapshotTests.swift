@@ -84,6 +84,16 @@ final class ExtensionSnapshotTests: XCTestCase {
             let view = ControlVKeyboardView(services: services, state: state, flow: flow)
             try snapshot(view, size: Self.keyboardSize, name: name, background: Self.lightKeyboard, ignoresSafeArea: true)
         }
+        // Trial ran out: one line saying where to subscribe (no link: 4.4.1).
+        let upgrades: [(String, TranslationError)] = [
+            ("kb-upgrade-expired", .trialExpired), ("kb-upgrade-quota", .trialQuotaExceeded(remaining: 0)), ("kb-upgrade-toolong", .trialTextTooLong(maxWords: 500)),
+        ]
+        for (name, error) in upgrades {
+            let (state, services) = makeKeyboard(language: .english, dark: false)
+            let flow = TranslateFlow(hasFullAccess: true, actions: .noop)
+            flow.applyPreview(phase: .upgrade, upgrade: error)
+            try snapshot(ControlVKeyboardView(services: services, state: state, flow: flow), size: Self.keyboardSize, name: name, background: Self.lightKeyboard, ignoresSafeArea: true)
+        }
         let (state, services) = makeKeyboard(language: .english, dark: true)
         let flow = TranslateFlow(hasFullAccess: true, actions: .noop)
         try snapshot(ControlVKeyboardView(services: services, state: state, flow: flow), size: Self.keyboardSize, name: "kb-idle-dark", dark: true, background: Self.darkKeyboard, ignoresSafeArea: true)
@@ -98,6 +108,7 @@ final class ExtensionSnapshotTests: XCTestCase {
         try snapshot(ShareResultView(sourceText: source, onDone: {}, onCopy: { _ in }, preview: .done(translated)), size: Self.sheetSize, name: "share-done-dark", dark: true, background: .systemBackground)
         try snapshot(ShareResultView(sourceText: source, onDone: {}, onCopy: { _ in }, preview: .failed("Daily limit reached. Upgrade to keep translating.")), size: Self.sheetSize, name: "share-error", background: .systemBackground)
         try snapshot(ShareResultView(sourceText: source, onDone: {}, onCopy: { _ in }, preview: .done(translated)), size: Self.sheetSize, name: "share-done-nosafearea", background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(ShareResultView(sourceText: source, onDone: {}, onCopy: { _ in }, preview: .upgrade(.trialExpired)), size: Self.sheetSize, name: "share-upgrade", background: .systemBackground)
     }
 
     @MainActor
@@ -110,7 +121,11 @@ final class ExtensionSnapshotTests: XCTestCase {
         try snapshot(TranslationProviderView(context: editable, preview: .translating), size: size, name: "tr-translating", background: .systemBackground, ignoresSafeArea: true)
         try snapshot(TranslationProviderView(context: editable, preview: .done(translated)), size: size, name: "tr-done-replace", background: .systemBackground, ignoresSafeArea: true)
         try snapshot(TranslationProviderView(context: readOnly, preview: .done(translated)), size: size, name: "tr-done-readonly", background: .systemBackground, ignoresSafeArea: true)
-        try snapshot(TranslationProviderView(context: editable, preview: .failed("Your free trial has ended. Open Control-V to subscribe.")), size: size, name: "tr-error", background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: editable, preview: .failed("Network error: The Internet connection appears to be offline.")), size: size, name: "tr-error", background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: editable, preview: .upgrade(.trialExpired)), size: size, name: "tr-upgrade-expired", background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: editable, preview: .upgrade(.trialExpired)), size: size, name: "tr-upgrade-expired-dark", dark: true, background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: editable, preview: .upgrade(.trialQuotaExceeded(remaining: 0))), size: size, name: "tr-upgrade-quota", background: .systemBackground, ignoresSafeArea: true)
+        try snapshot(TranslationProviderView(context: editable, preview: .upgrade(.trialTextTooLong(maxWords: 500))), size: size, name: "tr-upgrade-toolong", background: .systemBackground, ignoresSafeArea: true)
         try snapshot(TranslationProviderView(context: editable, preview: .done(translated)), size: size, name: "tr-done-dark", dark: true, background: .systemBackground, ignoresSafeArea: true)
         try snapshot(TranslationProviderView(context: editable, preview: .replaceIgnored(translated)), size: CGSize(width: 402, height: 460), name: "tr-replace-ignored", background: .systemBackground, ignoresSafeArea: true)
     }

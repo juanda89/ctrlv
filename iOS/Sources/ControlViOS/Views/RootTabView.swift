@@ -49,6 +49,12 @@ struct RootTabView: View {
         .onReceive(NotificationCenter.default.publisher(for: .controlVShowPaywall)) { _ in
             paywallRequested = true
         }
+        // controlv://subscribe: Subscribe on a translation or share sheet whose
+        // trial ran out. Someone already on Pro lands on their account instead.
+        .onOpenURL { url in
+            guard AppLink.isSubscribe(url) else { return }
+            if case .active = licenseService.state { selection = .account } else { paywallRequested = true }
+        }
         .sheet(isPresented: $showSetup) {
             KeyboardSetupView {
                 UserDefaults(suiteName: iOSSettingsStore.appGroup)?.set(true, forKey: "hasSeenKeyboardSetup")

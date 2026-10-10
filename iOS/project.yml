@@ -36,6 +36,10 @@ targets:
       - path: Resources/App
       # Permission marks the extensions write and the app reads.
       - path: Shared/SetupState.swift
+      # controlv:// links the extensions open (Subscribe → paywall), and the
+      # stamp that tells a waiting sheet the plan is now active.
+      - path: Shared/AppLink.swift
+      - path: Shared/AccessSignal.swift
     dependencies:
       - package: ControlVCore
         product: ControlVCore
@@ -59,6 +63,10 @@ targets:
         CtrlVTranslationAPIURL: https://hdfhonbgkkiffhkwoivd.functions.supabase.co/translate
         CtrlVAuthAPIBaseURL: https://hdfhonbgkkiffhkwoivd.functions.supabase.co
         NSUserActivityTypes: [info.controlv.translate]
+        # controlv://subscribe opens the paywall (see Shared/AppLink.swift).
+        CFBundleURLTypes:
+          - CFBundleURLName: info.controlv.ios
+            CFBundleURLSchemes: [controlv]
     entitlements:
       path: Generated/Control-V.entitlements
       properties:

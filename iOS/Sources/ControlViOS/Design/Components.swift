@@ -108,3 +108,70 @@ struct BrandMark: View {
         .shadow(color: Brand.blue.opacity(shadow ? 0.35 : 0), radius: size * 0.28, y: size * 0.14)
     }
 }
+
+/// What a trial that ran out says outside the paywall
+/// (`TranslationError.requiresSubscription`): what happened and the one way
+/// forward. Never "Try again": only a subscription gets past it.
+struct UpgradePrompt: Equatable {
+    let title: String
+    /// Asks to subscribe right here (the card has a Subscribe button).
+    let detail: String
+    /// For a surface that cannot open the app: says where to subscribe.
+    let detailOpenApp: String
+    /// One line for the keyboard's status band. Keyboards may open nothing
+    /// but Settings (App Review 4.4.1), so it only says where to go.
+    let short: String
+
+    init(_ error: TranslationError) {
+        switch error {
+        case .trialQuotaExceeded:
+            title = "You've used today's \(TrialTranslationService.dailyLimit) free translations"
+            detail = "Subscribe to Control-V Pro to keep going, or come back tomorrow."
+            detailOpenApp = "Open the Control-V app to subscribe, or come back tomorrow."
+            short = "Daily free limit reached. Subscribe in the Control-V app."
+        case .trialTextTooLong(let maxWords):
+            title = "Too long for the free trial"
+            detail = "The trial translates up to \(maxWords) words at a time. Subscribe to Control-V Pro for longer texts."
+            detailOpenApp = "The trial translates up to \(maxWords) words at a time. Open the Control-V app to subscribe."
+            short = "Too long for the trial. Subscribe in the Control-V app."
+        default:
+            title = "Your free trial has ended"
+            detail = "Subscribe to Control-V Pro to keep translating in any app."
+            detailOpenApp = "Open the Control-V app to subscribe and keep translating."
+            short = "Free trial ended. Subscribe in the Control-V app."
+        }
+    }
+}
+
+/// The trial-ended card of the translation and share sheets. `subscribe` is
+/// nil where the app cannot be opened; the card then says where to go.
+struct UpgradeCard: View {
+    let prompt: UpgradePrompt
+    let subscribe: (() -> Void)?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "sparkles")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 34, height: 34)
+                    .background(Brand.gradient, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(prompt.title).font(.subheadline.weight(.semibold))
+                    Text(subscribe == nil ? prompt.detailOpenApp : prompt.detail)
+                        .font(.footnote).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            if let subscribe {
+                Button("Subscribe", action: subscribe)
+                    .buttonStyle(PrimaryButtonStyle(compact: true))
+                    .accessibilityIdentifier("upgrade.subscribe")
+            }
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassCard(18)
+    }
+}

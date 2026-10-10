@@ -57,9 +57,25 @@ enum ExtensionBridge {
     /// Cloud translation service authenticated as this install / account.
     /// Usage limits (trial quota, character caps) are enforced server-side.
     static func makeTranslationService() -> TranslationService? {
+        if let forced = forcedError { return TranslationService(provider: FailingProvider(error: forced)) }
         guard let endpoint = Constants.translationAPIURL else { return nil }
         let provider = CtrlVCloudProvider(endpoint: endpoint, installID: installID(), sessionToken: sessionToken())
         return TranslationService(provider: provider)
+    }
+
+    /// QA only (`SetupState.forcedTranslateError`, always nil in Release).
+    private static var forcedError: TranslationError? {
+        switch SetupState.forcedTranslateError {
+        case "trialExpired": .trialExpired
+        case "trialQuota": .trialQuotaExceeded(remaining: 0)
+        case "trialTooLong": .trialTextTooLong(maxWords: TrialTranslationService.maxCharacters / 6)
+        default: nil
+        }
+    }
+
+    private struct FailingProvider: TranslationProvider {
+        let error: TranslationError
+        func translate(text: String, systemPrompt: String) async throws -> String { throw error }
     }
 
     // MARK: History

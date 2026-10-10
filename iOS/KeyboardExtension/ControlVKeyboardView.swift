@@ -189,6 +189,10 @@ struct StatusBand: View {
             strip(symbol: "info.circle.fill", tint: Brand.blue, text: flow.infoMessage ?? "") {
                 Button("OK") { flow.dismissStatus() }.font(.caption.weight(.semibold)).buttonStyle(.plain)
             }
+        case .upgrade:
+            strip(symbol: "sparkles", tint: Brand.blue, text: flow.upgrade?.short ?? "") {
+                Button("OK") { flow.dismissStatus() }.font(.caption.weight(.semibold)).buttonStyle(.plain)
+            }
         }
     }
 

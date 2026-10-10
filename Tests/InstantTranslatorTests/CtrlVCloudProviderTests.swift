@@ -96,6 +96,58 @@ final class CtrlVCloudProviderTests: XCTestCase {
         }
     }
 
+    // The bodies below are verbatim from supabase/functions/_shared/access.ts.
+
+    func test_translate_throwsTrialExpired_whenServerRejectsExpiredTrial() async {
+        let error = await gatewayError(statusCode: 403, json: #"{"error":"Trial expired"}"#)
+        guard case .trialExpired = error else { return XCTFail("Unexpected error: \(String(describing: error))") }
+        XCTAssertEqual(error?.requiresSubscription, true)
+        XCTAssertFalse(error?.localizedDescription.contains("403") ?? true, "no raw status for the customer")
+    }
+
+    func test_translate_throwsTrialQuotaExceeded_whenTrialDailyLimitReached() async {
+        let error = await gatewayError(statusCode: 429, json: #"{"error":"Trial daily limit reached.","retry_after_seconds":3600}"#)
+        guard case .trialQuotaExceeded = error else { return XCTFail("Unexpected error: \(String(describing: error))") }
+        XCTAssertEqual(error?.requiresSubscription, true)
+    }
+
+    func test_translate_throwsTrialTextTooLong_whenTrialTextExceedsLimit() async {
+        let error = await gatewayError(statusCode: 429, json: #"{"error":"Trial text exceeds 3000 characters."}"#)
+        guard case .trialTextTooLong(let maxWords) = error else { return XCTFail("Unexpected error: \(String(describing: error))") }
+        XCTAssertEqual(maxWords, 500)
+        XCTAssertEqual(error?.requiresSubscription, true)
+    }
+
+    func test_translate_keepsRateLimited_whenPaidPlanHitsFairUse() async {
+        let error = await gatewayError(statusCode: 429, json: #"{"error":"Daily fair-use limit reached.","retry_after_seconds":600}"#)
+        guard case .rateLimited(_, let retryAfter) = error else { return XCTFail("Unexpected error: \(String(describing: error))") }
+        XCTAssertEqual(retryAfter, 600)
+        XCTAssertEqual(error?.requiresSubscription, false)
+    }
+
+    func test_translate_keepsApiError_whenRejectionIsNotAboutTheTrial() async {
+        let error = await gatewayError(statusCode: 403, json: #"{"error":"Forbidden"}"#)
+        guard case .apiError(403, "Forbidden") = error else { return XCTFail("Unexpected error: \(String(describing: error))") }
+        XCTAssertEqual(error?.requiresSubscription, false)
+    }
+
+    private func gatewayError(statusCode: Int, json: String) async -> TranslationError? {
+        CloudProviderURLProtocolStub.requestHandler = { _ in makeCloudResponse(statusCode: statusCode, json: json) }
+        let provider = CtrlVCloudProvider(
+            endpoint: URL(string: "https://example.com/translate")!,
+            installID: "install-1",
+            sessionToken: nil,
+            session: session
+        )
+        do {
+            _ = try await provider.translate(text: "Hello", systemPrompt: "Translate")
+            XCTFail("Expected an error for \(statusCode)")
+            return nil
+        } catch {
+            return error as? TranslationError
+        }
+    }
+
     func test_warmup_sendsWarmupPayload_whenRequested() async throws {
         CloudProviderURLProtocolStub.requestHandler = { request in
             let body = try XCTUnwrap(request.httpBody ?? requestBody(from: request.httpBodyStream))

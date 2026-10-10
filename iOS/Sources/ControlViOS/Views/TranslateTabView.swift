@@ -170,6 +170,9 @@ struct TranslateTabView: View {
             let translated = try await translation.translate(text: inputText, targetLanguage: settings.targetLanguage, tone: settings.tone, customTonePrompt: settings.customTonePrompt)
             withAnimation(.spring(duration: 0.4)) { resultText = translated }
             HistoryStore.shared.append(source: inputText, translated: translated, language: settings.targetLanguage, tone: settings.tone)
+        } catch let error as TranslationError where error.requiresSubscription {
+            // The paywall is the answer, not an error line under the editor.
+            NotificationCenter.default.post(name: .controlVShowPaywall, object: nil)
         } catch {
             errorMessage = error.localizedDescription
         }

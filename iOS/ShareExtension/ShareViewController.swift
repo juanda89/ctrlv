@@ -105,12 +105,17 @@ struct ShareResultView: View {
 
     /// Fixed state for previews and snapshot tests; production passes nil and
     /// runs the real translation on appear.
-    enum Preview { case loading, done(String), failed(String) }
+    enum Preview { case loading, done(String), failed(String), upgrade(TranslationError) }
     private let preview: Preview?
 
     @State private var translated: String = ""
     @State private var isLoading = true
     @State private var errorMessage: String?
+    /// The trial ran out: shown instead of an error, with Subscribe.
+    @State private var upgrade: UpgradePrompt?
+    /// False once the system refused to open the app from this sheet.
+    @State private var canOpenApp = true
+    @Environment(\.openURL) private var openURL
     private let settings = ExtensionBridge.loadSettings()
 
     init(sourceText: String, onDone: @escaping () -> Void, onCopy: @escaping (String) -> Void, preview: Preview? = nil) {
@@ -122,6 +127,7 @@ struct ShareResultView: View {
         case .none, .loading: break
         case .done(let text): _translated = State(initialValue: text); _isLoading = State(initialValue: false)
         case .failed(let message): _errorMessage = State(initialValue: message); _isLoading = State(initialValue: false)
+        case .upgrade(let error): _upgrade = State(initialValue: UpgradePrompt(error)); _isLoading = State(initialValue: false)
         }
     }
 
@@ -151,6 +157,8 @@ struct ShareResultView: View {
                         .frame(maxWidth: .infinity)
                         .padding(28)
                         .glassCard(20)
+                    } else if let upgrade {
+                        UpgradeCard(prompt: upgrade, subscribe: canOpenApp ? { subscribe() } : nil)
                     } else if let errorMessage {
                         VStack(alignment: .leading, spacing: 12) {
                             Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
@@ -239,8 +247,18 @@ struct ShareResultView: View {
                 language: settings.targetLanguage,
                 tone: settings.tone
             )
+        } catch let error as TranslationError where error.requiresSubscription {
+            upgrade = UpgradePrompt(error)
         } catch {
             errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Opens the app on its paywall; if the system won't from a share sheet,
+    /// the card says where to subscribe instead.
+    private func subscribe() {
+        openURL(AppLink.subscribe) { accepted in
+            if accepted { onDone() } else { withAnimation { canOpenApp = false } }
         }
     }
 }

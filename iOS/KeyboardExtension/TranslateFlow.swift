@@ -35,12 +35,16 @@ final class TranslateFlow: ObservableObject {
         case fixed
         /// A neutral note (`infoMessage`), e.g. nothing to fix.
         case info
+        /// The trial ran out (`upgrade`): says where to subscribe. A keyboard
+        /// may open nothing but Settings (App Review 4.4.1), so no link.
+        case upgrade
     }
 
     @Published var phase: Phase = .idle
     @Published var errorMessage: String?
     @Published var infoMessage: String?
     @Published private(set) var fixedCount = 0
+    @Published private(set) var upgrade: UpgradePrompt?
     @Published var settings = ExtensionBridge.loadSettings()
     /// Language and tone chips in the band above the keys (long press on V).
     @Published var showsOptions = false
@@ -58,12 +62,14 @@ final class TranslateFlow: ObservableObject {
     }
 
     /// Fixed state for previews and snapshot tests.
-    func applyPreview(phase: Phase, errorMessage: String? = nil, showsOptions: Bool = false, fixedCount: Int = 0) {
+    func applyPreview(phase: Phase, errorMessage: String? = nil, showsOptions: Bool = false, fixedCount: Int = 0,
+                      upgrade: TranslationError? = nil) {
         self.phase = phase
         self.errorMessage = errorMessage
         self.infoMessage = errorMessage
         self.fixedCount = fixedCount
         self.showsOptions = showsOptions
+        self.upgrade = upgrade.map(UpgradePrompt.init)
     }
 
     var isBusy: Bool { phase != .idle }
@@ -203,6 +209,10 @@ final class TranslateFlow: ObservableObject {
         let request = TranslationRequest(text: text, targetLanguage: settings.targetLanguage, tone: settings.tone, customTonePrompt: settings.customTonePrompt)
         do {
             return try await service.translate(request).translatedText
+        } catch let error as TranslationError where error.requiresSubscription {
+            upgrade = UpgradePrompt(error)
+            phase = .upgrade
+            return nil
         } catch {
             errorMessage = error.localizedDescription
             phase = .error

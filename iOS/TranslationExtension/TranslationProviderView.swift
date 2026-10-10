@@ -8,7 +8,7 @@ struct TranslationProviderView: View {
     let context: any TranslationUIProviderContext
 
     /// Fixed state for previews and snapshot tests; production passes nil.
-    enum Preview { case translating, done(String), failed(String), replaceIgnored(String) }
+    enum Preview { case translating, done(String), failed(String), replaceIgnored(String), upgrade(TranslationError) }
     private let preview: Preview?
 
     @State private var settings = ExtensionBridge.loadSettings()
@@ -20,8 +20,13 @@ struct TranslationProviderView: View {
     /// The host ignored Replace (the sheet stayed up), so the translation
     /// went to the clipboard instead.
     @State private var replaceIgnored = false
+    /// The trial ran out: shown instead of an error (`.upgrade`).
+    @State private var upgrade: UpgradePrompt?
+    /// False once the system refused to open the app from this sheet.
+    @State private var canOpenApp = true
+    @Environment(\.openURL) private var openURL
 
-    enum Phase { case translating, done, failed }
+    enum Phase { case translating, done, failed, upgrade }
 
     init(context: any TranslationUIProviderContext, preview: Preview? = nil) {
         self.context = context
@@ -32,6 +37,8 @@ struct TranslationProviderView: View {
         case .failed(let message): _phase = State(initialValue: .failed); _errorMessage = State(initialValue: message)
         case .replaceIgnored(let text):
             _phase = State(initialValue: .done); _translated = State(initialValue: text); _replaceIgnored = State(initialValue: true)
+        case .upgrade(let error):
+            _phase = State(initialValue: .upgrade); _upgrade = State(initialValue: UpgradePrompt(error))
         }
     }
 
@@ -53,6 +60,7 @@ struct TranslationProviderView: View {
         .toast("Copied", isPresented: $showCopied)
         .onAppear { isOnScreen = true }
         .onDisappear { isOnScreen = false }
+        .task(id: phase) { await retryAfterUnlock() }
         .task {
             if preview == nil {
                 // Only reachable when Control-V is the default translation app.
@@ -137,17 +145,18 @@ struct TranslationProviderView: View {
                     .font(.footnote.weight(.medium))
                     .foregroundStyle(.orange)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 8) {
-                    Button { Task { await translate() } } label: { Label("Try again", systemImage: "arrow.clockwise") }
-                        .buttonStyle(GlassButtonStyle())
-                    Spacer()
-                    Button("Close") { context.finish(translation: nil) }
-                        .buttonStyle(GlassButtonStyle())
-                }
+                // No Close: the sheet's own X already closes it.
+                Button { Task { await translate() } } label: { Label("Try again", systemImage: "arrow.clockwise") }
+                    .buttonStyle(GlassButtonStyle())
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
             .glassCard(18)
+
+        case .upgrade:
+            if let upgrade {
+                UpgradeCard(prompt: upgrade, subscribe: canOpenApp ? { subscribe() } : nil)
+            }
 
         case .done:
             VStack(alignment: .leading, spacing: 8) {
@@ -216,6 +225,33 @@ struct TranslationProviderView: View {
         withAnimation { showCopied = true }
     }
 
+    /// Opens the app on its paywall. The sheet stays up meanwhile (iOS keeps
+    /// it, and `finish` does not close it from here), so `retryAfterUnlock`
+    /// translates when the person comes back subscribed. If the system won't
+    /// open the app, the card says where to subscribe instead.
+    private func subscribe() {
+        openURL(AppLink.subscribe) { accepted in
+            if !accepted { withAnimation { canOpenApp = false } }
+        }
+    }
+
+    /// While the trial-ended card shows, waits for the app's stamp that Pro
+    /// works now (`AccessSignal`), then translates again. Only a stamp newer
+    /// than the card counts, so a plan the server still refuses can't loop.
+    private func retryAfterUnlock() async {
+        guard phase == .upgrade, preview == nil else { return }
+        let shownAt = Date()
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(1))
+            if let stamp = AccessSignal.lastStamp, stamp > shownAt {
+                // Not awaited here: the phase change cancels this task, and
+                // with it a request still running inside it.
+                Task { await translate() }
+                return
+            }
+        }
+    }
+
     private func translate() async {
         phase = .translating
         errorMessage = nil
@@ -237,6 +273,9 @@ struct TranslationProviderView: View {
             ExtensionBridge.appendHistory(source: source, translated: translated, language: settings.targetLanguage, tone: settings.tone)
             phase = .done
             if translated.count > 140 { context.expandSheet() }
+        } catch let error as TranslationError where error.requiresSubscription {
+            upgrade = UpgradePrompt(error)
+            phase = .upgrade
         } catch {
             errorMessage = error.localizedDescription
             phase = .failed
